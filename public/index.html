@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#FFE0BF">
+<title>小朋友下樓梯</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23FFE0BF'/%3E%3Crect x='4' y='11' width='13' height='4' rx='2' fill='%23C87A32'/%3E%3Crect x='13' y='19' width='15' height='4' rx='2' fill='%23C87A32'/%3E%3Ccircle cx='9' cy='6' r='4' fill='%23FFD2AE'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ===== 右上角固定按鈕（設定；幼幼班進行中會多一顆「結束這局」） ===== -->
+<div class="corner-tools">
+  <button id="btn-finish" class="icon-btn finish-btn" type="button" hidden>結束這局</button>
+  <button id="btn-settings" class="icon-btn" type="button" aria-label="設定" title="設定"></button>
+</div>
+
+<nav id="screen-nav" class="screen-nav" aria-label="畫面導覽">
+  <button id="btn-back" class="nav-btn" type="button">← 返回</button>
+</nav>
+
+<!-- ============ 首頁 ============ -->
+<section id="screen-home" class="screen active">
+  <div class="home-art" id="home-art"></div>
+  <h1 class="title">小朋友下樓梯</h1>
+  <p class="subtitle">一直往下跑，別被上面的天花板追到</p>
+  <div class="home-buttons">
+    <button class="big-btn primary" type="button" data-go="setup">一個人玩</button>
+    <button class="big-btn" type="button" data-go="online">跟別人玩</button>
+    <button class="big-btn ghost" type="button" data-go="help">怎麼玩</button>
+  </div>
+  <div class="home-records" id="home-records"></div>
+</section>
+
+<!-- ============ 一個人玩：選角色與難度 ============ -->
+<section id="screen-setup" class="screen">
+  <div class="panel">
+    <h2>一個人玩</h2>
+    <p class="hint">選一隻小朋友，挑一個難度，就可以開始無限往下跑。</p>
+
+    <label class="field">
+      <span>你的名字</span>
+      <input id="in-nickname" type="text" maxlength="8" placeholder="小玩家">
+    </label>
+
+    <div class="field">
+      <span>選一隻小朋友</span>
+      <div id="char-picker" class="char-picker" role="radiogroup" aria-label="選一隻小朋友"></div>
+    </div>
+
+    <div class="field">
+      <span>難度</span>
+      <div id="diff-picker" class="diff-picker" role="radiogroup" aria-label="難度"></div>
+      <p class="diff-note" id="diff-note"></p>
+    </div>
+
+    <div class="panel-actions">
+      <button id="btn-start" class="big-btn primary" type="button">開始下樓梯</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 跟別人玩（M1／M2 才開放） ============ -->
+<section id="screen-online" class="screen">
+  <div class="panel">
+    <h2>跟別人玩</h2>
+    <div class="soon-list">
+      <div class="soon-item">
+        <div>
+          <h3>跟電腦對戰</h3>
+          <p>同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段。</p>
+        </div>
+        <span class="badge">M1 再開放</span>
+      </div>
+      <div class="soon-item">
+        <div>
+          <h3>線上大廳</h3>
+          <p>公開房、邀請連結、觀戰與聊天室。</p>
+        </div>
+        <span class="badge">M2／M3 再開放</span>
+      </div>
+    </div>
+    <p class="hint">目前這個版本是 M0：先把規則核心與一個人玩的部分做到能玩、能驗證。</p>
+    <div class="panel-actions">
+      <button class="big-btn primary" type="button" data-go="setup">先一個人玩</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 怎麼玩（靜態圖文說明） ============ -->
+<section id="screen-help" class="screen">
+  <div class="panel help">
+    <h2>怎麼玩</h2>
+
+    <section class="help-block">
+      <h3>目標</h3>
+      <p>只有左右兩個方向，沒有跳。一直往下踩階梯，<b>下得越深分數越高</b>（1 格 = 1 公尺）。
+        畫面上緣的天花板會一直追下來，越玩越快。</p>
+    </section>
+
+    <section class="help-block">
+      <h3>操作</h3>
+      <div class="help-keys">
+        <div><span class="kbd">←</span><span class="kbd">→</span> 或 <span class="kbd">A</span><span class="kbd">D</span> 左右移動</div>
+        <div><span class="kbd">Esc</span> 暫停選單（繼續／重新開始／回首頁）</div>
+        <div>手機平板：<b>橫向</b>左下兩顆大按鍵；<b>直向</b>左鍵在左下、右鍵在右下。</div>
+      </div>
+    </section>
+
+    <section class="help-block">
+      <h3>五種階梯</h3>
+      <ul class="help-steps" id="help-steps"></ul>
+    </section>
+
+    <section class="help-block">
+      <h3>天花板</h3>
+      <div class="help-ceiling" id="help-ceiling"></div>
+    </section>
+
+    <section class="help-block">
+      <h3>難度</h3>
+      <ul class="help-diff" id="help-diff"></ul>
+    </section>
+
+    <section class="help-block">
+      <h3>之後還會有</h3>
+      <p>跟電腦對戰、線上 1v1（兩個人都死了才結算、一斷線就判輸）、觀戰、邀請連結與聊天室。
+        對戰時兩個人共用同一座樓梯，<b>會互相推擠</b>，可以把對手推去撞刺或推上輸送帶。</p>
+    </section>
+  </div>
+</section>
+
+<!-- ============ 遊戲畫面 ============ -->
+<section id="screen-game" class="screen game">
+  <div class="game-wrap">
+    <!-- 資訊欄：桌機／橫向在左邊且刻意小；直向壓成上方薄狀態列 -->
+    <aside class="side" id="side">
+      <div class="side-row side-depth">
+        <span class="side-label">深度</span>
+        <strong id="hud-depth">0</strong><span class="unit">m</span>
+      </div>
+      <div class="side-row" id="hud-hp-row">
+        <span class="side-label">血量</span>
+        <span id="hud-hp"></span>
+      </div>
+      <div class="side-row">
+        <span class="side-label">難度</span>
+        <span id="hud-diff">普通</span>
+        <span class="chip" id="hud-speed">×1.0</span>
+      </div>
+      <div class="side-row">
+        <span class="side-label">世界</span>
+        <span id="hud-world">幼稚園</span>
+      </div>
+      <div class="side-row small" id="hud-next">下一層還有 100 m</div>
+      <div class="side-row small" id="hud-net">單機（M0）</div>
+      <div class="side-row small" id="hud-best"></div>
+    </aside>
+
+    <!-- 樓梯畫面 -->
+    <div class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+      <svg id="actors" class="actors" aria-hidden="true"></svg>
+
+      <div class="overlay countdown" id="overlay-countdown" hidden><span id="countdown-num">3</span></div>
+      <div class="overlay milestone" id="overlay-milestone" hidden><span id="milestone-text"></span></div>
+      <div class="rotate-tip" id="rotate-tip" hidden>
+        <span>轉成直向比較好玩</span>
+        <button type="button" class="mini-btn" id="rotate-close">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 觸控：橫向兩顆都在左下；直向左鍵左下、右鍵右下 -->
+  <div class="pads" id="pads">
+    <button class="pad pad-left" id="pad-left" type="button" aria-label="往左"></button>
+    <button class="pad pad-right" id="pad-right" type="button" aria-label="往右"></button>
+  </div>
+</section>
+
+<!-- ============ 結算 ============ -->
+<section id="screen-result" class="screen">
+  <div class="panel result">
+    <h2 id="result-title">這局結束</h2>
+    <div class="result-hero" id="result-hero"></div>
+    <p class="result-new" id="result-new" hidden>破紀錄了！</p>
+    <div class="result-stats">
+      <h3>這局統計</h3>
+      <ul id="result-list"></ul>
+    </div>
+    <div class="panel-actions">
+      <button id="btn-again" class="big-btn primary" type="button">再玩一次</button>
+      <button id="btn-change-diff" class="big-btn" type="button">換難度</button>
+      <button class="big-btn ghost" type="button" data-go="home">回首頁</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 暫停選單（Esc）：只有三顆 ============ -->
+<div class="overlay-full" id="overlay-pause" hidden>
+  <div class="pause-card">
+    <h2>暫停中</h2>
+    <button id="btn-resume" class="big-btn primary" type="button">繼續</button>
+    <button id="btn-restart" class="big-btn" type="button">重新開始</button>
+    <button id="btn-home" class="big-btn ghost" type="button">回首頁</button>
+  </div>
+</div>
+
+<!-- ============ 設定彈窗（右上角唯一入口） ============ -->
+<div class="modal-mask" id="modal-settings" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="settings-title">設定</h2>
+      <button id="btn-settings-close" class="icon-btn plain" type="button" aria-label="關閉設定"></button>
+    </div>
+
+    <div class="set-row">
+      <label class="switch"><input type="checkbox" id="set-bgm"><span>背景音樂</span></label>
+      <input type="range" id="set-bgm-vol" min="0" max="100" step="5" aria-label="背景音樂音量">
+    </div>
+    <div class="set-row">
+      <label class="switch"><input type="checkbox" id="set-sfx"><span>音效</span></label>
+      <input type="range" id="set-sfx-vol" min="0" max="100" step="5" aria-label="音效音量">
+    </div>
+    <div class="set-row">
+      <label class="switch"><input type="checkbox" id="set-vibrate"><span>震動（觸控裝置）</span></label>
+    </div>
+    <div class="set-row">
+      <label class="switch"><input type="checkbox" id="set-motion"><span>減少動態（關掉震動與粒子）</span></label>
+    </div>
+    <div class="set-row">
+      <label class="switch"><input type="checkbox" id="set-color"><span>色彩輔助（加強形狀差異與外框）</span></label>
+    </div>
+    <div class="set-row">
+      <label class="switch"><input type="checkbox" id="set-guide"><span>顯示深度輔助線（每 10 公尺）</span></label>
+    </div>
+
+    <div class="modal-foot">
+      <button id="set-clear" class="big-btn ghost" type="button">清除本機紀錄</button>
+      <button id="set-reset" class="big-btn ghost" type="button">恢復預設</button>
+    </div>
+    <p class="hint tiny" id="set-msg" role="status"></p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/rng.js"></script>
+<script src="js/stairs.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/themes/characters.js"></script>
+<script src="js/themes/scenes.js"></script>
+<script src="js/themes/nicknames.js"></script>
+<script src="js/svgui.js"></script>
+<script src="js/render.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
