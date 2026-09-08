@@ -1,0 +1,21 @@
+{
+  "name": "stair-kids",
+  "version": "0.1.0",
+  "description": "小朋友下樓梯 - 可愛小朋友無限往下跑的經典下樓梯遊戲（五種階梯、四段難度、六套世界；零依賴）",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/verify.js",
+    "test:stairs": "node scripts/stairs-check.js",
+    "test:match": "node scripts/match-check.js",
+    "verify": "node tests/verify.js && node scripts/stairs-check.js && node scripts/match-check.js",
+    "inject": "node scripts/inject-server-url.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "license": "MIT",
+  "private": true
+}
