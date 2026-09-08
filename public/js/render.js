@@ -1,0 +1,755 @@
+/* ===== render.js — 繪圖：Canvas 畫場景與階梯，SVG 畫小朋友與 UI =====
+ * 規劃書 §7／§8。全手繪向量，沒有任何 emoji 文字美術。
+ *
+ * 座標換算：世界 x ∈ [0,12]、depth 往下為正；畫面上緣永遠是 cameraTop。
+ */
+(function (root) {
+  'use strict';
+
+  let uid = 0;
+
+  /* ================================================================
+   *  一、手繪小朋友（SVG）
+   *  頭＋身體＋雙手＋雙腳，漸層做立體感，不是圓球加臉。
+   *  回傳的內容含具名子群組，poseKid() 只改 transform 就能換姿勢。
+   * ================================================================ */
+
+  function hairPath(style, c) {
+    switch (style) {
+      case 'bob':      /* 妹妹頭 */
+        return '<path d="M20 40q0-28 30-28t30 28q0 6-2 10 -6-14-28-14t-28 14q-2-4-2-10z" fill="url(#' + c + '-hair)"/>' +
+               '<path d="M18 40q2 16 4 24 -8-6-8-18 0-4 4-6z" fill="url(#' + c + '-hair)"/>' +
+               '<path d="M82 40q-2 16-4 24 8-6 8-18 0-4-4-6z" fill="url(#' + c + '-hair)"/>';
+      case 'twin':     /* 雙馬尾 */
+        return '<path d="M20 40q0-28 30-28t30 28q0 5-2 9 -8-13-28-13t-28 13q-2-4-2-9z" fill="url(#' + c + '-hair)"/>' +
+               '<ellipse cx="12" cy="52" rx="9" ry="16" fill="url(#' + c + '-hair)"/>' +
+               '<ellipse cx="88" cy="52" rx="9" ry="16" fill="url(#' + c + '-hair)"/>';
+      case 'short':
+        return '<path d="M20 42q0-30 30-30t30 30q0 4-2 7 -4-16-28-16-16 0-22 10 -3 3-6 6 -2-3-2-7z" fill="url(#' + c + '-hair)"/>';
+      case 'curly':
+        return '<path d="M22 40q0-28 28-28t28 28q0 4-1 7 -5-13-27-13t-27 13q-1-3-1-7z" fill="url(#' + c + '-hair)"/>' +
+               '<circle cx="26" cy="24" r="9" fill="url(#' + c + '-hair)"/>' +
+               '<circle cx="44" cy="16" r="10" fill="url(#' + c + '-hair)"/>' +
+               '<circle cx="62" cy="17" r="9" fill="url(#' + c + '-hair)"/>' +
+               '<circle cx="76" cy="26" r="8" fill="url(#' + c + '-hair)"/>';
+      case 'pony':
+        return '<path d="M20 41q0-29 30-29t30 29q0 5-2 8 -6-14-28-14t-28 14q-2-3-2-8z" fill="url(#' + c + '-hair)"/>' +
+               '<path d="M78 34q14 4 16 22 2 18-8 26 6-18-2-30 -4-8-10-10z" fill="url(#' + c + '-hair)"/>';
+      case 'buzz':
+        return '<path d="M22 42q0-30 28-30t28 30q0 3-1 5 -6-11-27-11t-27 11q-1-2-1-5z" fill="url(#' + c + '-hair)" opacity=".92"/>';
+      case 'wave':
+        return '<path d="M20 42q0-30 30-30t30 30q0 4-2 7 -3-8-9-6 -5 2-9-2 -5-5-11-1 -6 4-12 0 -5-3-9 2 -4 4-6 6 -2-3-2-7z" fill="url(#' + c + '-hair)"/>';
+      case 'bun':
+      default:
+        return '<path d="M20 41q0-29 30-29t30 29q0 5-2 8 -6-14-28-14t-28 14q-2-3-2-8z" fill="url(#' + c + '-hair)"/>' +
+               '<circle cx="50" cy="8" r="13" fill="url(#' + c + '-hair)"/>';
+    }
+  }
+
+  function topPath(style, c, accent) {
+    /* 身體：肩到腰的圓角形，漸層做立體 */
+    const base = '<path d="M28 70q0-8 8-10 6-2 14-2t14 2q8 2 8 10v40q0 8-8 9 -6 1-14 1t-14-1q-8-1-8-9z" fill="url(#' + c + '-shirt)"/>';
+    let extra = '';
+    if (style === 'dress') {
+      extra = '<path d="M26 104q-4 14-6 20 10 5 30 5t30-5q-2-6-6-20z" fill="url(#' + c + '-shirt)"/>' +
+              '<path d="M20 124q12 5 30 5t30-5q1 4 1 6 -13 6-31 6t-31-6q0-2 1-6z" fill="' + accent + '" opacity=".55"/>';
+    } else if (style === 'overall') {
+      extra = '<path d="M36 68v16h6V70zm22 0v14h6V68z" fill="url(#' + c + '-pants)"/>' +
+              '<path d="M30 96h40v18q0 6-6 7 -7 1-14 1t-14-1q-6-1-6-7z" fill="url(#' + c + '-pants)"/>';
+    } else if (style === 'hoodie') {
+      extra = '<path d="M30 68q8 12 20 12t20-12q4 2 4 6 -8 12-24 12t-24-12q0-4 4-6z" fill="url(#' + c + '-shirt)" opacity=".75"/>' +
+              '<path d="M48 84h4v18h-4z" fill="' + accent + '" opacity=".6"/>';
+    } else if (style === 'stripe') {
+      extra = '<g opacity=".45" fill="' + accent + '">' +
+              '<rect x="28" y="78" width="44" height="6" rx="3"/>' +
+              '<rect x="28" y="92" width="44" height="6" rx="3"/>' +
+              '<rect x="28" y="106" width="44" height="6" rx="3"/></g>';
+    }
+    return base + extra;
+  }
+
+  /**
+   * 建一隻小朋友的 SVG 內容（字串）。本地座標 100 × 160 ＝ 1.0 × 1.6 格。
+   * @param {object} char themes/characters.js 的一筆資料
+   * @param {object} opt  { id, ring: 玩家色外框, halo: 腳下光環 }
+   */
+  function buildKid(char, opt) {
+    opt = opt || {};
+    const c = opt.id || ('k' + (++uid));
+
+    const defs =
+      '<defs>' +
+      '<radialGradient id="' + c + '-skin" cx="38%" cy="30%" r="75%">' +
+        '<stop offset="0" stop-color="#fff" stop-opacity=".55"/>' +
+        '<stop offset="45%" stop-color="' + char.skin + '"/>' +
+        '<stop offset="100%" stop-color="' + char.skinDark + '"/></radialGradient>' +
+      '<linearGradient id="' + c + '-hair" x1="0" y1="0" x2="0.3" y2="1">' +
+        '<stop offset="0" stop-color="' + char.hairColor + '"/>' +
+        '<stop offset="100%" stop-color="' + char.hairDark + '"/></linearGradient>' +
+      '<linearGradient id="' + c + '-shirt" x1="0.1" y1="0" x2="0.9" y2="1">' +
+        '<stop offset="0" stop-color="' + char.shirt + '"/>' +
+        '<stop offset="100%" stop-color="' + char.shirtDark + '"/></linearGradient>' +
+      '<linearGradient id="' + c + '-pants" x1="0.1" y1="0" x2="0.9" y2="1">' +
+        '<stop offset="0" stop-color="' + char.pants + '"/>' +
+        '<stop offset="100%" stop-color="' + char.pantsDark + '"/></linearGradient>' +
+      '<linearGradient id="' + c + '-limb" x1="0" y1="0" x2="1" y2="0.4">' +
+        '<stop offset="0" stop-color="' + char.skin + '"/>' +
+        '<stop offset="100%" stop-color="' + char.skinDark + '"/></linearGradient>' +
+      '</defs>';
+
+    /* 手：上臂圓角柱 ＋ 手掌小球（旋轉原點在肩膀）。
+     * 肩膀放在身體外緣，走路擺手才看得出來，不會整條藏在身體後面。 */
+    const arm =
+      '<path d="M0 0q6 0 7 6v20q0 7-7 7t-7-7V6q1-6 7-6z" fill="url(#' + c + '-limb)"/>' +
+      '<circle cx="0" cy="30" r="7.5" fill="url(#' + c + '-skin)"/>';
+    /* 腳：褲管 ＋ 鞋子（旋轉原點在髖部） */
+    const leg =
+      '<path d="M0 0q7 0 8 7v22q0 7-8 7t-8-7V7q1-7 8-7z" fill="url(#' + c + '-pants)"/>' +
+      '<path d="M-9 30h18q3 0 3 4v4q0 4-4 4h-16q-4 0-4-4v-4q0-4 3-4z" fill="' + char.shoe + '"/>';
+
+    const face =
+      '<g class="k-eyes">' +
+        '<ellipse cx="38" cy="42" rx="5" ry="6.5" fill="#2C2422"/>' +
+        '<ellipse cx="62" cy="42" rx="5" ry="6.5" fill="#2C2422"/>' +
+        '<circle cx="36.4" cy="39.6" r="1.9" fill="#fff"/>' +
+        '<circle cx="60.4" cy="39.6" r="1.9" fill="#fff"/>' +
+      '</g>' +
+      '<g class="k-eyes-shut" opacity="0">' +
+        '<path d="M32 43q6 5 12 0" stroke="#2C2422" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+        '<path d="M56 43q6 5 12 0" stroke="#2C2422" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+      '</g>' +
+      '<g class="k-eyes-x" opacity="0">' +
+        '<path d="M33 37l10 10M43 37l-10 10" stroke="#2C2422" stroke-width="3" stroke-linecap="round"/>' +
+        '<path d="M57 37l10 10M67 37l-10 10" stroke="#2C2422" stroke-width="3" stroke-linecap="round"/>' +
+      '</g>' +
+      '<ellipse cx="28" cy="50" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/>' +
+      '<ellipse cx="72" cy="50" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/>' +
+      '<path class="k-mouth" d="M44 53q6 6 12 0" stroke="#B4574F" stroke-width="3" fill="none" stroke-linecap="round"/>';
+
+    const halo = opt.halo
+      ? '<ellipse class="k-halo" cx="50" cy="156" rx="30" ry="8" fill="none" stroke="' + opt.halo + '" stroke-width="4" opacity=".8"/>'
+      : '';
+    const ringLayer = opt.ring
+      ? '<circle class="k-ring" cx="50" cy="40" r="33" fill="none" stroke="' + opt.ring + '" stroke-width="4" opacity=".9"/>'
+      : '';
+
+    const body =
+      '<ellipse class="k-shadow" cx="50" cy="157" rx="26" ry="5" fill="#000" opacity=".16"/>' +
+      '<g class="k-figure">' +
+        '<g class="k-armR" transform="translate(76,74)">' + arm + '</g>' +
+        '<g class="k-legR" transform="translate(61,114)">' + leg + '</g>' +
+        '<g class="k-legL" transform="translate(39,114)">' + leg + '</g>' +
+        '<g class="k-body">' + topPath(char.top, c, char.accent) + '</g>' +
+        '<g class="k-armL" transform="translate(24,74)">' + arm + '</g>' +
+        '<g class="k-head">' +
+          '<path d="M44 62h12v10h-12z" fill="' + char.skinDark + '"/>' +
+          '<circle cx="50" cy="40" r="30" fill="url(#' + c + '-skin)"/>' +
+          hairPath(char.hair, c) +
+          '<g class="k-face">' + face + '</g>' +
+        '</g>' +
+      '</g>';
+
+    return defs + halo + body + ringLayer;
+  }
+
+  /**
+   * 換姿勢（六組：走路、下墜、落地／站立、踩刺、被頂、暈眩）。
+   * 只改 transform 與少數 opacity，不重建 DOM。
+   */
+  function poseKid(el, pose, phase, opt) {
+    if (!el) return;
+    opt = opt || {};
+    const q = sel => el.querySelector(sel);
+    const armL = q('.k-armL'), armR = q('.k-armR');
+    const legL = q('.k-legL'), legR = q('.k-legR');
+    const fig = q('.k-figure'), head = q('.k-head');
+    const eyes = q('.k-eyes'), shut = q('.k-eyes-shut'), ex = q('.k-eyes-x');
+    const mouth = q('.k-mouth');
+    if (!armL || !legL || !fig) return;
+
+    let aL = 8, aR = -8, lL = 0, lR = 0, tilt = 0, bob = 0, sy = 1;
+    let eye = 'open';
+    if (pose === 'walk') {
+      const s = Math.sin(phase * 9);
+      lL = s * 26; lR = -s * 26;
+      aL = -s * 30 + 6; aR = s * 30 - 6;
+      bob = Math.abs(s) * -2;
+    } else if (pose === 'fall') {
+      aL = -120; aR = 120; lL = -12; lR = 14;
+      bob = Math.sin(phase * 14) * 1.5;
+    } else if (pose === 'spring') {
+      aL = -160; aR = 160; lL = 18; lR = -18; sy = 1.06;
+    } else if (pose === 'land') {
+      aL = -30; aR = 30; lL = -6; lR = 6; sy = 0.94;
+    } else if (pose === 'spike') {
+      aL = -80; aR = 80; tilt = Math.sin(phase * 40) * 6; eye = 'x';
+    } else if (pose === 'ceiling') {
+      aL = -170; aR = 170; sy = 0.9; lL = 6; lR = -6; eye = 'shut';
+    } else if (pose === 'stun') {
+      tilt = 16; aL = -40; aR = 40; lL = -18; lR = 20; eye = 'x';
+    } else {
+      bob = Math.sin(phase * 2.2) * 1.5;
+      eye = (phase % 4.2) < 0.16 ? 'shut' : 'open';
+    }
+
+    armL.setAttribute('transform', 'translate(24,74) rotate(' + aL.toFixed(1) + ')');
+    armR.setAttribute('transform', 'translate(76,74) rotate(' + aR.toFixed(1) + ')');
+    legL.setAttribute('transform', 'translate(39,114) rotate(' + lL.toFixed(1) + ')');
+    legR.setAttribute('transform', 'translate(61,114) rotate(' + lR.toFixed(1) + ')');
+    fig.setAttribute('transform',
+      'translate(50,' + (150 + bob).toFixed(1) + ') rotate(' + tilt.toFixed(1) + ') scale(' +
+      (opt.face === -1 ? -1 : 1) + ',' + sy.toFixed(3) + ') translate(-50,-150)');
+    if (head) head.setAttribute('transform', 'rotate(' + (tilt * 0.4).toFixed(1) + ' 50 40)');
+    if (eyes) eyes.setAttribute('opacity', eye === 'open' ? '1' : '0');
+    if (shut) shut.setAttribute('opacity', eye === 'shut' ? '1' : '0');
+    if (ex) ex.setAttribute('opacity', eye === 'x' ? '1' : '0');
+    if (mouth) {
+      mouth.setAttribute('d', eye === 'x' ? 'M44 56q6-6 12 0'
+        : (pose === 'fall' || pose === 'spring') ? 'M45 52q5 8 10 0'
+        : 'M44 53q6 6 12 0');
+    }
+  }
+
+  /** 大頭貼（首頁、選角、結算用）：裁到頭與肩，尺寸小也看得清楚 */
+  function kidAvatarSvg(char, size, ring) {
+    const id = 'av' + (++uid);
+    return '<svg class="kid-avatar" viewBox="10 2 80 80" width="' + size + '" height="' + size +
+      '" role="img" aria-label="' + char.name + '">' + buildKid(char, { id: id, ring: ring }) + '</svg>';
+  }
+  /** 全身像 */
+  function kidFullSvg(char, size, ring) {
+    const id = 'fu' + (++uid);
+    return '<svg class="kid-full" viewBox="0 0 100 166" width="' + Math.round(size * 100 / 166) +
+      '" height="' + size + '" role="img" aria-label="' + char.name + '">' +
+      buildKid(char, { id: id, ring: ring }) + '</svg>';
+  }
+
+  /* ================================================================
+   *  二、場景與階梯（Canvas）
+   * ================================================================ */
+
+  function create(canvas, actorSvg) {
+    const ctx = canvas.getContext('2d');
+    const view = { scale: 30, offX: 0, w: 360, h: 540, viewH: 18, dpr: 1 };
+    let shake = 0;
+    let particles = [];
+    const opts = { reduceMotion: false, colorAssist: false, depthGuide: false, viewH: 18 };
+    const actors = new Map();     /* playerId → { g, inner, label } */
+    const NS = 'http://www.w3.org/2000/svg';
+
+    function resize() {
+      const box = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, root.devicePixelRatio || 1);
+      view.w = Math.max(120, box.width);
+      view.h = Math.max(120, box.height);
+      view.dpr = dpr;
+      canvas.width = Math.round(view.w * dpr);
+      canvas.height = Math.round(view.h * dpr);
+      view.scale = Math.min(view.w / 12, view.h / (opts.viewH || 18));
+      view.viewH = view.h / view.scale;
+      view.offX = (view.w - 12 * view.scale) / 2;
+      if (actorSvg) actorSvg.setAttribute('viewBox', '0 0 ' + view.w.toFixed(1) + ' ' + view.h.toFixed(1));
+    }
+
+    const px = x => view.offX + x * view.scale;
+    const py = (y, camTop) => (y - camTop) * view.scale;
+
+    function setOptions(next) {
+      Object.assign(opts, next || {});
+      resize();
+    }
+
+    function roundRect(x, y, w, h, r) {
+      r = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+    function arrow(x, y, len, size) {
+      ctx.beginPath();
+      ctx.moveTo(x - len, y - size / 2);
+      ctx.lineTo(x - len, y + size / 2);
+      ctx.lineTo(x + len, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    /* ---------- 背景 ---------- */
+
+    function drawDeco(scene, x, y, dir) {
+      const col = scene.decoColors;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(dir, 1);
+      const k = scene.deco;
+      if (k === 'blocks') {
+        for (let i = 0; i < 3; i++) {
+          ctx.fillStyle = col[i % col.length];
+          ctx.fillRect(-14 + i * 4, -i * 22, 26, 20);
+        }
+      } else if (k === 'trees') {
+        ctx.fillStyle = '#8A5C33'; ctx.fillRect(-4, 0, 8, 40);
+        ctx.fillStyle = col[0]; ctx.beginPath(); ctx.arc(0, -8, 24, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = col[1]; ctx.beginPath(); ctx.arc(-12, 2, 15, 0, Math.PI * 2); ctx.fill();
+      } else if (k === 'shells') {
+        ctx.fillStyle = col[0];
+        ctx.beginPath(); ctx.arc(0, 0, 18, Math.PI, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2;
+        for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(i * 8, -16); ctx.stroke(); }
+      } else if (k === 'roots') {
+        ctx.strokeStyle = '#7A5433'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-16, 30); ctx.quadraticCurveTo(6, 4, -4, -26); ctx.stroke();
+        ctx.fillStyle = col[0];
+        ctx.beginPath(); ctx.ellipse(12, 20, 13, 8, 0, Math.PI, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#F6EEDC'; ctx.fillRect(9, 20, 6, 12);
+      } else if (k === 'candy') {
+        ctx.strokeStyle = '#FFF6FA'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(0, 34); ctx.lineTo(0, 4); ctx.stroke();
+        for (let i = 3; i >= 0; i--) {
+          ctx.beginPath(); ctx.arc(0, 0, 6 + i * 5, 0, Math.PI * 2);
+          ctx.strokeStyle = col[i % col.length]; ctx.lineWidth = 5; ctx.stroke();
+        }
+      } else {
+        ctx.fillStyle = col[3];
+        for (let i = 0; i < 6; i++) {
+          const a = i * 1.7, r = 10 + i * 6;
+          ctx.globalAlpha = 0.9 - i * 0.12;
+          ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r, 2.4, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = col[0]; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, 20, 0.3, 2.6); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawBackground(scene, camTop) {
+      const g = ctx.createLinearGradient(0, 0, 0, view.h);
+      g.addColorStop(0, scene.sky[0]);
+      g.addColorStop(1, scene.sky[1]);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, view.w, view.h);
+
+      /* 遠景視差：畫在場地範圍內（畫到牆外面會變成兩坨莫名的色塊），
+       * 大小與位置用層號揉出來的偽隨機，看起來才不會像複製貼上。 */
+      const span = 190;
+      const drift = ((camTop * view.scale * 0.18) % span + span) % span;
+      const wobble = n => (Math.sin(n * 12.9898) * 43758.5453) % 1;
+      ctx.save();
+      ctx.globalAlpha = 0.32;
+      ctx.fillStyle = scene.far;
+      const rows = Math.ceil(view.h / span) + 2;
+      const base = Math.floor(camTop * view.scale / span);
+      for (let i = -1; i < rows; i++) {
+        const n = base + i;
+        const yy = i * span - drift;
+        const rx = 54 + Math.abs(wobble(n)) * 46;
+        const cx = px(1.4 + Math.abs(wobble(n + 0.5)) * 9.2);
+        ctx.beginPath(); ctx.ellipse(cx, yy, rx, rx * 0.36, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+
+      /* 中景裝飾：每套世界不同（純向量，沒有文字美術） */
+      const span2 = 210;
+      const drift2 = ((camTop * view.scale * 0.34) % span2 + span2) % span2;
+      const jitter = n => ((Math.sin(n * 78.233) * 12345.678) % 1);
+      const base2 = Math.floor(camTop * view.scale / span2);
+      ctx.save();
+      ctx.globalAlpha = 0.42;
+      for (let i = -1; i < Math.ceil(view.h / span2) + 2; i++) {
+        const n = base2 + i;
+        const yy = i * span2 - drift2;
+        drawDeco(scene, px(0.65), yy + 30 + Math.abs(jitter(n)) * 60, 1);
+        drawDeco(scene, px(11.35), yy + 120 + Math.abs(jitter(n + 3)) * 60, -1);
+      }
+      ctx.restore();
+
+      /* 左右牆（撞牆停住，不繞回） */
+      const wall = ctx.createLinearGradient(0, 0, view.w, 0);
+      wall.addColorStop(0, scene.mid);
+      wall.addColorStop(0.07, 'rgba(0,0,0,0)');
+      wall.addColorStop(0.93, 'rgba(0,0,0,0)');
+      wall.addColorStop(1, scene.mid);
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = wall;
+      ctx.fillRect(0, 0, view.w, view.h);
+      ctx.restore();
+      /* 場地兩側（桌機寬版才會出現）壓暗一點，讓視線集中在樓梯上 */
+      if (view.offX > 0.5) {
+        ctx.fillStyle = 'rgba(70,45,20,.10)';
+        ctx.fillRect(0, 0, view.offX, view.h);
+        ctx.fillRect(view.w - view.offX, 0, view.offX, view.h);
+      }
+    }
+
+    /** 深度輔助線（設定可開，每 10 公尺一條淡線） */
+    function drawGuides(scene, camTop) {
+      if (!opts.depthGuide) return;
+      ctx.save();
+      ctx.strokeStyle = scene.guide;
+      ctx.fillStyle = scene.guide;
+      ctx.lineWidth = 1;
+      ctx.font = '600 11px system-ui, sans-serif';
+      const from = Math.ceil(camTop / 10) * 10;
+      for (let d = from; d < camTop + view.viewH; d += 10) {
+        const y = py(d, camTop);
+        ctx.beginPath(); ctx.moveTo(px(0), y); ctx.lineTo(px(12), y); ctx.stroke();
+        ctx.fillText(d + 'm', px(0) + 4, y - 3);
+      }
+      ctx.restore();
+    }
+
+    /* ---------- 階梯：五種都用不同形狀＋不同顏色＋不同動態 ---------- */
+
+    function drawStep(st, scene, camTop, time) {
+      const x0 = px(st.x0), x1 = px(st.x1);
+      const w = x1 - x0;
+      const y = py(st.depth, camTop);
+      const h = Math.max(8, view.scale * 0.42);
+      const assist = opts.colorAssist;
+
+      ctx.save();
+      if (st.breakIn != null && !st.broken) {
+        ctx.globalAlpha = Math.max(0.25, st.breakIn / 0.25);
+        if (!opts.reduceMotion) ctx.translate(Math.sin(time * 60) * 1.6, 0);
+      }
+
+      if (st.kind === 'spike') {
+        /* 刺階：紅底 ＋ 三角尖刺（形狀最好認） */
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, scene.spike[0]); g.addColorStop(1, scene.spike[1]);
+        roundRect(x0, y, w, h, 4); ctx.fillStyle = g; ctx.fill();
+        ctx.fillStyle = '#FFF3F0';
+        const n = Math.max(3, Math.round(w / 12));
+        for (let i = 0; i < n; i++) {
+          const cw = w / n;
+          const sx = x0 + i * cw;
+          ctx.beginPath();
+          ctx.moveTo(sx + 1, y);
+          ctx.lineTo(sx + cw / 2, y - h * 0.7);
+          ctx.lineTo(sx + cw - 1, y);
+          ctx.closePath(); ctx.fill();
+        }
+        if (assist) { ctx.strokeStyle = '#7A0F0C'; ctx.lineWidth = 3; roundRect(x0, y, w, h, 4); ctx.stroke(); }
+      } else if (st.kind === 'fake') {
+        /* 假階：顏色偏白 ＋ 邊緣裂痕 */
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, scene.fake[0]); g.addColorStop(1, scene.fake[1]);
+        roundRect(x0, y, w, h, 5); ctx.fillStyle = g; ctx.fill();
+        ctx.strokeStyle = 'rgba(90,80,70,.55)'; ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        for (let i = 1; i < 4; i++) {
+          const cx = x0 + w * (i / 4);
+          ctx.moveTo(cx - 4, y + 1); ctx.lineTo(cx + 2, y + h * 0.55); ctx.lineTo(cx - 2, y + h - 1);
+        }
+        ctx.stroke();
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = assist ? '#6B6156' : 'rgba(120,110,95,.7)';
+        ctx.lineWidth = assist ? 3 : 2;
+        roundRect(x0, y, w, h, 5); ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (st.kind === 'spring') {
+        /* 彈簧跳床：螺旋彈簧 ＋ 壓縮動畫 */
+        const squash = st.squash ? Math.min(1, st.squash / 0.18) : 0;
+        const top = y + squash * h * 0.5;
+        ctx.strokeStyle = scene.spring[1];
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        /* 螺旋：疊起來的半橢圓，被踩到時壓扁 */
+        const coilH = h * 1.25 * (1 - squash * 0.6);
+        const turns = 3;
+        const cw = Math.min(w * 0.5, h * 2.2);
+        const cx = x0 + w / 2;
+        for (let i = 0; i < turns; i++) {
+          const cy = top + h * 0.55 + (i + 1) * (coilH / turns);
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, cw / 2, coilH / turns * 0.72, 0, Math.PI * 0.08, Math.PI * 0.92);
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.moveTo(cx - cw / 2, top + h * 0.55);
+        ctx.lineTo(cx - cw / 2, top + h * 0.55 + coilH);
+        ctx.moveTo(cx + cw / 2, top + h * 0.55);
+        ctx.lineTo(cx + cw / 2, top + h * 0.55 + coilH);
+        ctx.stroke();
+        const g = ctx.createLinearGradient(0, top, 0, top + h);
+        g.addColorStop(0, scene.spring[0]); g.addColorStop(1, scene.spring[1]);
+        roundRect(x0, top, w, h * 0.7, h * 0.35); ctx.fillStyle = g; ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.5)';
+        roundRect(x0 + 4, top + 2, w - 8, h * 0.2, h * 0.1); ctx.fill();
+        if (assist) {
+          ctx.strokeStyle = '#7A2A44'; ctx.lineWidth = 3;
+          roundRect(x0, top, w, h * 0.7, h * 0.35); ctx.stroke();
+        }
+      } else if (st.kind === 'belt') {
+        /* 輸送帶：滾輪轉動 ＋ 明顯方向箭頭（不靠顏色深淺表達方向） */
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, scene.belt[0]); g.addColorStop(1, scene.belt[1]);
+        roundRect(x0, y, w, h, h * 0.5); ctx.fillStyle = g; ctx.fill();
+        const dir = st.belt || 1;
+        const rollR = h * 0.34;
+        const spin = time * 5 * dir;
+        ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2;
+        const rolls = Math.max(2, Math.round(w / (rollR * 3)));
+        for (let i = 0; i < rolls; i++) {
+          const cx = x0 + (i + 0.5) * (w / rolls);
+          const cy = y + h / 2;
+          ctx.beginPath(); ctx.arc(cx, cy, rollR, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx + Math.cos(spin) * rollR, cy + Math.sin(spin) * rollR);
+          ctx.stroke();
+        }
+        /* 方向箭頭畫在帶面上，深色底＋白邊，淺色主題也看得清楚；會順著方向流動 */
+        const flow = ((time * 2.2 * dir) % 1 + 1) % 1;
+        const arrows = Math.max(1, Math.floor(w / 26));
+        for (let i = 0; i < arrows; i++) {
+          const t = (i + flow) / arrows;
+          const ax = x0 + 8 + t * (w - 16);
+          const fade = Math.sin(t * Math.PI);
+          ctx.globalAlpha = 0.35 + fade * 0.65;
+          ctx.fillStyle = '#12293A';
+          arrow(ax, y + h / 2, 7 * dir, 11);
+          ctx.strokeStyle = 'rgba(255,255,255,.9)';
+          ctx.lineWidth = 1.6;
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        if (assist) { ctx.strokeStyle = '#1F3A4A'; ctx.lineWidth = 3; roundRect(x0, y, w, h, h * 0.5); ctx.stroke(); }
+      } else {
+        /* 普通階：木頭／磚塊，木紋與上緣高光 */
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, scene.wood[0]); g.addColorStop(1, scene.wood[1]);
+        roundRect(x0, y, w, h, 4); ctx.fillStyle = g; ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.35)';
+        roundRect(x0 + 3, y + 2, w - 6, Math.max(2, h * 0.18), 2); ctx.fill();
+        ctx.strokeStyle = scene.woodEdge; ctx.lineWidth = 1.4;
+        for (let i = 1; i < 3; i++) {
+          const gy = y + h * (i / 3);
+          ctx.beginPath(); ctx.moveTo(x0 + 5, gy); ctx.lineTo(x1 - 5, gy); ctx.stroke();
+        }
+        if (st.wide) {
+          ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2;
+          roundRect(x0, y, w, h, 4); ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    /* ---------- 天花板 ---------- */
+
+    function drawCeiling(scene, cloud, time) {
+      const h = Math.max(14, view.scale * 0.6);
+      ctx.save();
+      if (cloud) {
+        /* 幼幼班：軟綿綿的雲朵，完全不畫尖刺 */
+        ctx.fillStyle = 'rgba(255,255,255,.96)';
+        const n = Math.max(4, Math.round(view.w / 60));
+        ctx.beginPath();
+        ctx.rect(0, -h * 1.5, view.w, h * 1.5);
+        for (let i = 0; i <= n; i++) {
+          const cx = (i / n) * view.w;
+          const r = h * (0.55 + 0.18 * Math.sin(i * 1.3 + time * 1.2));
+          ctx.moveTo(cx + r, h * 0.05);
+          ctx.arc(cx, h * 0.05, r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.fillStyle = 'rgba(190,215,235,.45)';
+        for (let i = 0; i <= n; i++) {
+          const cx = (i / n) * view.w;
+          ctx.beginPath();
+          ctx.ellipse(cx, h * 0.45, h * 0.4, h * 0.16, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        return;
+      }
+      const g = ctx.createLinearGradient(0, -h, 0, h);
+      g.addColorStop(0, scene.spike[1]);
+      g.addColorStop(1, scene.spike[0]);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, -h, view.w, h);
+      ctx.fillStyle = '#FFF0EC';
+      const n = Math.max(6, Math.round(view.w / 26));
+      for (let i = 0; i < n; i++) {
+        const cw = view.w / n;
+        const sx = i * cw;
+        ctx.beginPath();
+        ctx.moveTo(sx + 1, 0);
+        ctx.lineTo(sx + cw / 2, h * 0.85);
+        ctx.lineTo(sx + cw - 1, 0);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(view.w, 0); ctx.stroke();
+      ctx.restore();
+    }
+
+    /* ---------- 粒子與畫面震動（開了「減少動態」就全部關掉） ---------- */
+
+    const PALETTE = {
+      fake: ['#FFF8EC', '#D8CDBB', '#B9AC96'],
+      spike: ['#FF6B5E', '#FFD1CA', '#FFFFFF'],
+      spring: ['#FFE066', '#FF9BB0', '#FFFFFF'],
+      milestone: ['#FF8FB1', '#7FC8F8', '#FFD44D', '#9BDE7E', '#B79CED']
+    };
+
+    function burst(kind, x, y, camTop) {
+      if (opts.reduceMotion) return;
+      const cx = px(x), cy = py(y, camTop);
+      const palette = PALETTE[kind] || ['#FFFFFF'];
+      const party = kind === 'milestone';
+      const n = party ? 46 : 14;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 40 + Math.random() * (party ? 260 : 140);
+        particles.push({
+          x: party ? view.w * 0.5 + (Math.random() - 0.5) * view.w * 0.8 : cx,
+          y: party ? view.h * 0.28 + (Math.random() - 0.5) * 60 : cy,
+          vx: Math.cos(a) * sp,
+          vy: party ? 60 + Math.random() * 120 : Math.sin(a) * sp - 40,
+          life: party ? 1.4 : 0.6,
+          max: party ? 1.4 : 0.6,
+          size: 2 + Math.random() * (party ? 5 : 3),
+          color: palette[Math.floor(Math.random() * palette.length)],
+          spin: Math.random() * 6
+        });
+      }
+      if (particles.length > 420) particles = particles.slice(-420);
+    }
+
+    function kick(power) {
+      if (opts.reduceMotion) return;
+      shake = Math.max(shake, power);
+    }
+
+    function stepParticles(dt) {
+      for (const p of particles) {
+        p.life -= dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 420 * dt;
+        p.spin += dt * 8;
+      }
+      if (particles.length) particles = particles.filter(p => p.life > 0);
+      shake = Math.max(0, shake - dt * 40);
+    }
+
+    function drawParticles() {
+      for (const p of particles) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.life / p.max);
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.spin);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size, -p.size * 0.6, p.size * 2, p.size * 1.2);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    /* ---------- 角色層（SVG 疊在 Canvas 上面） ---------- */
+
+    function syncActors(state, charOf) {
+      if (!actorSvg) return;
+      const seen = new Set();
+      state.players.forEach((p, i) => {
+        seen.add(p.id);
+        if (actors.has(p.id)) return;
+        const g = document.createElementNS(NS, 'g');
+        g.setAttribute('class', 'actor');
+        const inner = document.createElementNS(NS, 'g');
+        inner.setAttribute('class', 'actor-kid');
+        /* 玩家色外框：玩家 1 藍、玩家 2 紅（同房選同一隻也分得清） */
+        const ring = state.players.length > 1 ? (i === 0 ? '#4F86D6' : '#F2545B') : null;
+        inner.innerHTML = buildKid(charOf(p.char), {
+          id: 'act-' + p.id,
+          ring: ring,
+          halo: p.kind === 'human' ? '#FFE066' : null
+        });
+        g.appendChild(inner);
+        const label = document.createElementNS(NS, 'text');
+        label.setAttribute('class', 'actor-name');
+        label.setAttribute('text-anchor', 'middle');
+        label.textContent = p.name;
+        g.appendChild(label);
+        actorSvg.appendChild(g);
+        actors.set(p.id, { g: g, inner: inner, label: label });
+      });
+      for (const [id, a] of actors) {
+        if (!seen.has(id)) { a.g.remove(); actors.delete(id); }
+      }
+    }
+
+    function drawActors(state, time) {
+      const k = view.scale / 100;          /* 本地 100 單位 = 1 格 */
+      for (const p of state.players) {
+        const a = actors.get(p.id);
+        if (!a) continue;
+        const x = px(p.x) - view.scale / 2;
+        const y = py(p.y, state.cameraTop) - view.scale * 1.6;
+        a.g.setAttribute('transform', 'translate(' + x.toFixed(1) + ',' + y.toFixed(1) + ')');
+        a.inner.setAttribute('transform', 'scale(' + k.toFixed(4) + ')');
+        const pose = !p.alive ? 'stun'
+          : p.state === 'ceiling' ? 'ceiling'
+          : p.state === 'spike' ? 'spike'
+          : p.state === 'spring' ? 'spring'
+          : p.state === 'fall' ? 'fall'
+          : p.state === 'walk' ? 'walk' : 'idle';
+        poseKid(a.inner, pose, time, { face: p.face });
+        a.g.setAttribute('opacity', (p.invuln > 0 && Math.floor(time * 14) % 2) ? '0.45' : '1');
+        a.label.setAttribute('x', (view.scale / 2).toFixed(1));
+        a.label.setAttribute('y', '-6');
+        a.label.setAttribute('font-size', Math.max(10, Math.min(16, view.scale * 0.42)).toFixed(1));
+        a.label.style.display = state.players.length > 1 ? '' : 'none';
+      }
+    }
+
+    /* ---------- 畫一格 ---------- */
+
+    function draw(state, scene, charOf, time, dt) {
+      stepParticles(dt || 0);
+      ctx.save();
+      ctx.scale(view.dpr, view.dpr);
+      ctx.clearRect(0, 0, view.w, view.h);
+      if (shake > 0.01) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+      drawBackground(scene, state.cameraTop);
+      drawGuides(scene, state.cameraTop);
+
+      const top = state.cameraTop - 2, bottom = state.cameraTop + view.viewH + 2;
+      for (const st of state.steps) {
+        if (st.broken) continue;
+        if (st.squash) st.squash = Math.max(0, st.squash - (dt || 0));
+        if (st.depth < top || st.depth > bottom) continue;
+        drawStep(st, scene, state.cameraTop, time);
+      }
+      drawCeiling(scene, state.diff.cloudCeiling, time);
+      drawParticles();
+      ctx.restore();
+
+      syncActors(state, charOf);
+      drawActors(state, time);
+    }
+
+    function clearActors() {
+      for (const [, a] of actors) a.g.remove();
+      actors.clear();
+      particles = [];
+      shake = 0;
+    }
+
+    return {
+      resize, setOptions, draw, burst, kick, clearActors,
+      get view() { return view; },
+      worldToPx(x, y, camTop) { return { x: px(x), y: py(y, camTop) }; }
+    };
+  }
+
+  root.Render = { create, buildKid, poseKid, kidAvatarSvg, kidFullSvg };
+})(typeof self !== 'undefined' ? self : this);
