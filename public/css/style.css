@@ -352,7 +352,10 @@ button.soon-item:active { transform: translateY(2px); }
   flex-direction: column;
   gap: 8px;
   font-size: 14px;
-  overflow: hidden;
+  /* 線上模式多了聊天區，內容有可能比欄位高（矮螢幕、放大字體）。
+   * 原本是 overflow:hidden，超出的部分直接看不見也點不到，所以改成可以捲。 */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 /* 玩家卡：頭像＋暱稱 */
 .side-who {
@@ -793,3 +796,254 @@ button.soon-item:active { transform: translateY(2px); }
     100% { opacity: 0; }
   }
 }
+
+/* ================= 線上模式：大廳、房間、聊天（M2／M3） ================= */
+
+.panel.wide { max-width: 720px; }
+
+.lobby-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lobby-head h2 { margin: 0; flex: 1 1 auto; }
+.lobby-me {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, .7);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 12px 3px 4px;
+}
+.lobby-me svg { display: block; border-radius: 50%; }
+
+.lobby-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.lobby-bar .grow { flex: 1 1 auto; }
+
+/* 連線狀態：顏色就是狀態，不用讀字也知道 */
+.net-state {
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 3px 12px;
+  border: 2px solid var(--line);
+  background: #EFEAE2;
+  color: var(--ink-soft);
+}
+.net-state[data-state="online"] { background: #DFF3E0; border-color: #8CC79A; color: #2F7A44; }
+.net-state[data-state="connecting"] { background: #FFF3D6; border-color: #E7C777; color: #8A6416; }
+.net-state[data-state="error"] { background: #FBE1E4; border-color: #E39AA6; color: #A3364A; }
+
+.lobby-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.lobby-actions .big-btn { flex: 1 1 180px; }
+
+/* ---------- 房間列表 ---------- */
+
+.room-list, .seat-list, .spec-list, .chat-list { list-style: none; margin: 0; padding: 0; }
+
+.room-list { display: flex; flex-direction: column; gap: 8px; }
+.room-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, .8);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 10px;
+}
+.room-item-main { flex: 1 1 auto; min-width: 0; }
+.room-item-main b { display: block; font-size: 15px; }
+.room-meta { font-size: 12px; color: var(--ink-soft); }
+.room-tag {
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 10px;
+  background: #DFF3E0;
+  color: #2F7A44;
+}
+.room-tag.full { background: #FFF3D6; color: #8A6416; }
+.room-tag.hot { background: #FBE1E4; color: #A3364A; }
+
+/* ---------- 席位 ---------- */
+
+.seat-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  margin: 12px 0 6px;
+}
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, .82);
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 8px 10px;
+  min-height: 76px;
+}
+.seat.is-ready { border-color: #8CC79A; background: #F1FBF2; }
+.seat.is-off { opacity: .55; }
+.seat.is-empty { border-style: dashed; }
+.seat-face svg { display: block; border-radius: 50%; }
+.seat.is-empty .seat-face { width: 56px; height: 56px; border-radius: 50%; background: rgba(0, 0, 0, .05); }
+.seat-body { flex: 1 1 auto; min-width: 0; }
+.seat-body b { display: block; font-size: 15px; }
+.seat-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+
+.pill {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #EFEAE2;
+  color: var(--ink-soft);
+}
+.pill.host { background: #FFE9C2; color: #8A6416; }
+.pill.ready { background: #DFF3E0; color: #2F7A44; }
+.pill.off { background: #FBE1E4; color: #A3364A; }
+
+.spec-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.spec {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, .72);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px 2px 3px;
+}
+.spec svg { display: block; border-radius: 50%; }
+.spec.is-off { opacity: .5; }
+
+.room-diff { display: flex; gap: 6px; }
+.diff-btn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, .8);
+  color: var(--ink);
+  cursor: pointer;
+}
+.diff-btn.on { background: var(--brand); border-color: var(--brand-dark); color: #fff; }
+.diff-btn:disabled { cursor: default; opacity: .75; }
+
+.room-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.room-actions .big-btn { flex: 0 1 auto; }
+/* 「離開房間」推到最右邊，才不會跟「開始這局」擠在一起被誤按 */
+.room-actions #btn-leave-room { margin-left: auto; }
+
+.invite-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.invite-box { display: flex; gap: 6px; flex: 1 1 320px; min-width: 0; }
+.invite-box input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 8px;
+  background: #fff;
+}
+
+/* ---------- 聊天室 ---------- */
+
+.chat { border-top: 2px solid var(--line); padding-top: 8px; }
+.chat-list {
+  height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, .6);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+}
+.chat-list.mini { height: 86px; font-size: 12px; padding: 5px; gap: 2px; }
+.chat-line b { color: var(--brand-dark); margin-right: 5px; }
+.chat-line.spec b { color: var(--ink-soft); }
+.chat-sys { color: var(--ink-soft); font-size: 13px; }
+.chat-list.mini .chat-sys { font-size: 11px; }
+
+.chat-phrases { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+.chat-phrases.mini { gap: 4px; margin: 5px 0 0; }
+.mini-btn.phrase { font-size: 12px; padding: 3px 9px; }
+.chat-phrases.mini .mini-btn.phrase { font-size: 11px; padding: 2px 7px; }
+
+.chat-form { display: flex; gap: 6px; }
+.chat-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: #fff;
+}
+
+/* ---------- 觀戰標記 ---------- */
+
+.spectate-tag {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  z-index: 5;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(60, 40, 20, .62);
+  border-radius: 999px;
+  padding: 3px 14px;
+  pointer-events: none;
+}
+.spectate-tag[hidden] { display: none !important; }
+
+/* 手機直向：聊天室矮一點，席位一欄一個 */
+@media (orientation: portrait) and (max-width: 620px) {
+  .chat-list { height: 118px; }
+  .seat-list { grid-template-columns: 1fr; }
+  .room-actions .big-btn { flex: 1 1 100%; }
+  .room-actions #btn-leave-room { margin-left: 0; }
+}
+
+/* 橫向矮螢幕：對局中的側欄放不下聊天，直接收掉（短語還在房間裡） */
+@media (orientation: landscape) and (max-height: 430px) {
+  .side-chat { display: none; }
+}
+
+/* ---------- 短提示 ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(22px + var(--safe-b));
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(90vw, 460px);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(60, 40, 20, .9);
+  border-radius: 999px;
+  padding: 8px 18px;
+  box-shadow: 0 6px 18px rgba(60, 40, 20, .25);
+  text-align: center;
+}
+.toast.bad { background: #A3364A; }
+.toast[hidden] { display: none !important; }

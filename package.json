@@ -14,7 +14,8 @@
     "inject": "node scripts/inject-server-url.js",
     "test:online": "node scripts/online-check.js",
     "test:netcode": "node scripts/netcode-check.js",
-    "test:result": "node scripts/result-check.js"
+    "test:result": "node scripts/result-check.js",
+    "test:e2e": "node scripts/e2e-online.js"
   },
   "engines": {
     "node": ">=18"

@@ -45,6 +45,9 @@
     opt = opt || {};
     const now = opt.now || (() => Date.now());
     const send = opt.send;
+    /* 每一個固定步之前呼叫一次（不含回溯重演）。
+     * app.js 用它記下「上一格」的位置來做畫面內插，跟單機走同一套。 */
+    const beforeStep = opt.beforeStep || null;
 
     const st = {
       /* 身分 */
@@ -373,6 +376,7 @@
         acc -= STEP_MS;
         st.log.push({ time: st.match.time, dir: st.dir });
         if (st.log.length > C.LOG_KEEP) st.log.shift();
+        if (beforeStep) beforeStep(st.match);
         Rules.stepMatch(st.match, inputsAt(st.match.time), STEP_MS);
         ran++;
       }
@@ -412,6 +416,11 @@
       return { x: st.offset.x * k, y: st.offset.y * k };
     }
 
+    /** 這一格畫到兩個固定步之間的哪裡（0～1），給畫面內插用 */
+    function alpha() {
+      return Math.max(0, Math.min(1, acc / STEP_MS));
+    }
+
     function takeEvents() {
       const out = st.events;
       st.events = [];
@@ -436,7 +445,7 @@
 
     return {
       C: C, state: st, actions: actions,
-      hello, receive, setDir, frame, visualOffset, takeEvents, stats,
+      hello, receive, setDir, frame, visualOffset, alpha, takeEvents, stats,
       get match() { return st.match; },
       get room() { return st.room; },
       get me() { return st.me; }

@@ -15,7 +15,7 @@
     diffPicker: $('#diff-picker'), diffNote: $('#diff-note'),
     setupTitle: $('#setup-title'), setupHint: $('#setup-hint'), diffLabel: $('#diff-label'),
     vsAi: $('#btn-vs-ai'), start: $('#btn-start'),
-    sideFoe: $('#side-foe'), hudFoeName: $('#hud-foe-name'),
+    sideFoe: $('#side-foe'), hudFoeName: $('#hud-foe-name'), hudFoeLabel: $('#hud-foe-label'),
     hudFoeDepth: $('#hud-foe-depth'), hudFoeHp: $('#hud-foe-hp'),
     canvas: $('#canvas'), actors: $('#actors'), stage: $('#stage'),
     hudDepth: $('#hud-depth'), hudHp: $('#hud-hp'), hudHpRow: $('#hud-hp-row'),
@@ -31,7 +31,9 @@
     milestone: $('#overlay-milestone'), milestoneText: $('#milestone-text'),
     rotateTip: $('#rotate-tip'), rotateClose: $('#rotate-close'),
     pads: $('#pads'), padLeft: $('#pad-left'), padRight: $('#pad-right'),
-    pause: $('#overlay-pause'), resume: $('#btn-resume'), restart: $('#btn-restart'), goHome: $('#btn-home'),
+    pause: $('#overlay-pause'), pauseTitle: $('#pause-title'),
+    resume: $('#btn-resume'), restart: $('#btn-restart'), goHome: $('#btn-home'),
+    spectateTag: $('#spectate-tag'), sideChat: $('#side-chat'), toast: $('#toast'),
     ovResult: $('#ov-result'),
     resultTitle: $('#result-title'), resultHero: $('#result-hero'), resultNew: $('#result-new'),
     resultList: $('#result-list'), again: $('#btn-again'), changeDiff: $('#btn-change-diff'),
@@ -51,6 +53,26 @@
   const view = Render.create(els.canvas, els.actors);
   const settingsModal = SvgUI.modal(els.modal, els.settingsBtn);
 
+  /* 線上模式。伺服器位置一律問 config.js，這裡不硬編碼也不回退 localhost。 */
+  const online = Online.create({
+    serverUrl: (self.Config && Config.serverUrl) || null,
+    /* 沒自己取名字就送空的，讓伺服器配一個可愛的隨機暱稱 ——
+     * 不然兩個人都會叫「小玩家」，對手欄根本分不出誰是誰 */
+    nameOf: () => (store.nickname || '').trim(),
+    charOf: () => G.char,
+    /* 畫面內插要在每個固定步之前存一份位置，線上跟單機走同一套 */
+    beforeStep: st => snapshotPrev(st),
+    onNotice: (text, kind) => toast(text, kind),
+    onEnterRoom: () => { if (G.screen !== 'game') show('room'); },
+    onMatchStart: info => startOnlineMatch(info),
+    onMatchEnd: (result, meId) => finish(result, meId),
+    onBackToLobby: () => {
+      /* 兩種情況都走這裡：一局收掉了（回房間等下一局），或是離開／被踢（回大廳） */
+      if (G.mode === 'online') { backFromOnlineMatch(); return; }
+      if (G.screen === 'room' || G.screen === 'game') show('lobby');
+    }
+  });
+
   const G = {
     screen: 'home',
     match: null,
@@ -59,8 +81,12 @@
     acc: 0,
     time: 0,                 /* 給動畫用的連續時間 */
     paused: false,
-    mode: 'solo',                /* 'solo' 一個人玩｜'ai' 跟電腦對戰 */
+    mode: 'solo',                /* 'solo' 一個人玩｜'ai' 跟電腦對戰｜'online' 線上 */
     ai: null,                    /* 對戰時的 AI 控制器 */
+    meId: 'p1',                  /* 哪一位是「我」（線上時是伺服器給的 id；觀戰時借用一號位） */
+    spectating: false,
+    menu: false,                 /* 線上模式的 Esc 選單（遊戲照跑，不暫停） */
+    netInfo: '',
     difficulty: store.difficulty || 'normal',
     char: store.char || 'yuan',
     scene: Scenes.sceneFor(0),
@@ -73,6 +99,26 @@
   };
 
   const charOf = id => Characters.byId(id);
+
+  /* 「我」不一定是 players[0]：線上對戰的席位順序由伺服器決定，觀戰時根本沒有我。
+   * 所有 HUD 與結算都走這兩個函式，才不會在線上模式顯示錯人的血量。 */
+  const mePlayer = s => (s && s.players.find(p => p.id === G.meId)) || (s && s.players[0]) || null;
+  const foePlayer = s => {
+    const m = mePlayer(s);
+    return (s && s.players.find(p => p !== m)) || null;
+  };
+
+  /* ================= 短提示 ================= */
+
+  let toastTimer = 0;
+  function toast(text, kind) {
+    if (!els.toast || !text) return;
+    els.toast.textContent = text;
+    els.toast.classList.toggle('bad', kind === 'bad');
+    els.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { els.toast.hidden = true; }, 3200);
+  }
 
   /* ================= 色彩：換世界的 0.8 秒漸變 ================= */
 
@@ -103,7 +149,7 @@
 
   /* ================= 畫面切換 ================= */
 
-  const BACK_TO = { setup: 'home', online: 'home', help: 'home' };
+  const BACK_TO = { setup: 'home', online: 'home', help: 'home', lobby: 'online', room: 'lobby' };
 
   function show(name) {
     G.screen = name;
@@ -117,12 +163,34 @@
     if (name === 'home') renderHomeRecords();
     if (name === 'setup') renderSetup();
     if (name === 'game') { view.resize(); updateRotateTip(); }
+    if (name === 'lobby') {
+      online.syncMe((store.nickname || '').trim(), G.char);
+      online.connect();
+      online.renderLobby();
+    }
+    if (name === 'room') online.renderRoom();
+    if (name !== 'game') {
+      if (els.spectateTag) els.spectateTag.hidden = true;
+      if (els.sideChat) els.sideChat.hidden = true;
+    }
   }
 
   function goto(name) {
+    const leavingRoom = (G.screen === 'room' || (G.screen === 'game' && G.mode === 'online')) &&
+      name !== 'room' && name !== 'game';
     if (G.screen === 'game' && name !== 'game') stopMatch();
+    /* 從房間或對局裡走掉就是離開房間（對局中離開＝判輸，規劃書 §4.4） */
+    if (leavingRoom) {
+      const c = online.client();
+      if (c) c.actions.leave();
+    }
+    /* 完全離開線上區域就把連線收掉，房間才不會一直掛著一個離線的人 */
+    if (name !== 'lobby' && name !== 'room' && name !== 'game') online.disconnect();
     show(name);
   }
+
+  const currentName = () =>
+    (els.nickname.value || '').trim() || store.nickname || els.nickname.placeholder || '小玩家';
 
   /* ================= 首頁 ================= */
 
@@ -199,6 +267,8 @@
     const btn = e.target.closest('[data-char]');
     if (!btn) return;
     G.char = btn.dataset.char;
+    /* 換了角色就同步給伺服器，房間卡片與名牌才會跟著換 */
+    online.syncMe((store.nickname || '').trim(), G.char);
     store.char = G.char; Store.save(store);
     sound.play('click');
     renderSetup();
@@ -267,6 +337,54 @@
     loop(0);
   }
 
+  /** 伺服器說開打了（自己上場或觀戰都走這裡） */
+  function startOnlineMatch(info) {
+    G.mode = 'online';
+    G.spectating = !!info.spectating;
+    const s = online.match;
+    if (!s) return;
+    /* 觀戰沒有「我」，借一號位當主視角，HUD 才有東西可以顯示 */
+    G.meId = G.spectating ? (s.players[0] && s.players[0].id) : info.meId;
+    G.match = s;
+    G.difficulty = s.difficulty;
+    G.paused = false;
+    G.menu = false;
+    G.acc = 0;
+    G.last = 0;
+    G.milestoneTimer = 0;
+    G.prev = { ready: false, cameraTop: 0, players: {} };
+    G.scene = Scenes.sceneFor(0);
+    G.sceneFrom = null;
+    G.sceneT = 1;
+    view.clearActors();
+    applyRenderOptions();
+    sound.setScene(0);
+    sound.setTempo(1);
+    els.milestone.hidden = true;
+    if (els.ovResult) els.ovResult.hidden = true;
+    show('game');
+    els.finishBtn.hidden = true;
+    if (els.spectateTag) els.spectateTag.hidden = !G.spectating;
+    if (els.sideChat) els.sideChat.hidden = false;
+    /* 觀戰不給方向鍵（也不會送輸入意圖） */
+    els.pads.classList.toggle('hidden', G.spectating);
+    online.renderChat();
+    updateHud(true);
+    input.clear();
+    loop(0);
+  }
+
+  /** 這一局收掉了（結算停留結束）→ 回房間等下一局 */
+  function backFromOnlineMatch() {
+    if (G.mode !== 'online') return;
+    stopMatch();
+    G.mode = 'solo';
+    G.meId = 'p1';
+    G.spectating = false;
+    /* 房間還在就回房間等下一局；房間沒了（被踢、房主關掉）就回大廳 */
+    show(online.room ? 'room' : 'lobby');
+  }
+
   function stopMatch() {
     if (G.raf) cancelAnimationFrame(G.raf);
     G.raf = 0;
@@ -278,6 +396,9 @@
     els.milestone.hidden = true;
     if (els.ovResult) els.ovResult.hidden = true;
     if (els.hurtFlash) els.hurtFlash.classList.remove('blink');
+    if (els.spectateTag) els.spectateTag.hidden = true;
+    if (els.sideChat) els.sideChat.hidden = true;
+    G.menu = false;
     view.clearActors();
     input.clear();
   }
@@ -286,12 +407,20 @@
 
   function loop(now) {
     G.raf = requestAnimationFrame(loop);
+    /* 線上模式的狀態物件由 net.js 保管：收到完整快照時它會重建一份，
+     * 所以每一格都要重新問，不能抓著舊的。 */
+    if (G.mode === 'online') G.match = online.match;
     const s = G.match;
     if (!s) return;
     if (!G.last) G.last = now;
     let dt = (now - G.last) / 1000;
     G.last = now;
     if (dt > 0.25) dt = 0.25;                 /* 切到別的分頁回來不要一次補一大段 */
+
+    if (G.mode === 'online') {
+      onlineFrame(s, now, dt);
+      return;
+    }
 
     if (!G.paused && s.phase !== 'over') {
       G.time += dt;
@@ -339,6 +468,33 @@
     updateHud(false);
   }
 
+  /**
+   * 線上模式的一格。跟單機最大的差別：
+   *   · 不自己推進規則核心 —— 交給 net.js（本地預測 ＋ 收到快照後回溯重演校正）
+   *   · 不能暫停（伺服器不會停），所以沒有 G.paused 這條路
+   *   · 觀戰不讀輸入，也不送輸入意圖
+   */
+  function onlineFrame(s, now, dt) {
+    G.time += dt;
+    const cmd = G.spectating ? { dir: 0 } : input.read();
+    online.frame(now, cmd.dir);
+    handleEvents(online.takeEvents());
+
+    els.countdown.hidden = s.phase !== 'countdown';
+    if (s.phase === 'countdown') els.countdownNum.textContent = Math.max(1, Math.ceil(s.countdown));
+
+    if (G.milestoneTimer > 0) {
+      G.milestoneTimer -= dt;
+      if (G.milestoneTimer <= 0) els.milestone.hidden = true;
+    }
+    if (G.sceneT < 1) G.sceneT = Math.min(1, G.sceneT + dt / 0.8);
+
+    const scene = blendScene(G.sceneFrom, G.scene, G.sceneT);
+    /* 校正之後的視覺補正只加在自己身上，這樣回溯重演不會看到瞬移 */
+    view.draw(interpolated(s, online.alpha(), online.visualOffset()), scene, charOf, G.time, dt);
+    updateHud(false);
+  }
+
   /* ---------- 畫面內插（讓滾動變柔順） ---------- */
 
   /**
@@ -359,9 +515,13 @@
 
   const lerp = (a, b, t) => a + (b - a) * t;
 
-  function interpolated(s) {
+  /**
+   * @param {number} [alpha] 這一格落在兩個固定步之間的哪裡；沒給就用單機的累積器
+   * @param {{x:number,y:number}} [offset] 只加在「我」身上的視覺補正（線上校正用）
+   */
+  function interpolated(s, alpha, offset) {
     if (!G.prev.ready || G.paused || s.phase !== 'playing') return s;
-    const t = Math.max(0, Math.min(1, G.acc / Rules.STEP_MS));
+    const t = Math.max(0, Math.min(1, alpha == null ? G.acc / Rules.STEP_MS : alpha));
     /* 用原型繼承做一層薄薄的「畫面用狀態」：只覆蓋位置，
      * 其他欄位（階梯、難度、狀態旗標）都直接讀原本的，階梯的動畫計時也還是寫回同一份物件。 */
     const view = Object.create(s);
@@ -372,6 +532,7 @@
       const shown = Object.create(p);
       shown.x = lerp(e.x, p.x, t);
       shown.y = lerp(e.y, p.y, t);
+      if (offset && p.id === G.meId) { shown.x += offset.x; shown.y += offset.y; }
       return shown;
     });
     return view;
@@ -520,7 +681,8 @@
   function updateHud(force) {
     const s = G.match;
     if (!s) return;
-    const p = s.players[0];
+    const p = mePlayer(s);
+    if (!p) return;
     const meters = Math.floor(p.best);
     if (force || meters !== hudCache.depth) {
       els.hudDepth.textContent = meters;
@@ -559,12 +721,17 @@
       els.liveFakes.textContent = p.stats.fakes;
       els.liveCeil.textContent = p.stats.ceilingSeconds.toFixed(1) + ' 秒';
     }
+    /* 線上模式順便把延遲寫在同一行，連線變差看得出來 */
+    if (G.mode === 'online') {
+      const label = netLabel();
+      if (label !== G.netInfo) { els.hudNet.textContent = label; G.netInfo = label; }
+    }
     if (els.hudWorldFill) {
       const into = Math.max(0, Math.min(1, (p.best % Rules.C.MILESTONE) / Rules.C.MILESTONE));
       els.hudWorldFill.style.width = (into * 100).toFixed(1) + '%';
     }
     /* 對手（只給數字，不顯示領先／落後差距 —— 規劃書 §0.3） */
-    const foe = s.players[1];
+    const foe = foePlayer(s);
     if (foe) {
       els.hudFoeDepth.textContent = Math.floor(foe.best);
       if (force || foe.hp !== hudCache.foeHp || compact !== hudCache.compact) {
@@ -576,14 +743,25 @@
     }
     if (force) {
       els.sideFoe.hidden = !foe;
+      /* 觀戰的人沒有「對手」，兩個都是別人 */
+      if (els.hudFoeLabel) els.hudFoeLabel.textContent = G.spectating ? '另一位' : '對手';
       els.hudDiff.textContent = s.diff.name;
-      els.hudNet.textContent = foe ? '跟電腦對戰' : '單機一人挑戰';
+      els.hudNet.textContent = netLabel();
       const rec = store.records[s.difficulty];
       els.hudBest.textContent = rec && rec.depth ? '本機最深 ' + rec.depth + ' m' : '還沒有紀錄';
       els.hudHpRow.hidden = false;
       els.hudName.textContent = p.name;
       els.hudAvatar.innerHTML = Render.kidAvatarSvg(charOf(p.char), 50);
     }
+  }
+
+  function netLabel() {
+    if (G.mode !== 'online') {
+      return foePlayer(G.match) ? '跟電腦對戰' : '單機一人挑戰';
+    }
+    const st = online.stats();
+    const ping = st && st.rtt ? '・延遲 ' + st.rtt + 'ms' : '';
+    return (G.spectating ? '觀戰中' : '線上對戰') + ping;
   }
 
   /* ================= 結算 ================= */
@@ -593,20 +771,27 @@
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
-  function finish(result) {
-    const me = result.players[0];
-    const foe = result.players[1] || null;
+  function finish(result, meId) {
+    const online2 = G.mode === 'online';
+    const watching = online2 && G.spectating;
+    const me = result.players.find(p => p.id === (meId || G.meId)) || result.players[0];
+    const foe = result.players.find(p => p !== me) || null;
     const win = foe ? result.winner === me.id : null;
-    const saved = Store.record(store, {
-      difficulty: result.difficulty,
-      depth: me.depth,
-      world: me.world,
-      char: me.char,
-      versus: foe ? { kind: 'ai', win: win } : null
-    });
-    store = Store.load();
+    /* 觀戰不是自己的成績，不寫進本機紀錄 */
+    const saved = watching
+      ? { record: false, best: (store.records[result.difficulty] || { depth: 0 }) }
+      : Store.record(store, {
+        difficulty: result.difficulty,
+        depth: me.depth,
+        world: me.world,
+        char: me.char,
+        versus: foe ? { kind: online2 ? 'online' : 'ai', win: win } : null
+      });
+    if (!watching) store = Store.load();
 
-    els.resultTitle.textContent = foe
+    els.resultTitle.textContent = watching
+      ? (result.draw ? '平手！' : (result.players.find(p => p.id === result.winner) || me).name + ' 贏了')
+      : foe
       ? (result.draw ? '平手！' : win ? '你贏了！' : '你輸了')
       : result.endedBy === 'manual' ? '這局結束'
       : result.endedBy === 'fell' ? '摔下去了'
@@ -624,7 +809,9 @@
         Render.kidFullSvg(charOf(champ.char), 118) +
         line(champ, 'champ') + line(other) +
         '<div class="result-line">' + Rules.DIFFICULTY[result.difficulty].name +
-        '・最深到 ' + Scenes.sceneFor(me.world).name + '</div>';
+        '・最深到 ' + Scenes.sceneFor(me.world).name +
+        (foe && foe.forfeit ? '　（' + foe.name + ' 斷線判輸）' : '') +
+        (me.forfeit ? '　（你斷線判輸）' : '') + '</div>';
     } else {
       els.resultHero.innerHTML =
         Render.kidFullSvg(charOf(me.char), 132) +
@@ -635,6 +822,12 @@
     els.resultNew.hidden = !saved.record;
     if (saved.record || win) { sound.play('win'); view.burst('milestone', 6, 0, 0); }
     else if (foe) sound.play('dead');
+
+    /* 線上模式沒有「再玩一次」與「換難度」—— 回房間讓房主開下一局 */
+    els.again.hidden = !!online2;
+    els.changeDiff.hidden = !!online2;
+    els.resultHome.textContent = online2 ? '回房間' : '回首頁';
+    els.resultHome.classList.toggle('primary', !!online2);
 
     /* 這局統計（一人挑戰自動省略「被推開」） */
     const rows = [
@@ -648,6 +841,11 @@
     ];
     if (result.mode === 'versus') rows.splice(4, 0, ['被推開', me.stats.pushes + ' 次']);
     if (foe) rows.push(['對手最深', foe.meters + ' m']);
+    if (online2) {
+      const st = online.stats();
+      if (st) rows.push(['連線延遲', st.rtt + ' ms']);
+    }
+    if (watching) rows.unshift(['你的身分', '觀戰']);
     els.resultList.innerHTML = rows.map(r =>
       '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('');
 
@@ -666,6 +864,21 @@
     const s = G.match;
     if (!s || s.phase === 'over' || G.screen !== 'game') return;
     if (settingsModal.isOpen) return;
+
+    /* 線上對戰不能暫停：伺服器不會停，停下來只會被天花板追死。
+     * 所以 Esc 只是打開一個選單，遊戲照跑，按鈕也換成「離開房間」。 */
+    if (G.mode === 'online') {
+      G.menu = on == null ? !G.menu : !!on;
+      G.paused = false;
+      els.pause.hidden = !G.menu;
+      if (els.pauseTitle) els.pauseTitle.textContent = '選單（線上對戰不會暫停）';
+      els.restart.hidden = true;
+      els.goHome.textContent = '離開房間（算輸）';
+      return;
+    }
+    if (els.pauseTitle) els.pauseTitle.textContent = '暫停中';
+    els.restart.hidden = false;
+    els.goHome.textContent = '回首頁';
     G.paused = on == null ? !G.paused : !!on;
     els.pause.hidden = !G.paused;
     if (G.paused) { input.clear(); els.resume.focus(); } else { G.last = 0; }
@@ -754,7 +967,7 @@
       ['normal', '普通階', '站著不動，最安全的落腳點。'],
       ['belt', '輸送帶', '會把你帶著走（每秒 3 格）。可以逆著走，但只剩每秒 3 格，很慢。'],
       ['spring', '彈簧跳床', '踩到會往上彈一段，可以救命，也可能把你彈回天花板。'],
-      ['spike', '刺階', '踩到扣 1 顆愛心，之後有 0.6 秒無敵閃爍。'],
+      ['spike', '刺階', '踩到會扣愛心（依難度與玩到多深，一次 1～5 顆），之後有 0.6 秒無敵閃爍。'],
       ['fake', '假階', '踩到 0.25 秒後就崩掉，只能當短暫落腳點。']
     ];
     els.helpSteps.innerHTML = steps.map(s =>
@@ -766,9 +979,16 @@
 
     els.helpDiff.innerHTML = Rules.DIFFICULTY_LIST.map(id => {
       const d = Rules.DIFFICULTY[id];
+      /* 傷害是範圍，而且越往下玩越痛，所以淺處與深處都寫出來 */
+      const near = Rules.spikeDamageRange(d, 0);
+      const far = Rules.spikeDamageRange(d, Rules.C.SPIKE_DEEP_WORLDS);
+      const hurt = d.ceilInterval == null
+        ? '不會扣血'
+        : d.hp + ' 顆愛心，被刺到一次扣 ' + near[0] + '～' + near[1] + ' 顆（' +
+          (Rules.C.SPIKE_DEEP_WORLDS * Rules.C.MILESTONE) + ' m 之後 ' + far[0] + '～' + far[1] +
+          ' 顆），被天花板頂住每 ' + d.ceilInterval + ' 秒扣一次';
       return '<li><b>' + d.name + '</b>：下捲每秒 ' + d.scrollBase + ' 格、每 ' + d.accelEvery +
-        ' 秒加快 ' + Math.round(d.accelRate * 100) + '%（最多 ' + d.scrollCap + ' 倍）、' +
-        (d.ceilInterval == null ? '不會扣血' : d.hp + ' 顆愛心，被頂每 ' + d.ceilInterval + ' 秒扣 1 顆') +
+        ' 秒加快 ' + Math.round(d.accelRate * 100) + '%（最多 ' + d.scrollCap + ' 倍）、' + hurt +
         '、刺階 ' + Math.round(d.spikeRate * 100) + '%、假階 ' + Math.round(d.fakeRate * 100) + '%。</li>';
     }).join('');
   }
@@ -822,10 +1042,19 @@
   els.start.addEventListener('click', () => { sound.unlock(); startMatch(); });
   els.again.addEventListener('click', () => { sound.unlock(); startMatch(); });
   els.changeDiff.addEventListener('click', () => goto('setup'));
-  els.resultHome.addEventListener('click', () => goto('home'));
+  els.resultHome.addEventListener('click', () => {
+    /* 線上模式這顆是「回房間」，不是回首頁（不能順手把房間關掉） */
+    if (G.mode === 'online') { backFromOnlineMatch(); return; }
+    goto('home');
+  });
   els.resume.addEventListener('click', () => togglePause(false));
   els.restart.addEventListener('click', () => { togglePause(false); startMatch(); });
-  els.goHome.addEventListener('click', () => { togglePause(false); goto('home'); });
+  els.goHome.addEventListener('click', () => {
+    togglePause(false);
+    /* 線上模式：離開房間（對局中離開＝判輸），回到大廳而不是首頁 */
+    if (G.mode === 'online') { goto('lobby'); return; }
+    goto('home');
+  });
   els.finishBtn.addEventListener('click', () => {
     if (!G.match || G.match.phase === 'over') return;
     finish(Rules.endMatch(G.match, 'manual'));
@@ -851,7 +1080,16 @@
     applyRenderOptions(); view.resize(); updateRotateTip();
   }, 120));
   document.addEventListener('visibilitychange', () => {
+    /* 線上模式不能靠切分頁暫停（伺服器照跑），所以只有單機才自動暫停 */
+    if (G.mode === 'online') return;
     if (document.hidden && G.match && G.match.phase !== 'over') togglePause(true);
+  });
+
+  /* 暱稱與角色改了就同步給伺服器（房間卡片、名牌、觀戰名單都要跟著換） */
+  els.nickname.addEventListener('change', () => {
+    store.nickname = (els.nickname.value || '').trim();
+    Store.save(store);
+    online.syncMe((store.nickname || '').trim(), G.char);
   });
 
   /* ================= 起手 ================= */
@@ -867,4 +1105,11 @@
   G.char = store.char;
   G.difficulty = store.difficulty || 'normal';
   show('home');
+
+  /* 網址帶 ?invite=xxx（朋友貼給你的連結）→ 直接連線進那間房。
+   * 有效性由伺服器驗，無效會回一句看得懂的話。 */
+  if (online.takeInviteFromUrl()) {
+    toast('用邀請連結加入房間…');
+    show('lobby');
+  }
 })();

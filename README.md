@@ -28,14 +28,30 @@ npm start
 ## 怎麼驗
 
 ```
-npm run verify        # 下面四支全部跑一次
-npm test              # tests/verify.js          規則核心單元測試
-npm run test:stairs   # scripts/stairs-check.js  一萬層樓梯驗收
-npm run test:match    # scripts/match-check.js   單機與對戰一局跑完
-npm run test:ai       # scripts/ai-check.js      四段 AI 的行為差異
+npm run verify         # 下面七支全部跑一次（零依賴、不需要瀏覽器）
+npm test               # tests/verify.js           規則核心單元測試
+npm run test:stairs    # scripts/stairs-check.js   一萬層樓梯：可達性、無死路、空隙看得出來
+npm run test:match     # scripts/match-check.js    單機與對戰一局跑完、難度差異
+npm run test:ai        # scripts/ai-check.js       四段 AI 的行為差異（各 200 局）
+npm run test:online    # scripts/online-check.js   房間、席位、觀戰、搶位、邀請、斷線判輸
+npm run test:netcode   # scripts/netcode-check.js  假網路＋假時鐘的預測校正（可指定延遲）
+npm run test:result    # scripts/result-check.js   結算內容與本機紀錄
 ```
 
-三支都是零依賴的純 Node，不需要瀏覽器。
+七支都是零依賴的純 Node，不需要瀏覽器。指定延遲的用法：
+
+```
+node scripts/netcode-check.js --lag=80                      # M2 的驗收條件
+node scripts/netcode-check.js --lag=200 --jitter=40 --loss=0.05
+```
+
+另外還有一支**需要另外裝 Playwright** 的端對端驗收（故意不算專案依賴）：
+
+```
+npm i -D playwright && npx playwright install chromium
+node server.js                                              # 另一個視窗
+npm run test:e2e                                            # 三到五個瀏覽器連同一台伺服器
+```
 
 ## 操作
 
@@ -282,6 +298,113 @@ M0 的做法：實作在 `stairs.js`，`rules.js` 直接轉出 `Rules.makeStairs
 
 ---
 
+## M2／M3 做完了什麼（線上模式的畫面）
+
+前面那一節是伺服器端與同步核心；這一節是玩家真的會碰到的部分。
+
+- **大廳**（`#screen-lobby`）：連線狀態（顏色就是狀態）、快速加入、開一間新房、房間列表（難度／人數／觀戰人數／等人或對局中）、重新整理、重新連線。
+- **房間**（`#screen-room`）：兩張席位卡（頭像、暱稱、房主、準備好、離線）、空位卡、觀戰名單、
+  房主可改難度與踢人、準備好／開始、搶位、可撤銷的邀請連結、聊天室（自由輸入 ＋ 六個快速短語）。
+- **對局中**：側欄多一塊聊天（最後五行 ＋ 快速短語）。對局中**不給輸入框** —— 方向鍵會被輸入框吃掉，
+  所以打字留在房間裡，對局中只用短語。側欄最後一行顯示「線上對戰・延遲 xx ms」。
+- **觀戰**：畫面上方一個「觀戰中」標記、沒有方向鍵、側欄第二塊的標題從「對手」改成「另一位」，
+  結算也不會寫進本機紀錄。
+- **結算**：跟單機一樣直接蓋在原房間畫面上；線上版沒有「再玩一次」與「換難度」，
+  只有「回房間」，並多兩行「連線延遲」與（觀戰時）「你的身分」。結算停留 10 秒後自動回房間。
+- **邀請連結**：`?invite=<token>`。開起來會自動連線進那間房，用掉之後網址會被清乾淨
+  （重新整理不會又跳一次）。席位滿了會自動安排觀戰並說明原因。
+- **Esc**：線上模式**不會暫停**（伺服器不會停，停下來只會被天花板追死），
+  所以標題直接寫「選單（線上對戰不會暫停）」，按鈕換成「離開房間（算輸）」。
+  切到別的分頁也不會自動暫停（單機才會）。
+- **冷啟動**：Render 免費方案會休眠。三秒還連不上就把狀態文字換成
+  「喚醒伺服器中…（免費方案會休眠，第一次要等 30～60 秒）」，不然只看到「連線中…」會以為壞了。
+
+### 找到並修掉的心跳誤判（這個 bug 只有用真瀏覽器跑才會出現）
+
+一局打完之後，**還開著的分頁會被判定斷線，整間房被關掉**。伺服器 log 寫得很清楚：
+
+```
+[hb] 心跳連續沒回，判定離線：p74287ed8b697, pb9c4a200e958
+```
+
+原因：原本的心跳只認應用層的 `hb` 訊息。對局中不會出事（客戶端一直在送輸入意圖，
+順手就重設了計數），但**一局結束、沒人在送輸入之後**，只要瀏覽器把分頁節流一下、
+或某一格畫得比較久，JS 晚幾秒才回話就會被當成斷線。單頁測試看不到，
+因為要三、四個分頁同時跑才會被節流。
+
+改成三層一起判斷：
+
+| 層 | 做法 | 為什麼要有它 |
+|---|---|---|
+| 網路層 | 伺服器每秒發 WebSocket ping，`lib/ws.js` 記下最後一次收到**任何** frame 的時間 | 瀏覽器的 pong 是網路層自動回的，**不需要跑到 JS** —— 分頁被節流也照樣會回 |
+| 協定層 | `lib/protocol.js` 收到**任何**訊息就重設計數 | 聊天、按準備、送輸入…有動作就代表人還在 |
+| 應用層 | 原本的 `hb` 一問一答 | 保留，當作額外的確認 |
+
+這樣分得出「連線真的斷了」與「這個分頁忙了一下」。修好之後同一份測試跑起來
+**心跳誤判 0 次**（之前每一局結束都會發生）。
+
+### 用真瀏覽器跑的端對端驗收
+
+`scripts/e2e-online.js`。**故意不算專案依賴**（遊戲本身零依賴是硬規則），
+所以它不在 `npm run verify` 裡，要跑得另外裝 Playwright：
+
+```
+npm i -D playwright && npx playwright install chromium
+node server.js                    （另一個視窗）
+npm run test:e2e                  （或 node scripts/e2e-online.js --url=... --shots=./screenshots）
+```
+
+它開三到五個瀏覽器連同一台伺服器，走完：開房 → 大廳看得到 → 加入 → 席位滿了自動觀戰 →
+房主改難度 → 產生邀請連結 → 準備好 → 開始 → 真的往下跑 → 快速短語 → 結算 →
+自動回房間 → 離開 → 搶位 → 踢人 → 手機直向 → `/health` 人數 → 沒人自動關房。
+**實測 37 項全過，瀏覽器主控台沒有任何錯誤。**
+
+---
+
+## M4 做完了什麼
+
+M4 清單裡的多數項目其實在 M0 就做掉了（設定彈窗、教學頁、本機紀錄、八隻角色與六套世界美術、
+音效、RWD），這一輪補的是：
+
+- **教學頁**：加上「回血」與「跟別人玩」兩段（線上規則、觀戰、快速短語、斷線判輸都寫進去）；
+  難度表改成自動從規則核心讀，會顯示新的傷害範圍（含「300 m 之後變多少」）。
+- **首頁**：「線上大廳」從「M2／M3 再開放」變成可以點進去。
+- **線上畫面的 RWD**：手機直向席位卡改成一欄一張、按鈕滿寬、聊天室矮一點；
+  橫向矮螢幕（≤430px 高）把對局中的側欄聊天收掉。實測手機直向（390×844）**不會橫向溢出**。
+- **側欄可以捲**：原本是 `overflow: hidden`，線上模式多了聊天區之後，
+  矮螢幕或放大字體時超出的部分會**看不見也點不到**（Playwright 就是這樣抓到的）。
+- **部署準備**：`render.yaml`（healthCheckPath `/health`）、
+  `.github/workflows/pages.yml`（建置時跑 `npm run verify` 再注入 `GAME_SERVER_URL`）、
+  `scripts/inject-server-url.js` 都在 M0 就備好了，這一輪只確認 `/health`、`/api/presence`、
+  `/api/rooms` 回的是真實數字（e2e 有驗）。
+
+### 加進既有 `game-lobby`（這一步我沒有動手）
+
+`game-lobby` 不在這次連進來的資料夾裡，所以我沒辦法改它。
+按規劃書 §12 要在 `game-lobby/config/games.json` 加這一張卡：
+
+```json
+{
+  "id": "stair-kids",
+  "name": "小朋友下樓梯",
+  "desc": "一直往下踩樓梯，別被上面的天花板追到。可以跟電腦打，也可以線上 1v1。",
+  "localPort": 3060,
+  "presenceUrl": "/api/presence",
+  "healthUrl": "/health",
+  "badge": "新遊戲",
+  "tags": ["單機", "AI 對戰", "線上 1v1", "反應"]
+}
+```
+
+`/api/presence` 回的格式（跟 bubble-battle 一致）：
+
+```json
+{ "gameId": "stair-kids", "online": 7, "players": 2, "spectators": 1,
+  "lobby": 4, "rooms": 1, "updatedAt": "2026-09-08T12:34:56.789Z" }
+```
+
+---
+
 ## 依 Eric 回報改掉的第二批規則（間隙、角色大小、傷害、難度）
 
 ### 1. 「間隙判斷不夠明顯，以為能下去」——真的是 bug，不是手感問題
@@ -411,15 +534,21 @@ Eric 指定：「被刺到一次損失的血量 1～5 隨機，可根據模式�
 
 ```
 stair-kids/
-├─ server.js                零依賴 HTTP ＋ /health ＋ /api/presence ＋ WebSocket 端點
-├─ lib/ws.js                自寫 WebSocket（RFC 6455）
+├─ server.js                HTTP ＋ /health ＋ /api/presence ＋ /api/rooms ＋ WebSocket
+├─ lib/
+│  ├─ ws.js                 自寫 WebSocket（RFC 6455），含網路層 ping/pong 的存活時間
+│  ├─ rooms.js              房間、席位、觀戰、搶位、邀請、聊天（純邏輯，不碰 socket）
+│  ├─ match-loop.js         30Hz 權威迴圈、快照增量廣播、心跳掃描（時鐘與送出動作可注入）
+│  └─ protocol.js           客戶端訊息 → 上面兩支的呼叫
 ├─ public/
 │  ├─ index.html  css/style.css
 │  └─ js/
 │     ├─ config.js          唯一的 server URL 入口（GAME_SERVER_URL）
-│     ├─ rules.js           ★ 共用純函式規則核心
+│     ├─ rules.js           ★ 共用純函式規則核心（前後端同一支）
 │     ├─ ai.js              四段電腦對手（只輸出 -1／0／1，不作弊）
-│     ├─ stairs.js          樓梯程序生成器（可達性保證）
+│     ├─ stairs.js          樓梯程序生成器（可達性保證、空隙看得出來）
+│     ├─ net.js             線上同步的腦袋：預測、回溯重演校正、對手內插（不碰 DOM）
+│     ├─ online.js          線上的畫面與連線：大廳、房間、觀戰、聊天
 │     ├─ rng.js             可注入種子亂數
 │     ├─ render.js          Canvas 畫場景與階梯、SVG 畫小朋友
 │     ├─ svgui.js           愛心、方向鍵、階梯圖示、Modal
@@ -427,7 +556,15 @@ stair-kids/
 │     ├─ audio.js  storage.js  app.js
 │     └─ themes/            characters.js（8 隻）／scenes.js（六套世界）／nicknames.js
 ├─ tests/verify.js          規則核心單元測試
-├─ scripts/                 stairs-check.js／match-check.js／ai-check.js／inject-server-url.js
+├─ scripts/
+│  ├─ stairs-check.js       一萬層樓梯
+│  ├─ match-check.js        一局跑完與難度差異
+│  ├─ ai-check.js           四段 AI（各 200 局）
+│  ├─ online-check.js       房間生命週期
+│  ├─ netcode-check.js      假網路＋假時鐘的預測校正
+│  ├─ result-check.js       結算與本機紀錄
+│  ├─ e2e-online.js         真瀏覽器端對端（需要 Playwright，不算專案依賴）
+│  └─ inject-server-url.js  建置時注入 server URL
 ├─ .env.example  .gitignore  render.yaml  啟動遊戲.bat  規劃書.md
 └─ .github/workflows/pages.yml
 ```

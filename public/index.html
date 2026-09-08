@@ -69,21 +69,99 @@
       <button class="soon-item live" type="button" id="btn-vs-ai">
         <div>
           <h3>跟電腦對戰</h3>
-          <p>同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段。玩家一死就結束。</p>
+          <p>同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段。玩家一死就結束。不用連線。</p>
         </div>
         <span class="badge go">開始</span>
       </button>
-      <div class="soon-item">
+      <button class="soon-item live" type="button" data-go="lobby">
         <div>
           <h3>線上大廳</h3>
-          <p>公開房、邀請連結、觀戰與聊天室。</p>
+          <p>公開房間列表、快速加入、邀請連結、觀戰與聊天室。1v1，兩個人都死才結算，一斷線就判輸。</p>
         </div>
-        <span class="badge">M2／M3 再開放</span>
-      </div>
+        <span class="badge go">進大廳</span>
+      </button>
     </div>
     <p class="hint">幼幼班不開放對戰 —— 不會死就分不出勝負。</p>
     <div class="panel-actions">
       <button class="big-btn ghost" type="button" data-go="setup">一個人玩</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 線上大廳（M2） ============ -->
+<section id="screen-lobby" class="screen">
+  <div class="panel wide">
+    <div class="lobby-head">
+      <h2>線上大廳</h2>
+      <div class="lobby-me" id="lobby-me"></div>
+    </div>
+
+    <div class="lobby-bar">
+      <span class="net-state" id="lobby-status" data-state="offline">沒有連線</span>
+      <button id="btn-reconnect" class="mini-btn" type="button" hidden>重新連線</button>
+      <span class="grow"></span>
+      <button id="btn-refresh" class="mini-btn" type="button">重新整理</button>
+    </div>
+
+    <div class="lobby-actions">
+      <button id="btn-quick" class="big-btn primary" type="button">快速加入</button>
+      <button id="btn-create" class="big-btn" type="button">開一間新房</button>
+    </div>
+    <p class="hint">快速加入會幫你找一間還在等人的房；沒有的話就自己開一間等別人進來。</p>
+
+    <div class="field">
+      <span>房間列表</span>
+      <ul class="room-list" id="lobby-list"></ul>
+      <p class="hint" id="lobby-empty" hidden>現在沒有房間，按「開一間新房」就有了。</p>
+    </div>
+
+    <div class="panel-actions">
+      <button class="big-btn ghost" type="button" data-go="setup">改暱稱與角色</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 房間（M2／M3） ============ -->
+<section id="screen-room" class="screen">
+  <div class="panel wide room-panel">
+    <div class="lobby-head">
+      <h2 id="room-title">房間</h2>
+      <div class="room-diff" id="room-diff" role="group" aria-label="難度"></div>
+    </div>
+
+    <ul class="seat-list" id="room-seats"></ul>
+
+    <div class="field" id="room-specs-block" hidden>
+      <span>觀戰中</span>
+      <ul class="spec-list" id="room-specs"></ul>
+    </div>
+
+    <p class="hint" id="room-hint"></p>
+
+    <div class="room-actions">
+      <button id="btn-ready" class="big-btn primary" type="button">我準備好了</button>
+      <button id="btn-start-online" class="big-btn" type="button" hidden>開始這局</button>
+      <button id="btn-take-seat" class="big-btn" type="button" hidden>搶一個位子</button>
+      <button id="btn-leave-room" class="big-btn ghost" type="button">離開房間</button>
+    </div>
+
+    <div class="invite-row">
+      <button id="btn-invite" class="mini-btn" type="button" hidden>產生邀請連結</button>
+      <div class="invite-box" id="invite-box" hidden>
+        <input id="invite-link" type="text" readonly aria-label="邀請連結">
+        <button id="btn-invite-copy" class="mini-btn" type="button">複製</button>
+        <button id="btn-invite-revoke" class="mini-btn danger" type="button">撤銷</button>
+      </div>
+    </div>
+
+    <div class="chat">
+      <div class="side-label block-label">聊天室</div>
+      <ul class="chat-list" id="chat-list"></ul>
+      <div class="chat-phrases" id="chat-phrases"></div>
+      <form class="chat-form" id="chat-form" autocomplete="off">
+        <input id="chat-input" type="text" maxlength="60" placeholder="說點什麼…（最多 60 字）">
+        <button class="mini-btn go" type="submit">送出</button>
+      </form>
     </div>
   </div>
 </section>
@@ -124,9 +202,20 @@
     </section>
 
     <section class="help-block">
-      <h3>之後還會有</h3>
-      <p>跟電腦對戰、線上 1v1（兩個人都死了才結算、一斷線就判輸）、觀戰、邀請連結與聊天室。
-        對戰時兩個人共用同一座樓梯，<b>會互相推擠</b>，可以把對手推去撞刺或推上輸送帶。</p>
+      <h3>回血</h3>
+      <p>踩到<b>不是刺</b>的階梯就回 1 顆愛心。所以一直穩穩往下踩是可以撐很久的，
+        但刺一次就扣好幾顆，回血追不上 —— 少踩到刺比踩得快更重要。</p>
+    </section>
+
+    <section class="help-block">
+      <h3>跟別人玩</h3>
+      <p><b>跟電腦對戰</b>：同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段，玩家一死就結束。</p>
+      <p><b>線上 1v1</b>：進大廳可以快速加入、開房或用邀請連結叫朋友。兩個人共用同一座樓梯，
+        <b>會互相推擠</b>，可以把對手推去撞刺或推上輸送帶。
+        <b>兩個人都死了才結算</b>，比誰下得深；一樣深就比誰撐得久。
+        <b>一斷線就判輸</b>，不暫停也不給寬限秒數 —— 對手可以照常玩完。</p>
+      <p><b>觀戰</b>：房間席位滿了會自動安排觀戰，看得到兩個人的深度與血量；
+        席位一空出來就可以搶（先按先得）。對局中可以用<b>快速短語</b>聊天（打字會被方向鍵吃掉，所以只給短語）。</p>
     </section>
   </div>
 </section>
@@ -169,7 +258,7 @@
       <!-- 對手（對戰才顯示）。只給數字，不顯示領先／落後差距（規劃書 §0.3） -->
       <div class="side-block side-foe" id="side-foe" hidden>
         <div class="side-row">
-          <span class="side-label">對手</span>
+          <span class="side-label" id="hud-foe-label">對手</span>
           <span id="hud-foe-name"></span>
         </div>
         <div class="side-row side-depth small-depth">
@@ -193,6 +282,13 @@
         </ul>
       </div>
 
+      <!-- 對局中的聊天：只放最後幾行 ＋ 快速短語（打字會被方向鍵吃掉，所以不給輸入框） -->
+      <div class="side-block side-chat" id="side-chat" hidden>
+        <div class="side-label block-label">聊天</div>
+        <ul class="chat-list mini" id="game-chat-list"></ul>
+        <div class="chat-phrases mini" id="game-chat-phrases"></div>
+      </div>
+
       <div class="side-foot">
         <div class="side-row small" id="hud-best"></div>
         <div class="side-row small" id="hud-net">單機一人挑戰</div>
@@ -207,6 +303,7 @@
       <div class="hurt-flash" id="overlay-hurt" aria-hidden="true"></div>
       <!-- 這一下扣了幾顆愛心（傷害是 1～5 隨機，要讓玩家看得到數字） -->
       <div class="dmg-pop" id="dmg-pop" hidden aria-hidden="true"></div>
+      <div class="spectate-tag" id="spectate-tag" hidden>觀戰中</div>
       <div class="overlay countdown" id="overlay-countdown" hidden><span id="countdown-num">3</span></div>
       <div class="overlay milestone" id="overlay-milestone" hidden><span id="milestone-text"></span></div>
       <div class="rotate-tip" id="rotate-tip" hidden>
@@ -244,12 +341,15 @@
 <!-- ============ 暫停選單（Esc）：只有三顆 ============ -->
 <div class="overlay-full" id="overlay-pause" hidden>
   <div class="pause-card">
-    <h2>暫停中</h2>
+    <h2 id="pause-title">暫停中</h2>
     <button id="btn-resume" class="big-btn primary" type="button">繼續</button>
     <button id="btn-restart" class="big-btn" type="button">重新開始</button>
     <button id="btn-home" class="big-btn ghost" type="button">回首頁</button>
   </div>
 </div>
+
+<!-- 短提示（連線狀態、邀請連結複製好了、伺服器回的錯誤訊息） -->
+<div class="toast" id="toast" hidden aria-live="polite"></div>
 
 <!-- ============ 設定彈窗（右上角唯一入口） ============ -->
 <div class="modal-mask" id="modal-settings" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
@@ -301,6 +401,9 @@
 <script src="js/input.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/storage.js"></script>
+<!-- 線上模式：net.js 是同步的腦袋（也被 netcode-check 在 Node 裡跑），online.js 是畫面與連線 -->
+<script src="js/net.js"></script>
+<script src="js/online.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

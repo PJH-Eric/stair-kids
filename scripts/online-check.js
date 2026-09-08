@@ -201,3 +201,31 @@ group('斷線判輸（§4.4：不暫停、不給寬限秒數）');
   const pb = room.match.players.find(p => p.id === 'B');
   ok(!pb.alive && pb.forfeit, '對局中離開房間也是判輸');
 }
+
+/* ---------------------------------------------------------- */
+group('心跳不能誤判（實測真的被誤判過）');
+{
+  /* 有在送輸入意圖就代表人還在，不必等專門的心跳訊息。
+   * 這一條是修掉「還開著的分頁被誤判斷線、整間房被關掉」的一半；
+   * 另一半（任何訊息都算、加上網路層 pong）在 netcode-check 驗，那裡有完整的協定。 */
+  const { hub, room } = playingRoom();
+  run(hub, 1);
+  for (let i = 0; i < 6; i++) {
+    hub.setInput(room.id, 'A', { seq: i + 1, dir: 1 });
+    hub.sweepHeartbeats();
+  }
+  const pa = room.match.players.find(p => p.id === 'A');
+  ok(pa.alive, '只要有在送輸入意圖，就不會被判定斷線');
+
+  /* 對照組：什麼都不送就是真的該判定斷線 */
+  const pb = room.match.players.find(p => p.id === 'B');
+  ok(!pb.alive && pb.forfeit, '完全沒有任何訊息才判定斷線');
+}
+
+/* ---------------------------------------------------------- */
+console.log('\n' + pass + ' 項通過，' + fail + ' 項失敗');
+if (fail) {
+  console.log('\n沒過的項目：');
+  for (const f of failures) console.log('  · ' + f);
+  process.exit(1);
+}

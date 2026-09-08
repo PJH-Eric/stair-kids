@@ -27,6 +27,8 @@ const PORT = Number(process.env.PORT) || 3060;
 const ROOT = path.join(__dirname, 'public');
 const ALLOW_ORIGIN = process.env.ALLOW_ORIGIN || '*';
 const GAME_ID = 'stair-kids';
+/* 多久沒收到任何東西才算連線可能死了（要比心跳間隔寬鬆一點） */
+const ALIVE_MS = 2500;
 const MILESTONE = 'M2';
 
 /* ---------- 靜態檔案 ---------- */
@@ -78,11 +80,27 @@ const io = {
     const out = [];
     for (const [id, it] of people) if (!it.person.roomId) out.push(id);
     return out;
+  },
+  /**
+   * 網路層還活著的人：最近 ALIVE_MS 內收到過任何 frame（含瀏覽器自動回的 pong）。
+   * 這是「連線斷了沒」的真正依據；應用層的心跳訊息只是加分。
+   */
+  aliveIds() {
+    const now = Date.now();
+    const out = [];
+    for (const [id, it] of people) {
+      if (it.socket.alive && now - (it.socket.lastSeen || 0) < ALIVE_MS) out.push(id);
+    }
+    return out;
+  },
+  /** 對所有連線發網路層 ping，瀏覽器會在網路層直接回 pong */
+  pingAll() {
+    for (const it of people.values()) it.socket.ping();
   }
 };
 
 const hub = createHub();
-const loop = createLoop(hub, io, {});
+const loop = createLoop(hub, io, { log: msg => console.log(msg) });
 const proto = createProtocol(hub, loop, io);
 loop.start();
 
@@ -165,6 +183,7 @@ ws.attach(server, {
       role: null
     };
     people.set(person.id, { socket: socket, person: person });
+    console.log('[ws] 新連線：' + person.id + '（線上 ' + people.size + ' 人）');
     socket.data.personId = person.id;
     socket.sendJSON({ type: 'hello', game: GAME_ID, milestone: MILESTONE, personId: person.id });
 
@@ -180,6 +199,7 @@ ws.attach(server, {
     });
 
     socket.on('close', () => {
+      console.log('[ws] 連線關閉：' + person.id + '（' + (person.name || '沒名字') + '）');
       people.delete(person.id);
       /* 對局中斷線＝判輸（§4.4），房間邏輯自己會處理 */
       hub.markDisconnected(person.id);

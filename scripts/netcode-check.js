@@ -449,6 +449,35 @@ group('聊天與觀戰（M3 會用到的通道先驗一下）');
 }
 
 /* ---------------------------------------------------------- */
+group('心跳不能誤判（實測真的被誤判過）');
+{
+  /* 曾經發生的事：一局打完之後，還開著的分頁被判定斷線，整間房就被關掉了。
+   * 原因是只認應用層的心跳訊息 —— 分頁被瀏覽器節流、或這一格畫得比較久，
+   * JS 晚幾秒才回話就會被當成斷線。現在改成「收到任何訊息都算活著」。 */
+  const w = createWorld({ lag: 40 });
+  const a = w.connect('甲');
+  w.advance(400);
+  a.actions.create('心跳房', 'normal');
+  w.advance(400);
+  const room = [...w.hub.rooms.values()][0];
+  const me = room.members.get(a.person.id);
+
+  /* 攔掉 hb 的自動回覆，只讓它送別的訊息（模擬 JS 忙到來不及回心跳） */
+  const realReceive = a.receive;
+  a.receive = msg => { if (msg && msg.type === 'hb') return; realReceive(msg); };
+  for (let i = 0; i < 6; i++) {
+    w.proto.handle(a.person, { type: 'chat', text: '還在喔' });
+    w.loop.heartbeatRound();
+  }
+  ok(me.connected, '完全沒回心跳、但一直有送別的訊息（聊天）→ 不會被判定斷線');
+  ok(w.hub.rooms.has(room.id), '房間也不會被誤關');
+
+  /* 對照組：真的什麼都不送就該判定斷線 */
+  for (let i = 0; i < 4; i++) w.loop.heartbeatRound();
+  ok(!me.connected, '完全沒有任何訊息才判定斷線');
+}
+
+/* ---------------------------------------------------------- */
 console.log('\n' + pass + ' 項通過，' + fail + ' 項失敗');
 if (fail) {
   console.log('\n沒過的項目：');
