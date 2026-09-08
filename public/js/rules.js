@@ -341,7 +341,20 @@
         s.phase = 'playing';
         events.push({ type: 'start' });
       }
-      for (const p of s.players) { p.dir = 0; p.state = 'idle'; }
+      for (const p of s.players) {
+        if (!p.alive) continue;          /* 別把已經淘汰的人重設回站姿 */
+        p.dir = 0;
+        p.state = 'idle';
+      }
+      /* 倒數期間也可能已經分出勝負 —— 線上對戰兩個人都在倒數時斷線判輸的話，
+       * 不檢查的話這一局會卡在倒數跑完才收，房間看起來像沒反應。 */
+      const early = checkResult(s);
+      if (early) {
+        s.phase = 'over';
+        s.result = early;
+        s.endedBy = early.endedBy;
+        events.push({ type: 'over', result: early });
+      }
       return { state: s, events: events };
     }
 
@@ -613,6 +626,7 @@
         hp: p.hp,
         alive: p.alive,
         fell: p.fell,
+        forfeit: !!p.forfeit,            /* 線上對戰斷線判輸，結算畫面要寫清楚 */
         world: p.stats.deepestWorld,
         stats: {
           spikes: p.stats.spikes,
