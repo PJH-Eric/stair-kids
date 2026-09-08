@@ -99,6 +99,10 @@
       hurt: () => tone(240, 0.30, 'sawtooth', 0.22, 110),
       milestone: () => [0, 90, 180, 300].forEach((d, i) =>
         setTimeout(() => tone([659, 784, 988, 1319][i], 0.30, 'triangle', 0.26), d)),
+      /* 往下沉的警告：短促的雙嗶，越危險播越密（由 app.js 控制頻率） */
+      sink: () => { tone(520, 0.08, 'square', 0.20, 380); setTimeout(() => tone(430, 0.08, 'square', 0.18, 300), 90); },
+      /* 摔出畫面：一路往下滑的哨音 */
+      fell: () => { tone(700, 0.55, 'sine', 0.30, 90); noise(0.4, 700, 0.18); },
       dead: () => [0, 130, 260].forEach((d, i) =>
         setTimeout(() => tone([392, 330, 262][i], 0.34, 'sine', 0.26), d)),
       win: () => [0, 90, 180, 300, 430].forEach((d, i) =>

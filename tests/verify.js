@@ -92,15 +92,16 @@ group('角色移動與物理');
   near(s.players[0].x, C.PLAYER_W / 2, 0.001, '撞到左牆也停住');
 }
 {
-  /* 從 0 落到 20 格：t = √(2·20/30) ≈ 1.155 秒 */
-  const s = sandbox({ steps: [wide(20, 0, 12)], at: [{ x: 6, y: 0, vy: 0, onStep: null }] });
-  run(s, 2);
-  near(s.players[0].y, 20, 0.001, '重力 30 格／秒²，落到階梯上表面就停住');
+  /* 從 0 落到 8 格：t = √(2·8/30) ≈ 0.73 秒（再深就會先摔出畫面了） */
+  const s = sandbox({ steps: [wide(8, 0, 12)], at: [{ x: 6, y: 0, vy: 0, onStep: null }] });
+  run(s, 1.2);
+  near(s.players[0].y, 8, 0.001, '重力 30 格／秒²，落到階梯上表面就停住');
   eq(s.players[0].onStep, 'T0', '落地後記住站在哪一階');
   eq(s.players[0].vy, 0, '落地後垂直速度歸零');
 }
 {
-  const s = sandbox({ steps: [], at: [{ x: 6, y: 0, vy: 0, onStep: null }], cameraTop: -1e6 });
+  /* 幼幼班不會摔死，可以放心一直掉下去量落速 */
+  const s = sandbox({ difficulty: 'baby', steps: [], at: [{ x: 6, y: 0, vy: 0, onStep: null }] });
   run(s, 5);
   ok(s.players[0].vy <= C.MAX_FALL + 1e-9, '最大落速被限制在 18 格／秒（避免穿階）');
   near(s.players[0].vy, C.MAX_FALL, 0.001, '掉久了就維持在最大落速');
@@ -270,15 +271,26 @@ group('鏡頭與保底下捲');
   }
 }
 {
-  /* 鏡頭跟最深的存活者 */
+  /* 鏡頭跟最深的存活者（但追隨有速度上限，不會瞬間跳過去） */
   const s = sandbox({
     players: [{ id: 'p1', name: 'A', kind: 'human' }, { id: 'p2', name: 'B', kind: 'human' }],
-    steps: [wide(0, 0, 4), wide(40, 8, 12)],
-    at: [{ x: 2, y: 0, onStep: 'T0' }, { x: 10, y: 40, onStep: 'T1' }]
+    steps: [wide(0, 0, 4), wide(6, 8, 12)],
+    at: [{ x: 2, y: 0, onStep: 'T0' }, { x: 10, y: 6, onStep: 'T1' }]
   });
   s.players[0].onStep = 'T0'; s.players[1].onStep = 'T1';
-  run(s, 0.05);
-  near(s.cameraTop, 40 - C.CAMERA_LEAD, 0.2, '鏡頭跟「下得最深的存活者」（不看比較淺的那個）');
+  const start = s.cameraTop;
+  run(s, 0.5);
+  const floorOnly = start + Rules.DIFFICULTY.normal.scrollBase * 0.5;
+  ok(s.cameraTop > floorOnly + 0.5, '鏡頭會主動追向最深的存活者（比只有保底下捲快）');
+  const cap = Math.max(Rules.DIFFICULTY.normal.scrollBase, C.CAMERA_CATCHUP);
+  ok(s.cameraTop <= start + cap * 0.5 + 1e-6,
+    '但追隨有速度上限，不會瞬間跳到玩家身上（這是「掉出畫面外會摔死」成立的關鍵）');
+}
+{
+  /* 幼幼班沒有追隨上限 → 永遠追得上 → 沉不出去 */
+  eq(Rules.DIFFICULTY.baby.cameraCatchup, null, '幼幼班的鏡頭沒有追隨上限');
+  eq(Rules.DIFFICULTY.baby.fallOut, false, '幼幼班不會摔死（照 §0.2 的鼓勵式不死）');
+  ok(['easy', 'normal', 'hard'].every(id => Rules.DIFFICULTY[id].fallOut), '其他三段難度都會摔死');
 }
 {
   /* 倒數期間鏡頭不下捲 */
@@ -298,33 +310,34 @@ group('天花板');
   const count = (id, seconds) => {
     const diff = Rules.DIFFICULTY[id];
     const p = { y: 0, hp: 999, hpMax: 999, alive: true, invuln: 0, ceilAccum: 0, pressed: false,
-      hurtFlash: 0, stats: { ceilingSeconds: 0 } };
+      hurtFlash: 0, hurtBy: null, stats: { ceilingSeconds: 0 } };
     const out = [];
     for (let i = 0; i < Math.round(seconds / C.STEP); i++) {
       /* 天花板永遠壓在頭上（floorY 給 0：站在階梯上被夾住） */
-      applyCeiling(p, p.y - C.PLAYER_H + 0.5, diff, C.STEP, out, 0);
+      const before = p.y;
+      applyCeiling(p, p.y - C.PLAYER_H + 0.5, diff, C.STEP, out);
+      p.y = before;                      /* 固定住位置，才量得到扣血間隔 */
     }
-    return { lost: 999 - p.hp, sec: p.stats.ceilingSeconds };
+    return { lost: 999 - p.hp, sec: p.stats.ceilingSeconds, by: p.hurtBy };
   };
   const applyCeiling = Rules.applyCeiling;
   const n = count('normal', 3.0);
   eq(n.lost, 5, '普通：被頂住每 0.6 秒 −1（3 秒掉 5 顆）');
+  eq(n.by, 'ceiling', '被天花板扣血時傷害來源記成 ceiling');
   eq(count('easy', 3.0).lost, 3, '簡單：每 0.9 秒 −1（3 秒掉 3 顆）');
   eq(count('hard', 3.0).lost, 7, '困難：每 0.4 秒 −1（3 秒掉 7 顆）');
   eq(count('baby', 3.0).lost, 0, '幼幼班：軟綿綿的雲朵，被頂到完全不扣血');
   near(n.sec, 3.0, 0.05, '被頂住的秒數有記到「這局統計」');
 }
 {
-  /* 站在階梯上被夾住：不會被壓穿階梯，要脫身只能往左右走 */
+  /* 被頂到會被推穿腳下的階梯往下掉（推力大於階梯） */
   const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   s.cameraTop = -C.PLAYER_H + 0.5;
-  const hp0 = s.players[0].hp;
-  run(s, 2.0);
-  near(s.players[0].y, 0, 1e-6, '被天花板頂住時不會被壓穿腳下的階梯');
-  const lost = hp0 - s.players[0].hp;
-  ok(lost >= 3 && lost <= 4, '普通難度夾住 2 秒掉 3～4 顆愛心（實際 ' + lost + '）');
+  run(s, 0.1);
   eq(s.players[0].state, 'ceiling', '狀態標成被頂住（畫面會播警告與紅色閃爍）');
+  ok(s.players[0].y > 0, '被天花板推穿腳下的階梯，開始往下掉');
+  eq(s.players[0].onStep, null, '被推穿之後就不站在那一階上了');
 }
 {
   /* 幼幼班同樣情境：不扣血、不會死 */
@@ -333,31 +346,18 @@ group('天花板');
   s.cameraTop = -C.PLAYER_H + 0.5;
   const hp0 = s.players[0].hp;
   run(s, 5.0);
-  eq(s.players[0].hp, hp0, '幼幼班被雲朵頂住完全不扣血');
+  eq(s.players[0].hp, hp0, '幼幼班被雲朵頂到完全不扣血');
   eq(s.players[0].alive, true, '幼幼班不會死');
   eq(Rules.DIFFICULTY.baby.cloudCeiling, true, '幼幼班的天花板畫成雲朵，不畫尖刺');
 }
 {
-  /* 空中的玩家只被推回畫面內，不會被擠出畫面外 */
+  /* 天花板只會往下推，不會把玩家往上提 */
   const s = sandbox({ steps: [], at: [{ x: 6, y: 0, onStep: null }] });
   s.cameraTop = 5;
+  const before = s.players[0].y;
   run(s, 0.02);
-  near(s.players[0].y - C.PLAYER_H, s.cameraTop, 0.001, '空中被頂：頭頂貼在天花板上，不會被擠出畫面');
-}
-{
-  /* 往旁邊走出這一階就能脫身 */
-  const s = sandbox({ steps: [wide(0, 5, 7)], at: [{ x: 6, y: 0 }] });
-  s.players[0].onStep = 'T0';
-  s.cameraTop = -C.PLAYER_H + 0.5;
-  run(s, 0.4, () => 1);
-  eq(s.players[0].onStep, null, '被夾住時往旁邊走出階梯就能掉下去脫身');
-}
-{
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
-  s.players[0].onStep = 'T0';
-  s.cameraTop = -C.PLAYER_H + 0.5;
-  run(s, 1.0);
-  eq(s.players[0].hurtBy, 'ceiling', '被天花板扣血時傷害來源記成 ceiling');
+  ok(s.players[0].y > before, '被頂到是往下推，不是往上提');
+  near(s.players[0].y - C.PLAYER_H, s.cameraTop, 0.001, '頭頂貼在天花板下緣');
 }
 {
   /* 刺階的 0.6 秒無敵不會蓋掉天花板的扣血（只擋「同類」傷害） */
@@ -431,12 +431,12 @@ group('深度、里程碑與世界');
   eq(Rules.worldIsNight(6), true, '第 7 層開始是夜間變體');
 }
 {
-  const s = sandbox({ steps: [wide(50, 0, 12)], at: [{ x: 6, y: 0, onStep: null }] });
-  run(s, 4);
-  near(s.players[0].best, 50, 0.001, '分數就是最深深度（1 格 = 1 公尺）');
-  s.players[0].y = 10;
+  const s = sandbox({ steps: [wide(8, 0, 12)], at: [{ x: 6, y: 0, onStep: null }] });
+  run(s, 1.2);
+  near(s.players[0].best, 8, 0.001, '分數就是最深深度（1 格 = 1 公尺）');
+  s.players[0].y = 3;
   run(s, 0.05);
-  near(s.players[0].best, 50, 0.001, '分數只增不減');
+  near(s.players[0].best, 8, 0.001, '分數只增不減');
 }
 
 /* ---------------------------------------------------------- */
@@ -468,17 +468,39 @@ group('四段難度參數（規劃書 §1.7）');
 /* ---------------------------------------------------------- */
 group('勝負判定（規劃書 §1.6）');
 {
-  /* 一人挑戰：血歸零就結束（用天花板夾住把血耗完） */
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  /* 一人挑戰：血歸零就結束（連續踩刺把血耗完） */
+  const steps = [];
+  for (let i = 0; i < 40; i++) steps.push(wide(i * 2.2, 0, 12, { kind: i % 2 ? 'spike' : 'normal' }));
+  const s = sandbox({ steps: steps, at: [{ x: 6, y: 0, onStep: 'T0' }] });
   s.players[0].onStep = 'T0';
-  s.cameraTop = -C.PLAYER_H + 0.5;
-  run(s, 20);
+  run(s, 30, () => 1);
   eq(s.phase, 'over', '一人挑戰血歸零就結束');
   eq(s.result.endedBy, 'dead', '結算標明是被打死的');
   eq(s.result.players[0].hp, 0, '結算帶著血歸零的狀態');
+  eq(s.result.players[0].fell, false, '不是摔死的');
   ok(s.result.players[0].survived > 0, '結算帶著存活時間');
-  ok(typeof s.result.players[0].meters === 'number', '結算帶著這次的深度（公尺）');
-  ok(s.result.players[0].stats.ceilingSeconds > 1, '結算帶著「這局統計」');
+  ok(s.result.players[0].stats.spikes > 0, '結算帶著「這局統計」');
+}
+{
+  /* 一人挑戰：連續踩空掉出畫面下緣 → 摔死 */
+  const s = sandbox({ steps: [], at: [{ x: 6, y: 0, onStep: null }] });
+  const ev = run(s, 5);
+  eq(s.phase, 'over', '連續踩空掉出畫面下緣就結束這局');
+  eq(s.result.endedBy, 'fell', '結算標明是摔下去的');
+  eq(s.result.players[0].fell, true, '這位玩家是摔死的');
+  ok(ev.some(e => e.type === 'sinking'), '快掉出去之前會先發出 sinking 警示（畫面下緣會亮紅帶）');
+  ok(ev.some(e => e.type === 'fell'), '掉出去時發出 fell 事件');
+  ok(ev.some(e => e.type === 'eliminated'), '摔死一樣算淘汰');
+  ok(s.players[0].y > 12 && s.players[0].y < 22,
+    '大約掉 16 格（5～6 層）沒踩到東西就會摔死（實際 ' + s.players[0].y.toFixed(1) + ' 格）');
+}
+{
+  /* 幼幼班怎麼掉都不會摔死 */
+  const s = sandbox({ difficulty: 'baby', steps: [], at: [{ x: 6, y: 0, onStep: null }] });
+  run(s, 10);
+  eq(s.phase, 'playing', '幼幼班連續踩空 10 秒也不會結束');
+  eq(s.players[0].alive, true, '幼幼班不會摔死');
+  near(s.players[0].y - s.cameraTop, C.CAMERA_LEAD, 0.2, '幼幼班的鏡頭永遠追得上，玩家沉不出畫面');
 }
 {
   /* 幼幼班：手動結束這局 */

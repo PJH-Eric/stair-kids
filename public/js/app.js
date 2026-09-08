@@ -55,7 +55,8 @@
     scene: Scenes.sceneFor(0),
     sceneFrom: null,
     sceneT: 1,
-    milestoneTimer: 0
+    milestoneTimer: 0,
+    sinkBeep: 0
   };
 
   const charOf = id => Characters.byId(id);
@@ -250,6 +251,17 @@
         handleEvents(r.events);
         if (s.phase === 'over') break;
       }
+      /* 還在往下沉就持續嗶，越接近掉出去嗶得越密 */
+      const me = s.players[0];
+      if (me && me.alive && me.sinking > 0) {
+        G.sinkBeep -= dt;
+        if (G.sinkBeep <= 0) {
+          sound.play('sink');
+          G.sinkBeep = Math.max(0.12, 0.42 - me.sinking * 0.05);
+        }
+      } else {
+        G.sinkBeep = 0;
+      }
       if (G.milestoneTimer > 0) {
         G.milestoneTimer -= dt;
         if (G.milestoneTimer <= 0) els.milestone.hidden = true;
@@ -329,6 +341,16 @@
           sound.setScene(e.scene);
           break;
         }
+        case 'sinking':
+          sound.play('sink');
+          buzz(15);
+          break;
+        case 'fell':
+          sound.play('fell');
+          view.kick(12);
+          flashHurt(true);
+          buzz(80);
+          break;
         case 'eliminated':
           sound.play('dead');
           view.kick(10);
@@ -418,7 +440,10 @@
     });
     store = Store.load();
 
-    els.resultTitle.textContent = result.endedBy === 'manual' ? '這局結束' : '掉到底了';
+    els.resultTitle.textContent =
+      result.endedBy === 'manual' ? '這局結束'
+      : result.endedBy === 'fell' ? '摔下去了'
+      : '沒血了';
     els.resultHero.innerHTML =
       Render.kidFullSvg(charOf(me.char), 132) +
       '<div class="result-line">' + me.name + ' 下到 <b>' + me.meters + ' m</b>' +
@@ -464,7 +489,9 @@
       reduceMotion: store.reduceMotion,
       colorAssist: store.colorAssist,
       depthGuide: store.depthGuide,
-      viewH: shortStage() ? Rules.C.VIEW_H_SHORT : Rules.C.VIEW_H
+      /* 一律用 18 格。手機橫向原本會縮成 14 格放大角色，但摔死的判定線就在 18 格，
+       * 看不到判定線就會死得莫名其妙，所以這裡不縮。 */
+      viewH: Rules.C.VIEW_H
     });
   }
 

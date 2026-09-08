@@ -684,6 +684,51 @@
       ctx.restore();
     }
 
+    /* ---------- 沉出畫面下緣的警示 ---------- */
+
+    /**
+     * 玩家掉得比鏡頭快、開始往畫面下緣沉下去時，在下緣畫一條會脈動的紅帶與往下的箭頭。
+     * 沒有這個的話玩家只會覺得「我怎麼突然就死了」—— 死法要看得懂。
+     */
+    function drawSinkWarning(state, time) {
+      let worst = 0;
+      for (const p of state.players) if (p.alive && p.sinking > 0) worst = Math.max(worst, p.sinking);
+      if (worst <= 0) return;
+      /* sinking 從 0 到約 5.6 格就會掉出去，換算成 0～1 的危險程度 */
+      const k = Math.min(1, worst / 5.6);
+      const pulse = opts.reduceMotion ? 1 : 0.8 + 0.2 * Math.sin(time * 14);
+      const band = Math.max(60, view.h * 0.24);
+      const bar = Math.max(16, view.h * 0.035);
+      ctx.save();
+      ctx.globalAlpha = pulse;
+
+      /* 由淡轉濃的紅色危險區 */
+      const g = ctx.createLinearGradient(0, view.h - band, 0, view.h - bar);
+      g.addColorStop(0, 'rgba(214,25,40,0)');
+      g.addColorStop(1, 'rgba(214,25,40,' + (0.45 + 0.4 * k).toFixed(3) + ')');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, view.h - band, view.w, band - bar);
+
+      /* 畫面最下緣一條實心紅條 ＝ 掉過這裡就沒了。
+       * 箭頭畫在紅條上（白色在淺色背景會看不見，一定要有底才行）。 */
+      ctx.fillStyle = 'rgba(198,20,36,' + (0.8 + 0.2 * k).toFixed(3) + ')';
+      ctx.fillRect(0, view.h - bar, view.w, bar);
+      ctx.fillStyle = '#FFFFFF';
+      const n = 5;
+      for (let i = 0; i < n; i++) {
+        const cx = view.w * ((i + 0.5) / n);
+        const cy = view.h - bar / 2;
+        const sz = bar * (0.3 + 0.12 * k);
+        ctx.beginPath();
+        ctx.moveTo(cx - sz, cy - sz * 0.65);
+        ctx.lineTo(cx + sz, cy - sz * 0.65);
+        ctx.lineTo(cx, cy + sz * 0.75);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     /* ---------- 粒子與畫面震動（開了「減少動態」就全部關掉） ---------- */
 
     const PALETTE = {
@@ -835,6 +880,7 @@
         drawStep(st, scene, state.cameraTop, time);
       }
       drawCeiling(scene, state.diff.cloudCeiling, time);
+      drawSinkWarning(state, time);
       drawParticles();
       ctx.restore();
 

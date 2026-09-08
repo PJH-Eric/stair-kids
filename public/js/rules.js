@@ -30,6 +30,11 @@
     VIEW_H: 18,                  /* 可見高度 18 格 */
     VIEW_H_SHORT: 14,            /* 手機橫向縮短的可見高度（規劃書 §7.1） */
     CAMERA_LEAD: 12,             /* 鏡頭跟在「最深存活者 − 12 格」，領先者維持在畫面下方 1/3 */
+    CAMERA_CATCHUP: 8.0,         /* 鏡頭最高追隨速度（格／秒）。
+                                  * 這是「掉出畫面外會摔死」成立的關鍵：自由落體最快 18 格／秒，
+                                  * 追不上的那 10 格／秒就是你往畫面下緣沉下去的速度。
+                                  * 實測連續踩空約 16 格（5～6 層）就會沉出畫面。 */
+    SINK_WARN: 2.0,              /* 比正常位置低這麼多格就開始在畫面下緣警示 */
     PLAYER_W: 1.0,
     PLAYER_H: 1.6,
     MOVE_SPEED: 6.0,             /* 水平速度（格／秒），按住就是等速、無加速度 */
@@ -70,13 +75,17 @@
       cloudCeiling: false,        /* 天花板畫成雲朵（幼幼班） */
       hpAsNumber: false,          /* 愛心＋數字顯示（幼幼班 20 顆太長） */
       endless: false,             /* 沒有終點，靠「結束這局」收局 */
-      versus: true                /* 是否開放對戰 */
+      versus: true,               /* 是否開放對戰 */
+      fallOut: true,              /* 掉出畫面下緣會摔死 */
+      cameraCatchup: C.CAMERA_CATCHUP  /* 鏡頭追隨上限；null ＝ 無上限（永遠追得上，沉不出去） */
     }, opt || {});
   }
 
   const DIFFICULTY = {
+    /* 幼幼班照 §0.2 的「鼓勵式不死」：鏡頭永遠追得上，所以不可能沉出畫面，也不會摔死 */
     baby: makeDifficulty('baby', '幼幼班', 1.2, 30, 0.05, 1.5, 20, null,
-      { cloudCeiling: true, hpAsNumber: true, endless: true, versus: false }),
+      { cloudCeiling: true, hpAsNumber: true, endless: true, versus: false,
+        fallOut: false, cameraCatchup: null }),
     easy: makeDifficulty('easy', '簡單', 2.0, 20, 0.10, 2.0, 12, 0.9),
     normal: makeDifficulty('normal', '普通', 2.8, 20, 0.12, 2.2, 10, 0.6),
     hard: makeDifficulty('hard', '困難', 3.6, 20, 0.14, 2.5, 8, 0.4)
@@ -110,6 +119,8 @@
       invuln: 0,
       ceilAccum: 0,
       hurtBy: null,                    /* 最近一次扣血的來源，前端用來決定要播哪一種受傷特效 */
+      sinking: 0,                      /* 比正常位置低幾格（超過 SINK_WARN 才算，給前端做警示強度） */
+      fell: false,                     /* 是不是掉出畫面下緣摔死的 */
       pressed: false,
       alive: true,
       aliveTime: 0,
@@ -229,22 +240,24 @@
   }
 
   /**
-   * 天花板（純函式風格，會改 player）：頭超出鏡頭上緣就推回來，並依難度扣血。
-   * 幼幼班的 ceilInterval 是 null → 只推回、不扣血（天花板畫成雲朵）。
+   * 天花板（純函式風格，會改 player）：頭超出鏡頭上緣就把玩家往下推，並依難度扣血。
+   * 幼幼班的 ceilInterval 是 null → 只推、不扣血（天花板畫成雲朵）。
    *
-   * floorY：玩家腳下踩著的階梯深度。站在階梯上時會被「夾」在天花板與階梯之間，
-   * 不會被壓穿階梯 —— 這就是「被頂住持續扣血」的情境，要脫身只能往左右走出這一階。
-   * 空中的玩家沒有 floorY，就單純被推回畫面內（不會被擠出畫面外）。
+   * 推力大於腳下的階梯：被頂到就會被推穿階梯往下掉。天花板的威脅因此不是
+   * 「站在原地慢慢被扣血」，而是「把你一路推下去，推到你沉出畫面下緣摔死」。
    */
-  function applyCeiling(player, cameraTop, diff, dt, out, floorY) {
+  function applyCeiling(player, cameraTop, diff, dt, out) {
     const headY = player.y - C.PLAYER_H;
     if (headY >= cameraTop - EPS) {
       player.pressed = false;
-      player.ceilAccum = 0;
+      /* 註：這裡刻意「不」把 ceilAccum 歸零。
+       * 天花板會把玩家推穿階梯，所以接觸永遠是斷斷續續的（實測平均一次只有 0.15 秒、
+       * 最長 0.4 秒），要求「連續」接觸滿一個間隔的話就永遠扣不到血，
+       * §0.1 的「被上方天花板刺頂住持續扣血」等於被刪掉。
+       * 改成累計總接觸時間，被頂得越多就扣得越多，語意才對得上。 */
       return false;
     }
-    const wanted = cameraTop + C.PLAYER_H;
-    player.y = (floorY == null) ? wanted : Math.min(wanted, floorY);
+    player.y = cameraTop + C.PLAYER_H;
     player.pressed = true;
     player.stats.ceilingSeconds += dt;
     if (diff.ceilInterval == null) return true;      /* 幼幼班：軟綿綿的雲朵，不扣血 */
@@ -395,14 +408,23 @@
     for (const p of s.players) if (p.alive) deepestAlive = deepestAlive == null ? p.y : Math.max(deepestAlive, p.y);
     const follow = deepestAlive == null ? -Infinity : deepestAlive - C.CAMERA_LEAD;
     /* 永遠不回捲：取「跟隨」「保底下捲」「上一格」三者最大 */
-    s.cameraTop = Math.max(s.cameraTop, s.cameraTop + s.scrollSpeed * dt, follow);
+    const want = Math.max(s.cameraTop, s.cameraTop + s.scrollSpeed * dt, follow);
+    /* 但鏡頭有最高追隨速度 —— 掉得比鏡頭快就會被甩在下面，掉出畫面下緣就摔死。
+     * 上限不能低於保底下捲，不然鏡頭反而會被自己的上限拖住。
+     * 幼幼班的 cameraCatchup 是 null ＝ 沒有上限，永遠追得上，所以沉不出去也摔不死。 */
+    const catchup = s.diff.cameraCatchup;
+    const limit = catchup == null ? Infinity : Math.max(s.scrollSpeed, catchup) * dt;
+    s.cameraTop = Math.min(want, s.cameraTop + limit);
 
     /* ---- 天花板 ---- */
     for (const p of s.players) {
       if (!p.alive) continue;
+      const pressed = applyCeiling(p, s.cameraTop, s.diff, dt, events);
+      if (!pressed) continue;
+      p.state = 'ceiling';
+      /* 被推到腳下那一階以下 → 離開階梯開始往下掉（推力大於階梯） */
       const g = p.onStep ? stepById(s, p.onStep) : null;
-      const pressed = applyCeiling(p, s.cameraTop, s.diff, dt, events, g ? g.depth : null);
-      if (pressed) p.state = 'ceiling';
+      if (g && p.y > g.depth + EPS) p.onStep = null;
     }
 
     /* ---- 深度、分數、每 100 公尺換世界 ---- */
@@ -427,6 +449,27 @@
         scene: worldSceneIndex(world),
         night: worldIsNight(world)
       });
+    }
+
+    /* ---- 沉出畫面下緣 → 直接摔死 ---- */
+    for (const p of s.players) {
+      if (!p.alive) continue;
+      /* 比「鏡頭想把你放的位置」低幾格；超過 SINK_WARN 前端就開始在下緣警示 */
+      const sink = p.y - (s.cameraTop + C.CAMERA_LEAD);
+      const before = p.sinking;
+      p.sinking = Math.max(0, sink - C.SINK_WARN);
+      if (p.sinking > 0 && before <= 0) events.push({ type: 'sinking', player: p.id });
+      if (!s.diff.fallOut) continue;
+      /* 整個人（含頭頂）都到畫面下緣以外才算掉出去，不會有「看起來還在畫面裡卻死了」 */
+      if (p.y - C.PLAYER_H > s.cameraTop + C.VIEW_H) {
+        p.hp = 0;
+        p.alive = false;
+        p.fell = true;
+        p.state = 'stun';
+        p.dir = 0;
+        events.push({ type: 'fell', player: p.id, depth: p.best });
+        events.push({ type: 'eliminated', player: p.id, depth: p.best });
+      }
     }
 
     /* ---- 樓梯：往下補、把太上面的丟掉 ---- */
@@ -502,7 +545,7 @@
     if (s.mode === 'solo') {
       const me = ps[0];
       if (me.alive) return null;
-      return summarize(s, 'dead', null);
+      return summarize(s, me.fell ? 'fell' : 'dead', null);
     }
     const human = ps.filter(p => p.kind === 'human');
     const hasAi = ps.some(p => p.kind === 'ai');
@@ -529,7 +572,7 @@
     return {
       mode: s.mode,
       difficulty: s.difficulty,
-      endedBy: endedBy,                /* 'dead'（血歸零）｜'manual'（幼幼班按結束這局） */
+      endedBy: endedBy,                /* 'dead'（血歸零）｜'fell'（掉出畫面摔死）｜'manual'（幼幼班按結束這局） */
       seed: s.seed,
       elapsed: s.time,
       world: s.world,
@@ -542,6 +585,7 @@
         survived: p.aliveTime,
         hp: p.hp,
         alive: p.alive,
+        fell: p.fell,
         world: p.stats.deepestWorld,
         stats: {
           spikes: p.stats.spikes,
