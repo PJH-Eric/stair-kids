@@ -7,6 +7,7 @@
   'use strict';
 
   let uid = 0;
+  const C_FLASH = 0.22;                 /* 刺階閃白光的長度（秒），要跟 rules.js 的 step.flash 一致 */
 
   /* ================================================================
    *  一、手繪小朋友（SVG）
@@ -107,12 +108,17 @@
       '<path d="M0 0q7 0 8 7v22q0 7-8 7t-8-7V7q1-7 8-7z" fill="url(#' + c + '-pants)"/>' +
       '<path d="M-9 30h18q3 0 3 4v4q0 4-4 4h-16q-4 0-4-4v-4q0-4 3-4z" fill="' + char.shoe + '"/>';
 
+    /* 眼睛拆成遠側／近側兩組，轉成四分之三側臉時可以各自縮放 */
     const face =
       '<g class="k-eyes">' +
-        '<ellipse cx="38" cy="42" rx="5" ry="6.5" fill="#2C2422"/>' +
-        '<ellipse cx="62" cy="42" rx="5" ry="6.5" fill="#2C2422"/>' +
-        '<circle cx="36.4" cy="39.6" r="1.9" fill="#fff"/>' +
-        '<circle cx="60.4" cy="39.6" r="1.9" fill="#fff"/>' +
+        '<g class="k-eye-far">' +
+          '<ellipse cx="38" cy="42" rx="5" ry="6.5" fill="#2C2422"/>' +
+          '<circle cx="36.4" cy="39.6" r="1.9" fill="#fff"/>' +
+        '</g>' +
+        '<g class="k-eye-near">' +
+          '<ellipse cx="62" cy="42" rx="5" ry="6.5" fill="#2C2422"/>' +
+          '<circle cx="60.4" cy="39.6" r="1.9" fill="#fff"/>' +
+        '</g>' +
       '</g>' +
       '<g class="k-eyes-shut" opacity="0">' +
         '<path d="M32 43q6 5 12 0" stroke="#2C2422" stroke-width="3" fill="none" stroke-linecap="round"/>' +
@@ -122,8 +128,8 @@
         '<path d="M33 37l10 10M43 37l-10 10" stroke="#2C2422" stroke-width="3" stroke-linecap="round"/>' +
         '<path d="M57 37l10 10M67 37l-10 10" stroke="#2C2422" stroke-width="3" stroke-linecap="round"/>' +
       '</g>' +
-      '<ellipse cx="28" cy="50" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/>' +
-      '<ellipse cx="72" cy="50" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/>' +
+      '<ellipse class="k-cheek-far" cx="28" cy="50" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/>' +
+      '<ellipse class="k-cheek-near" cx="72" cy="50" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/>' +
       '<path class="k-mouth" d="M44 53q6 6 12 0" stroke="#B4574F" stroke-width="3" fill="none" stroke-linecap="round"/>';
 
     const halo = opt.halo
@@ -144,8 +150,15 @@
         '<g class="k-head">' +
           '<path d="M44 62h12v10h-12z" fill="' + char.skinDark + '"/>' +
           '<circle cx="50" cy="40" r="30" fill="url(#' + c + '-skin)"/>' +
-          hairPath(char.hair, c) +
+          '<g class="k-hair">' + hairPath(char.hair, c) + '</g>' +
           '<g class="k-face">' + face + '</g>' +
+          /* 鼻尖：從臉的輪廓凸出來，是「有在轉頭」最關鍵的一筆。所以要畫在最上面，
+           * 排在頭髮後面會被瀏海蓋掉。也不能用 -skin 漸層 —— 漸層以「自己的
+           * bounding box」為單位，這麼小的零件會整片變成最淺的那一端，等於看不見。 */
+          '<g class="k-nose" opacity="0">' +
+            '<path d="M76 41q8 3.5 8 7.5 0 4-8 5z" fill="' + char.skin + '"/>' +
+            '<path d="M76 48.5q8 0 8 .5 0 4-8 5z" fill="' + char.skinDark + '" opacity=".4"/>' +
+          '</g>' +
         '</g>' +
       '</g>';
 
@@ -162,8 +175,11 @@
     const q = sel => el.querySelector(sel);
     const armL = q('.k-armL'), armR = q('.k-armR');
     const legL = q('.k-legL'), legR = q('.k-legR');
-    const fig = q('.k-figure'), head = q('.k-head');
+    const fig = q('.k-figure'), head = q('.k-head'), faceG = q('.k-face');
     const eyes = q('.k-eyes'), shut = q('.k-eyes-shut'), ex = q('.k-eyes-x');
+    const eyeFar = q('.k-eye-far'), eyeNear = q('.k-eye-near');
+    const nose = q('.k-nose'), hair = q('.k-hair'), bodyG = q('.k-body');
+    const cheekFar = q('.k-cheek-far'), cheekNear = q('.k-cheek-near');
     const mouth = q('.k-mouth');
     if (!armL || !legL || !fig) return;
 
@@ -181,8 +197,6 @@
       aL = -160; aR = 160; lL = 18; lR = -18; sy = 1.06;
     } else if (pose === 'land') {
       aL = -30; aR = 30; lL = -6; lR = 6; sy = 0.94;
-    } else if (pose === 'spike') {
-      aL = -80; aR = 80; tilt = Math.sin(phase * 40) * 6; eye = 'x';
     } else if (pose === 'ceiling') {
       aL = -170; aR = 170; sy = 0.9; lL = 6; lR = -6; eye = 'shut';
     } else if (pose === 'stun') {
@@ -192,21 +206,83 @@
       eye = (phase % 4.2) < 0.16 ? 'shut' : 'open';
     }
 
-    armL.setAttribute('transform', 'translate(24,74) rotate(' + aL.toFixed(1) + ')');
-    armR.setAttribute('transform', 'translate(76,74) rotate(' + aR.toFixed(1) + ')');
-    legL.setAttribute('transform', 'translate(39,114) rotate(' + lL.toFixed(1) + ')');
-    legR.setAttribute('transform', 'translate(61,114) rotate(' + lR.toFixed(1) + ')');
+    /* ---- 四分之三側臉 ----
+     * 一律「照著右邊」畫，要面向左邊就把整個角色水平鏡射（下面 fig 的 scale）。
+     * turn 是 0～1 的轉頭程度，讓正面↔側面之間有一小段過渡，快速左右點按才不會抽動。
+     */
+    const turn = Math.max(0, Math.min(1, opt.turn == null ? (opt.face ? 1 : 0) : opt.turn));
+    if (turn > 0) {
+      /* 手臂跟著轉：近的那隻往前擺、遠的那隻收到身體後面 */
+      aL -= turn * 18;
+      aR -= turn * 18;
+    }
+
+    /* 近側的手往前挪到身體外面，遠側的手縮到身體後面（幾乎看不到） */
+    armL.setAttribute('transform', 'translate(' + (24 + turn * 9).toFixed(1) + ',' +
+      (74 + turn * 2).toFixed(1) + ') rotate(' + aL.toFixed(1) + ')');
+    armR.setAttribute('transform', 'translate(' + (76 - turn * 18).toFixed(1) + ',' +
+      (74 + turn * 3).toFixed(1) + ') rotate(' + aR.toFixed(1) + ') scale(' + (1 - turn * 0.2).toFixed(3) + ')');
+    /* 兩隻腳靠近，前後站而不是左右站 */
+    legL.setAttribute('transform', 'translate(' + (39 + turn * 7).toFixed(1) + ',114) rotate(' + lL.toFixed(1) + ')');
+    legR.setAttribute('transform', 'translate(' + (61 - turn * 5).toFixed(1) + ',' +
+      (114 + turn * 1.5).toFixed(1) + ') rotate(' + lR.toFixed(1) + ') scale(' + (1 - turn * 0.12).toFixed(3) + ')');
+    /* 身體壓窄：轉過去之後看到的是比較窄的那一面 */
+    if (bodyG) {
+      bodyG.setAttribute('transform',
+        'translate(' + (50 + turn * 3).toFixed(2) + ',92) scale(' + (1 - turn * 0.14).toFixed(3) +
+        ',1) translate(-50,-92)');
+    }
     fig.setAttribute('transform',
       'translate(50,' + (150 + bob).toFixed(1) + ') rotate(' + tilt.toFixed(1) + ') scale(' +
       (opt.face === -1 ? -1 : 1) + ',' + sy.toFixed(3) + ') translate(-50,-150)');
-    if (head) head.setAttribute('transform', 'rotate(' + (tilt * 0.4).toFixed(1) + ' 50 40)');
+    /* 整顆頭往前傾，並壓窄 —— 轉過去之後看到的臉本來就比較窄 */
+    if (head) {
+      head.setAttribute('transform',
+        'rotate(' + (tilt * 0.4).toFixed(1) + ' 50 40) translate(' + (turn * 4).toFixed(2) + ',0) ' +
+        'translate(50,44) scale(' + (1 - turn * 0.06).toFixed(3) + ',1) translate(-50,-44)');
+    }
+    /* 頭髮也跟著往前挪一點、但比五官慢，兩者的相對位移就是「轉頭」；
+     * 順便讓後腦那一側多露出來一些。 */
+    if (hair) {
+      hair.setAttribute('transform',
+        'translate(' + (50 + turn * 2.5).toFixed(2) + ',40) scale(' + (1 + turn * 0.03).toFixed(3) + ',1) translate(-50,-40)');
+    }
+    if (faceG) {
+      /* 五官整組往前臉方向偏，並壓窄，做出臉轉過去的透視。
+       * 位移刻意不能太大：再往外就會壓到瀏海與臉的輪廓外面去。 */
+      faceG.setAttribute('transform',
+        'translate(' + (50 + turn * 7).toFixed(2) + ',40) scale(' + (1 - turn * 0.18).toFixed(3) + ',1) translate(-50,-40)');
+    }
+    /* 遠側的眼睛縮小、近側的放大，是側臉最好認的線索 */
+    if (eyeFar) {
+      eyeFar.setAttribute('transform',
+        'translate(38,42) scale(' + (1 - turn * 0.5).toFixed(3) + ',' + (1 - turn * 0.1).toFixed(3) + ') translate(-38,-42)');
+    }
+    if (eyeNear) {
+      eyeNear.setAttribute('transform',
+        'translate(62,42) scale(' + (1 + turn * 0.12).toFixed(3) + ',' + (1 + turn * 0.06).toFixed(3) + ') translate(-62,-42)');
+    }
+    /* 遠側的臉頰縮小，不然轉過去會滑到臉外面變成一塊浮在頭髮上的粉紅色 */
+    if (cheekFar) {
+      cheekFar.setAttribute('transform',
+        'translate(28,50) scale(' + (1 - turn * 0.55).toFixed(3) + ') translate(-28,-50)');
+    }
+    if (cheekNear) {
+      cheekNear.setAttribute('transform',
+        'translate(' + (72 - turn * 4).toFixed(2) + ',50) scale(' + (1 - turn * 0.15).toFixed(3) + ') translate(-72,-50)');
+    }
+    if (nose) nose.setAttribute('opacity', turn.toFixed(3));
     if (eyes) eyes.setAttribute('opacity', eye === 'open' ? '1' : '0');
     if (shut) shut.setAttribute('opacity', eye === 'shut' ? '1' : '0');
     if (ex) ex.setAttribute('opacity', eye === 'x' ? '1' : '0');
     if (mouth) {
-      mouth.setAttribute('d', eye === 'x' ? 'M44 56q6-6 12 0'
+      const d = eye === 'x' ? 'M44 56q6-6 12 0'
         : (pose === 'fall' || pose === 'spring') ? 'M45 52q5 8 10 0'
-        : 'M44 53q6 6 12 0');
+        : 'M44 53q6 6 12 0';
+      mouth.setAttribute('d', d);
+      /* 側身時嘴巴縮短，看起來才像轉到側面去 */
+      mouth.setAttribute('transform',
+        'translate(50,53) scale(' + (1 - turn * 0.28).toFixed(3) + ',1) translate(-50,-53)');
     }
   }
 
@@ -436,6 +512,24 @@
           ctx.closePath(); ctx.fill();
         }
         if (assist) { ctx.strokeStyle = '#7A0F0C'; ctx.lineWidth = 3; roundRect(x0, y, w, h, 4); ctx.stroke(); }
+        /* 剛剛刺到人：往外擴散的白色衝擊環 ＋ 很淡的一層白，很快淡掉。
+         * 刻意不整片塗白 —— 塗滿的話閃的那一下會變成一塊認不出來的白方塊，
+         * 玩家反而看不到自己是踩到什麼才扣血的。 */
+        if (st.flash > 0) {
+          const k = Math.min(1, st.flash / C_FLASH);
+          const grow = (1 - k) * h * 1.6;
+          ctx.save();
+          ctx.globalAlpha = k * 0.32;
+          ctx.fillStyle = '#FFFFFF';
+          roundRect(x0 - 1, y - h * 0.75, w + 2, h * 1.75, 4);
+          ctx.fill();
+          ctx.globalAlpha = k * 0.9;
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 2 + k * 4;
+          roundRect(x0 - 2 - grow, y - h * 0.78 - grow, w + 4 + grow * 2, h * 1.8 + grow * 2, 5 + grow);
+          ctx.stroke();
+          ctx.restore();
+        }
       } else if (st.kind === 'fake') {
         /* 假階：顏色偏白 ＋ 邊緣裂痕 */
         const g = ctx.createLinearGradient(0, y, 0, y + h);
@@ -604,7 +698,7 @@
       const cx = px(x), cy = py(y, camTop);
       const palette = PALETTE[kind] || ['#FFFFFF'];
       const party = kind === 'milestone';
-      const n = party ? 46 : 14;
+      const n = party ? 46 : kind === 'spike' ? 26 : 14;
       for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2;
         const sp = 40 + Math.random() * (party ? 260 : 140);
@@ -612,7 +706,8 @@
           x: party ? view.w * 0.5 + (Math.random() - 0.5) * view.w * 0.8 : cx,
           y: party ? view.h * 0.28 + (Math.random() - 0.5) * 60 : cy,
           vx: Math.cos(a) * sp,
-          vy: party ? 60 + Math.random() * 120 : Math.sin(a) * sp - 40,
+          vy: party ? 60 + Math.random() * 120
+            : Math.sin(a) * sp - (kind === 'spike' ? 120 : 40),
           life: party ? 1.4 : 0.6,
           max: party ? 1.4 : 0.6,
           size: 2 + Math.random() * (party ? 5 : 3),
@@ -679,29 +774,38 @@
         label.textContent = p.name;
         g.appendChild(label);
         actorSvg.appendChild(g);
-        actors.set(p.id, { g: g, inner: inner, label: label });
+        actors.set(p.id, { g: g, inner: inner, label: label, turn: 0, mirror: 1 });
       });
       for (const [id, a] of actors) {
         if (!seen.has(id)) { a.g.remove(); actors.delete(id); }
       }
     }
 
-    function drawActors(state, time) {
+    const TURN_TIME = 0.11;               /* 正面↔側身轉過去要多久（秒） */
+
+    function drawActors(state, time, dt) {
       const k = view.scale / 100;          /* 本地 100 單位 = 1 格 */
       for (const p of state.players) {
         const a = actors.get(p.id);
         if (!a) continue;
+        /* 朝向：面向左右時轉成側臉，沒在動就轉回正面。
+         * 中間插值是為了讓快速左右點按不會一格一格抽動；
+         * mirror 記住最後一次的左右，回正面時才不會突然翻面。 */
+        if (p.face) a.mirror = p.face;
+        const wantTurn = p.face ? 1 : 0;
+        const rate = (dt || 0) / TURN_TIME;
+        a.turn += Math.max(-rate, Math.min(rate, wantTurn - a.turn));
+        if (rate <= 0 || Math.abs(wantTurn - a.turn) < 0.02) a.turn = wantTurn;
         const x = px(p.x) - view.scale / 2;
         const y = py(p.y, state.cameraTop) - view.scale * 1.6;
         a.g.setAttribute('transform', 'translate(' + x.toFixed(1) + ',' + y.toFixed(1) + ')');
         a.inner.setAttribute('transform', 'scale(' + k.toFixed(4) + ')');
         const pose = !p.alive ? 'stun'
           : p.state === 'ceiling' ? 'ceiling'
-          : p.state === 'spike' ? 'spike'
           : p.state === 'spring' ? 'spring'
           : p.state === 'fall' ? 'fall'
           : p.state === 'walk' ? 'walk' : 'idle';
-        poseKid(a.inner, pose, time, { face: p.face });
+        poseKid(a.inner, pose, time, { face: a.mirror, turn: a.turn });
         a.g.setAttribute('opacity', (p.invuln > 0 && Math.floor(time * 14) % 2) ? '0.45' : '1');
         a.label.setAttribute('x', (view.scale / 2).toFixed(1));
         a.label.setAttribute('y', '-6');
@@ -726,6 +830,7 @@
       for (const st of state.steps) {
         if (st.broken) continue;
         if (st.squash) st.squash = Math.max(0, st.squash - (dt || 0));
+        if (st.flash) st.flash = Math.max(0, st.flash - (dt || 0));
         if (st.depth < top || st.depth > bottom) continue;
         drawStep(st, scene, state.cameraTop, time);
       }
@@ -734,7 +839,7 @@
       ctx.restore();
 
       syncActors(state, charOf);
-      drawActors(state, time);
+      drawActors(state, time, dt || 0);
     }
 
     function clearActors() {

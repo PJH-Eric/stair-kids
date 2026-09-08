@@ -40,6 +40,7 @@
     SPIKE_DAMAGE: 1,             /* 踩刺 −1 顆愛心 */
     INVULN: 0.6,                 /* 扣血後的無敵閃爍（只擋「同類」傷害） */
     FAKE_DELAY: 0.25,            /* 假階踩到幾秒後崩解 */
+    SPIKE_FLASH: 0.22,           /* 踩到刺時那一階閃白光的長度（純畫面，render.js 用同一個值） */
     MILESTONE: 100,              /* 每 100 公尺慶祝＋換世界 */
     WORLD_COUNT: 6,              /* 六套世界，用完循環並套夜間配色 */
     KEEP_ABOVE: 30,              /* 鏡頭上方保留幾格的舊階梯 */
@@ -99,7 +100,7 @@
       y: 0,                            /* 腳底站在第 0 層出生平台上 */
       vy: 0,
       dir: 0,
-      face: 1,
+      face: 0,                         /* -1 面向左、1 面向右、0 面向前方（沒在動） */
       hp: diff.hp,
       hpMax: diff.hp,
       depth: 0,
@@ -108,6 +109,7 @@
       state: 'idle',                   /* idle｜walk｜fall｜spring｜spike｜ceiling｜stun */
       invuln: 0,
       ceilAccum: 0,
+      hurtBy: null,                    /* 最近一次扣血的來源，前端用來決定要播哪一種受傷特效 */
       pressed: false,
       alive: true,
       aliveTime: 0,
@@ -259,6 +261,7 @@
     if (source === 'spike' && player.invuln > 0) return false;
     player.hp = Math.max(0, player.hp - amount);
     player.hurtFlash = 0.35;
+    player.hurtBy = source;
     if (source === 'spike') player.invuln = C.INVULN;
     if (out) out.push({ type: 'hurt', player: player.id, source: source, hp: player.hp });
     if (player.hp <= 0) {
@@ -331,7 +334,8 @@
 
       const cmd = (inputs && inputs[p.id]) || null;
       p.dir = cmd && cmd.dir ? (cmd.dir > 0 ? 1 : -1) : 0;
-      if (p.dir) p.face = p.dir;
+      /* 朝向就是當下的移動方向；沒在動就是 0 ＝ 面向前方（畫面正面） */
+      p.face = p.dir;
 
       /* 站著的階梯還在不在、還踩不踩得到 */
       let ground = p.onStep ? stepById(s, p.onStep) : null;
@@ -466,9 +470,10 @@
       return;
     }
     if (step.kind === KIND.SPIKE) {
-      p.state = 'spike';
+      p.state = 'idle';
       if (p.invuln <= 0) {
         p.stats.spikes++;
+        step.flash = C.SPIKE_FLASH;    /* 這一階閃白光（純畫面，不影響規則） */
         events.push({ type: 'spike', player: p.id, step: step.id });
         damage(p, C.SPIKE_DAMAGE, 'spike', events);
       }

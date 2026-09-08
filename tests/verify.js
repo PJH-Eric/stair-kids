@@ -125,6 +125,27 @@ group('角色移動與物理');
 }
 
 /* ---------------------------------------------------------- */
+group('角色朝向');
+{
+  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  s.players[0].onStep = 'T0';
+  eq(s.players[0].face, 0, '開局站著不動，面向前方（face 0）');
+  run(s, 0.1, () => 1);
+  eq(s.players[0].face, 1, '往右移動就面向右邊（face 1）');
+  run(s, 0.1, () => -1);
+  eq(s.players[0].face, -1, '往左移動就面向左邊（face -1）');
+  run(s, 0.1, () => 0);
+  eq(s.players[0].face, 0, '放開按鍵、停下來就回到面向前方');
+}
+{
+  /* 在空中也要看得出朝向（前端會照 face 轉側臉） */
+  const s = sandbox({ steps: [wide(30, 0, 12)], at: [{ x: 6, y: 0, onStep: null }] });
+  run(s, 0.5, () => -1);
+  eq(s.players[0].state, 'fall', '這時候是在下墜');
+  eq(s.players[0].face, -1, '下墜中往左也一樣面向左邊');
+}
+
+/* ---------------------------------------------------------- */
 group('五種階梯');
 {
   /* 輸送帶：往右 +1，逆走只剩 6 − 3 = 3 格／秒 */
@@ -180,6 +201,23 @@ group('五種階梯');
   const s = sandbox({ steps: [wide(1, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
   run(s, 0.3);
   near(s.players[0].y, 1, 0.001, '踩刺之後照樣站在刺階上（不僵直、不彈開）');
+  ok(s.players[0].state !== 'spike', '踩刺不改角色姿勢（受傷反饋只做畫面，不動角色）');
+}
+{
+  /* 踩刺的畫面反饋：刺階閃白光 ＋ 記下傷害來源給前端播特效 */
+  const s = sandbox({ steps: [wide(1, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
+  const ev = run(s, 0.3);
+  ok(ev.some(e => e.type === 'spike'), '踩到刺會發出 spike 事件（前端播音效與白光）');
+  ok(s.steps[0].flash > 0, '被踩到的刺階會被標記要閃白光');
+  eq(s.players[0].hurtBy, 'spike', '傷害來源記成 spike（前端才知道要播哪一種受傷特效）');
+  ok(s.players[0].hurtFlash > 0, '受傷閃光計時有啟動');
+  /* 無敵期間再踩同一階不會再閃、也不會再扣 */
+  s.steps[0].flash = 0;
+  const hp = s.players[0].hp;
+  s.players[0].y = 0.5; s.players[0].vy = 5; s.players[0].onStep = null;
+  run(s, 0.2);
+  eq(s.players[0].hp, hp, '無敵期間再踩同一個刺階不會再扣血');
+  eq(s.steps[0].flash, 0, '無敵期間再踩也不會再閃白光（不會一直閃）');
 }
 {
   /* 假階：踩到 0.25 秒後崩解，只能當短暫落腳點 */
@@ -313,6 +351,13 @@ group('天花板');
   s.cameraTop = -C.PLAYER_H + 0.5;
   run(s, 0.4, () => 1);
   eq(s.players[0].onStep, null, '被夾住時往旁邊走出階梯就能掉下去脫身');
+}
+{
+  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  s.players[0].onStep = 'T0';
+  s.cameraTop = -C.PLAYER_H + 0.5;
+  run(s, 1.0);
+  eq(s.players[0].hurtBy, 'ceiling', '被天花板扣血時傷害來源記成 ceiling');
 }
 {
   /* 刺階的 0.6 秒無敵不會蓋掉天花板的扣血（只擋「同類」傷害） */

@@ -19,6 +19,7 @@
     hudDiff: $('#hud-diff'), hudSpeed: $('#hud-speed'),
     hudWorld: $('#hud-world'), hudNext: $('#hud-next'),
     hudNet: $('#hud-net'), hudBest: $('#hud-best'),
+    hurtFlash: $('#overlay-hurt'),
     countdown: $('#overlay-countdown'), countdownNum: $('#countdown-num'),
     milestone: $('#overlay-milestone'), milestoneText: $('#milestone-text'),
     rotateTip: $('#rotate-tip'), rotateClose: $('#rotate-close'),
@@ -222,6 +223,7 @@
     els.pause.hidden = true;
     els.countdown.hidden = true;
     els.milestone.hidden = true;
+    if (els.hurtFlash) { els.hurtFlash.classList.remove('on'); els.hurtFlash.style.opacity = '0'; }
     view.clearActors();
     input.clear();
   }
@@ -294,15 +296,24 @@
           break;
         case 'spike': {
           sound.play('spike');
+          const st = Rules.stepById(s, e.step);
           const p = s.players.find(x => x.id === e.player);
-          if (p) view.burst('spike', p.x, p.y, s.cameraTop);
-          view.kick(7);
-          buzz(30);
+          /* 粒子從刺階的接觸點往上噴，比從角色身上噴更看得懂發生了什麼 */
+          if (p) view.burst('spike', p.x, st ? st.depth : p.y, s.cameraTop);
+          view.kick(9);
+          flashHurt(true);
+          buzz(35);
           break;
         }
         case 'hurt':
-          if (e.source === 'ceiling') { sound.play('warn'); view.kick(5); buzz(20); }
-          sound.play('hurt');
+          /* 踩刺已經有自己的一整套聲音與畫面（上面那個 case），這裡只處理天花板 */
+          if (e.source === 'ceiling') {
+            sound.play('warn');
+            sound.play('hurt');
+            view.kick(5);
+            flashHurt(false);
+            buzz(20);
+          }
           break;
         case 'milestone': {
           sound.play('milestone');
@@ -328,6 +339,22 @@
           break;
       }
     }
+  }
+
+  /** 受傷時畫面閃一圈紅光。減少動態時不關掉、只調弱（這是透明度不是位移） */
+  let hurtTimer = 0;
+  function flashHurt(strong) {
+    const el = els.hurtFlash;
+    if (!el) return;
+    const peak = store.reduceMotion ? (strong ? 0.5 : 0.3) : (strong ? 1 : 0.6);
+    /* .on 是「很快亮起來」的過渡；拿掉之後換成慢慢淡出的過渡 */
+    el.classList.add('on');
+    el.style.opacity = String(peak);
+    clearTimeout(hurtTimer);
+    hurtTimer = setTimeout(() => {
+      el.classList.remove('on');
+      el.style.opacity = '0';
+    }, 60);
   }
 
   function buzz(ms) {

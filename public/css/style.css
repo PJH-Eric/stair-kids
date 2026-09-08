@@ -367,6 +367,24 @@ b { font-weight: 700; }
   font-family: inherit;
 }
 
+/* 受傷時整個樓梯畫面閃一圈紅光（踩到刺、被天花板頂）。
+ * 這是不透明度變化不是位移，開了「減少動態」也留著，只是弱一點。 */
+.hurt-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 20;
+  background:
+    radial-gradient(ellipse at center, rgba(255, 40, 40, 0) 45%, rgba(214, 25, 40, .85) 100%);
+  box-shadow: inset 0 0 0 5px rgba(255, 70, 70, .9);
+  transition: opacity .28s ease-out;
+}
+.hurt-flash.on {
+  opacity: 1;
+  transition: opacity .04s ease-in;
+}
+
 /* 疊在樓梯畫面上的提示 */
 .overlay {
   position: absolute;
