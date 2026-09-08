@@ -306,28 +306,43 @@ group('鏡頭與保底下捲');
 /* ---------------------------------------------------------- */
 group('天花板');
 {
-  /* 扣血間隔（直接測 applyCeiling，時間軸最乾淨） */
+  /* 扣血：碰到就立刻扣 1 顆，之後要等冷卻。直接測 applyCeiling，時間軸最乾淨。 */
+  const applyCeiling = Rules.applyCeiling;
   const count = (id, seconds) => {
     const diff = Rules.DIFFICULTY[id];
-    const p = { y: 0, hp: 999, hpMax: 999, alive: true, invuln: 0, ceilAccum: 0, pressed: false,
+    const p = { y: 0, hp: 999, hpMax: 999, alive: true, invuln: 0, ceilCool: 0, pressed: false,
       hurtFlash: 0, hurtBy: null, stats: { ceilingSeconds: 0 } };
     const out = [];
+    const hits = [];
     for (let i = 0; i < Math.round(seconds / C.STEP); i++) {
-      /* 天花板永遠壓在頭上（floorY 給 0：站在階梯上被夾住） */
+      p.ceilCool = Math.max(0, p.ceilCool - C.STEP);   /* stepMatch 每一步都會做這件事 */
       const before = p.y;
+      const hp = p.hp;
       applyCeiling(p, p.y - C.PLAYER_H + 0.5, diff, C.STEP, out);
-      p.y = before;                      /* 固定住位置，才量得到扣血間隔 */
+      p.y = before;                      /* 固定住位置，才量得到扣血節奏 */
+      if (p.hp < hp) hits.push(i * C.STEP);
     }
-    return { lost: 999 - p.hp, sec: p.stats.ceilingSeconds, by: p.hurtBy };
+    return { lost: 999 - p.hp, sec: p.stats.ceilingSeconds, by: p.hurtBy, hits: hits };
   };
-  const applyCeiling = Rules.applyCeiling;
   const n = count('normal', 3.0);
-  eq(n.lost, 5, '普通：被頂住每 0.6 秒 −1（3 秒掉 5 顆）');
+  near(n.hits[0], 0, 1e-9, '碰到天花板的刺就「立刻」扣 1 顆，不用等滿一個間隔');
+  eq(n.lost, 5, '普通：之後每 0.6 秒最多再扣 1 顆（3 秒共 5 顆）');
+  near(n.hits[1] - n.hits[0], 0.6, 1e-6, '兩次扣血之間剛好隔一個冷卻');
   eq(n.by, 'ceiling', '被天花板扣血時傷害來源記成 ceiling');
-  eq(count('easy', 3.0).lost, 3, '簡單：每 0.9 秒 −1（3 秒掉 3 顆）');
-  eq(count('hard', 3.0).lost, 7, '困難：每 0.4 秒 −1（3 秒掉 7 顆）');
+  eq(count('easy', 3.0).lost, 4, '簡單：冷卻 0.9 秒（3 秒共 4 顆）');
+  eq(count('hard', 3.0).lost, 8, '困難：冷卻 0.4 秒（3 秒共 8 顆）');
   eq(count('baby', 3.0).lost, 0, '幼幼班：軟綿綿的雲朵，被頂到完全不扣血');
   near(n.sec, 3.0, 0.05, '被頂住的秒數有記到「這局統計」');
+}
+{
+  /* 在真的一局裡：碰到天花板那一下就要扣血（接觸是斷斷續續的，不能等累計） */
+  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  s.players[0].onStep = 'T0';
+  s.cameraTop = -C.PLAYER_H + 0.5;
+  const hp0 = s.players[0].hp;
+  const ev = run(s, 0.05);
+  eq(s.players[0].hp, hp0 - 1, '被天花板的刺頂到，當下就掉 1 顆愛心');
+  ok(ev.some(e => e.type === 'hurt' && e.source === 'ceiling'), '同時發出 ceiling 的 hurt 事件（前端閃紅光）');
 }
 {
   /* 被頂到會被推穿腳下的階梯往下掉（推力大於階梯） */

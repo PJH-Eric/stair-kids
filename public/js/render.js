@@ -8,6 +8,10 @@
 
   let uid = 0;
   const C_FLASH = 0.22;                 /* 刺階閃白光的長度（秒），要跟 rules.js 的 step.flash 一致 */
+  const CEIL_UNITS = 1.25;              /* 畫面最上面留給天花板的高度（格）。
+                                         * 天花板的底座本來畫在 cameraTop 以上，也就是畫面外，
+                                         * 結果只剩白色的刺露在淺色背景上，等於看不見。
+                                         * 留出這段空間之後底座才看得到，刺也才有厚度可以畫。 */
 
   /* ================================================================
    *  一、手繪小朋友（SVG）
@@ -306,7 +310,7 @@
 
   function create(canvas, actorSvg) {
     const ctx = canvas.getContext('2d');
-    const view = { scale: 30, offX: 0, w: 360, h: 540, viewH: 18, dpr: 1 };
+    const view = { scale: 30, offX: 0, offY: 0, w: 360, h: 540, viewH: 18, fieldBottom: 540, dpr: 1 };
     let shake = 0;
     let particles = [];
     const opts = { reduceMotion: false, colorAssist: false, depthGuide: false, viewH: 18 };
@@ -321,14 +325,17 @@
       view.dpr = dpr;
       canvas.width = Math.round(view.w * dpr);
       canvas.height = Math.round(view.h * dpr);
-      view.scale = Math.min(view.w / 12, view.h / (opts.viewH || 18));
-      view.viewH = view.h / view.scale;
+      view.viewH = opts.viewH || 18;
+      /* 垂直方向要放得下「天花板 ＋ 可見高度」 */
+      view.scale = Math.min(view.w / 12, view.h / (view.viewH + CEIL_UNITS));
       view.offX = (view.w - 12 * view.scale) / 2;
+      view.offY = CEIL_UNITS * view.scale;              /* cameraTop 對到的畫面 y */
+      view.fieldBottom = view.offY + view.viewH * view.scale;
       if (actorSvg) actorSvg.setAttribute('viewBox', '0 0 ' + view.w.toFixed(1) + ' ' + view.h.toFixed(1));
     }
 
     const px = x => view.offX + x * view.scale;
-    const py = (y, camTop) => (y - camTop) * view.scale;
+    const py = (y, camTop) => view.offY + (y - camTop) * view.scale;
 
     function setOptions(next) {
       Object.assign(opts, next || {});
@@ -455,11 +462,56 @@
       ctx.fillStyle = wall;
       ctx.fillRect(0, 0, view.w, view.h);
       ctx.restore();
-      /* 場地兩側（桌機寬版才會出現）壓暗一點，讓視線集中在樓梯上 */
-      if (view.offX > 0.5) {
-        ctx.fillStyle = 'rgba(70,45,20,.10)';
-        ctx.fillRect(0, 0, view.offX, view.h);
-        ctx.fillRect(view.w - view.offX, 0, view.offX, view.h);
+      /* 場地兩側的留白（桌機寬版才會出現）畫成豎井的牆面。
+       * 只壓一層暗色的話會像沒畫完的空地；畫成牆之後整個畫面才讀成「一口往下的井」。 */
+      if (view.offX > 2) drawShaftWall(scene, camTop);
+    }
+
+    /** 場地外側的牆面：縱向壁板 ＋ 隨鏡頭捲動的橫向接縫 ＋ 靠場地那側的陰影 */
+    function drawShaftWall(scene, camTop) {
+      const w = view.offX;
+      const seam = Math.max(26, view.scale * 0.9);
+      const drift = ((camTop * view.scale * 0.55) % seam + seam) % seam;
+      for (const side of [0, 1]) {
+        const x0 = side ? view.w - w : 0;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x0, 0, w, view.h);
+        ctx.clip();
+        /* 底色：由外往內漸亮，做出圓弧感 */
+        const g = ctx.createLinearGradient(x0, 0, x0 + w, 0);
+        if (side) { g.addColorStop(0, scene.mid); g.addColorStop(1, scene.far); }
+        else { g.addColorStop(0, scene.far); g.addColorStop(1, scene.mid); }
+        ctx.fillStyle = g;
+        ctx.fillRect(x0, 0, w, view.h);
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = 'rgba(60,38,18,.35)';
+        ctx.fillRect(x0, 0, w, view.h);
+        ctx.globalAlpha = 1;
+        /* 縱向壁板 */
+        const panel = Math.max(18, w / 4);
+        ctx.strokeStyle = 'rgba(0,0,0,.16)';
+        ctx.lineWidth = 1.5;
+        for (let x = x0 + panel; x < x0 + w - 1; x += panel) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, view.h); ctx.stroke();
+        }
+        /* 橫向接縫：跟著鏡頭往上捲，往下墜的速度感就出來了 */
+        ctx.strokeStyle = 'rgba(0,0,0,.13)';
+        for (let y = -seam + drift; y < view.h + seam; y += seam) {
+          ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + w, y); ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(255,255,255,.12)';
+          ctx.moveTo(x0, y + 1.5); ctx.lineTo(x0 + w, y + 1.5); ctx.stroke();
+          ctx.strokeStyle = 'rgba(0,0,0,.13)';
+        }
+        /* 靠場地那一側壓一道陰影，場地邊界才清楚 */
+        const edge = side ? x0 : x0 + w;
+        const eg = ctx.createLinearGradient(edge, 0, edge + (side ? 14 : -14), 0);
+        eg.addColorStop(0, 'rgba(0,0,0,.35)');
+        eg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = eg;
+        ctx.fillRect(side ? edge : edge - 14, 0, 14, view.h);
+        ctx.restore();
       }
     }
 
@@ -637,50 +689,101 @@
 
     /* ---------- 天花板 ---------- */
 
+    /**
+     * 天花板：畫在畫面最上面留出來的 [0, offY] 這段裡，
+     * 刺尖剛好落在 offY（＝ cameraTop，也就是真正會扣血的那條線），
+     * 所以「看起來碰到刺」和「真的被扣血」是同一件事。
+     */
     function drawCeiling(scene, cloud, time) {
-      const h = Math.max(14, view.scale * 0.6);
+      const H = view.offY;                         /* 整條天花板可以用的高度 */
       ctx.save();
       if (cloud) {
         /* 幼幼班：軟綿綿的雲朵，完全不畫尖刺 */
-        ctx.fillStyle = 'rgba(255,255,255,.96)';
-        const n = Math.max(4, Math.round(view.w / 60));
-        ctx.beginPath();
-        ctx.rect(0, -h * 1.5, view.w, h * 1.5);
+        const r = H * 0.52;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, view.w, H * 0.5);
+        const n = Math.max(4, Math.round(view.w / (r * 1.5)));
         for (let i = 0; i <= n; i++) {
           const cx = (i / n) * view.w;
-          const r = h * (0.55 + 0.18 * Math.sin(i * 1.3 + time * 1.2));
-          ctx.moveTo(cx + r, h * 0.05);
-          ctx.arc(cx, h * 0.05, r, 0, Math.PI * 2);
+          const rr = r * (0.9 + 0.18 * Math.sin(i * 1.3 + time * 1.2));
+          ctx.beginPath();
+          ctx.arc(cx, H * 0.5 - rr * 0.25, rr, 0, Math.PI * 2);
+          ctx.fill();
         }
-        ctx.fill();
-        ctx.fillStyle = 'rgba(190,215,235,.45)';
+        ctx.fillStyle = 'rgba(186,212,234,.5)';
         for (let i = 0; i <= n; i++) {
           const cx = (i / n) * view.w;
           ctx.beginPath();
-          ctx.ellipse(cx, h * 0.45, h * 0.4, h * 0.16, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx, H * 0.62, r * 0.62, r * 0.24, 0, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.restore();
         return;
       }
-      const g = ctx.createLinearGradient(0, -h, 0, h);
-      g.addColorStop(0, scene.spike[1]);
+
+      /* ---- 天花板的刺：整局唯一在追殺你的東西，一眼就要看得出很兇 ---- */
+      const base = H * 0.34;                       /* 上面那條底座 */
+      const tip = H - base;                        /* 尖刺長度：剩下的全給它 */
+      const g = ctx.createLinearGradient(0, 0, 0, base);
+      g.addColorStop(0, '#3D0A09');
+      g.addColorStop(0.5, scene.spike[1]);
       g.addColorStop(1, scene.spike[0]);
       ctx.fillStyle = g;
-      ctx.fillRect(0, -h, view.w, h);
-      ctx.fillStyle = '#FFF0EC';
-      const n = Math.max(6, Math.round(view.w / 26));
+      ctx.fillRect(0, 0, view.w, base);
+      /* 底座下緣壓一條暗邊，刺的根部才有厚度 */
+      ctx.fillStyle = 'rgba(0,0,0,.3)';
+      ctx.fillRect(0, base - Math.max(2, H * 0.05), view.w, Math.max(3, H * 0.06));
+
+      /* 尖刺：每根約 0.75 格寬（比原本少而大）；金屬漸層 ＋ 深色描邊 ＋ 高光 */
+      const stepW = Math.max(16, view.scale * 0.75);
+      const n = Math.max(4, Math.round(view.w / stepW));
+      const cw = view.w / n;
+      const wob = opts.reduceMotion ? 0 : Math.sin(time * 3.5) * (tip * 0.05);
       for (let i = 0; i < n; i++) {
-        const cw = view.w / n;
         const sx = i * cw;
+        const cx = sx + cw / 2;
+        const len = base + tip + (i % 2 ? wob : -wob);
+        const sg = ctx.createLinearGradient(sx, 0, sx + cw, 0);
+        sg.addColorStop(0, '#6E605C');
+        sg.addColorStop(0.3, '#E6DEDA');
+        sg.addColorStop(0.52, '#B9AAA4');
+        sg.addColorStop(0.8, '#8A7A75');
+        sg.addColorStop(1, '#4E4340');
         ctx.beginPath();
-        ctx.moveTo(sx + 1, 0);
-        ctx.lineTo(sx + cw / 2, h * 0.85);
-        ctx.lineTo(sx + cw - 1, 0);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(sx + 0.5, base * 0.55);
+        ctx.lineTo(cx, len);
+        ctx.lineTo(sx + cw - 0.5, base * 0.55);
+        ctx.closePath();
+        ctx.fillStyle = sg;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(48,6,6,.75)';
+        ctx.lineWidth = Math.max(1.5, cw * 0.06);
+        ctx.stroke();
+        /* 沿著左緣的一條亮線，做出金屬感 */
+        ctx.beginPath();
+        ctx.moveTo(sx + cw * 0.3, base * 0.7);
+        ctx.lineTo(cx - cw * 0.04, base + tip * 0.82);
+        ctx.strokeStyle = 'rgba(255,255,255,.9)';
+        ctx.lineWidth = Math.max(1.5, cw * 0.08);
+        ctx.stroke();
       }
-      ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(view.w, 0); ctx.stroke();
+      if (opts.colorAssist) {
+        ctx.strokeStyle = '#5A0B0A';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(view.w, H); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    /** 場地下緣以外的「外面」：畫成暗色，讓玩家看得出掉出去就沒了 */
+    function drawVoid() {
+      if (view.fieldBottom >= view.h - 0.5) return;
+      ctx.save();
+      const g = ctx.createLinearGradient(0, view.fieldBottom, 0, Math.min(view.h, view.fieldBottom + 40));
+      g.addColorStop(0, 'rgba(30,16,8,.55)');
+      g.addColorStop(1, 'rgba(20,10,5,.85)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, view.fieldBottom, view.w, view.h - view.fieldBottom);
       ctx.restore();
     }
 
@@ -697,27 +800,28 @@
       /* sinking 從 0 到約 5.6 格就會掉出去，換算成 0～1 的危險程度 */
       const k = Math.min(1, worst / 5.6);
       const pulse = opts.reduceMotion ? 1 : 0.8 + 0.2 * Math.sin(time * 14);
-      const band = Math.max(60, view.h * 0.24);
-      const bar = Math.max(16, view.h * 0.035);
+      const bottom = view.fieldBottom;
+      const band = Math.max(60, view.viewH * view.scale * 0.24);
+      const bar = Math.max(16, view.viewH * view.scale * 0.035);
       ctx.save();
       ctx.globalAlpha = pulse;
 
       /* 由淡轉濃的紅色危險區 */
-      const g = ctx.createLinearGradient(0, view.h - band, 0, view.h - bar);
+      const g = ctx.createLinearGradient(0, bottom - band, 0, bottom - bar);
       g.addColorStop(0, 'rgba(214,25,40,0)');
       g.addColorStop(1, 'rgba(214,25,40,' + (0.45 + 0.4 * k).toFixed(3) + ')');
       ctx.fillStyle = g;
-      ctx.fillRect(0, view.h - band, view.w, band - bar);
+      ctx.fillRect(0, bottom - band, view.w, band - bar);
 
       /* 畫面最下緣一條實心紅條 ＝ 掉過這裡就沒了。
        * 箭頭畫在紅條上（白色在淺色背景會看不見，一定要有底才行）。 */
       ctx.fillStyle = 'rgba(198,20,36,' + (0.8 + 0.2 * k).toFixed(3) + ')';
-      ctx.fillRect(0, view.h - bar, view.w, bar);
+      ctx.fillRect(0, bottom - bar, view.w, bar);
       ctx.fillStyle = '#FFFFFF';
       const n = 5;
       for (let i = 0; i < n; i++) {
         const cx = view.w * ((i + 0.5) / n);
-        const cy = view.h - bar / 2;
+        const cy = bottom - bar / 2;
         const sz = bar * (0.3 + 0.12 * k);
         ctx.beginPath();
         ctx.moveTo(cx - sz, cy - sz * 0.65);
@@ -880,6 +984,7 @@
         drawStep(st, scene, state.cameraTop, time);
       }
       drawCeiling(scene, state.diff.cloudCeiling, time);
+      drawVoid();
       drawSinkWarning(state, time);
       drawParticles();
       ctx.restore();

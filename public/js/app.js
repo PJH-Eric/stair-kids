@@ -18,6 +18,9 @@
     hudDepth: $('#hud-depth'), hudHp: $('#hud-hp'), hudHpRow: $('#hud-hp-row'),
     hudDiff: $('#hud-diff'), hudSpeed: $('#hud-speed'),
     hudWorld: $('#hud-world'), hudNext: $('#hud-next'),
+    hudAvatar: $('#hud-avatar'), hudName: $('#hud-name'), hudWorldFill: $('#hud-world-fill'),
+    liveSpikes: $('#live-spikes'), liveSprings: $('#live-springs'),
+    liveFakes: $('#live-fakes'), liveCeil: $('#live-ceil'),
     hudNet: $('#hud-net'), hudBest: $('#hud-best'),
     hurtFlash: $('#overlay-hurt'),
     countdown: $('#overlay-countdown'), countdownNum: $('#countdown-num'),
@@ -224,7 +227,7 @@
     els.pause.hidden = true;
     els.countdown.hidden = true;
     els.milestone.hidden = true;
-    if (els.hurtFlash) { els.hurtFlash.classList.remove('on'); els.hurtFlash.style.opacity = '0'; }
+    if (els.hurtFlash) els.hurtFlash.classList.remove('blink');
     view.clearActors();
     input.clear();
   }
@@ -320,11 +323,12 @@
         case 'hurt':
           /* 踩刺已經有自己的一整套聲音與畫面（上面那個 case），這裡只處理天花板 */
           if (e.source === 'ceiling') {
+            /* 天花板上面也是刺，被刺到的反饋要跟踩到刺階一樣明顯 */
             sound.play('warn');
-            sound.play('hurt');
-            view.kick(5);
-            flashHurt(false);
-            buzz(20);
+            sound.play('spike');
+            view.kick(8);
+            flashHurt(true);
+            buzz(35);
           }
           break;
         case 'milestone': {
@@ -368,15 +372,14 @@
   function flashHurt(strong) {
     const el = els.hurtFlash;
     if (!el) return;
-    const peak = store.reduceMotion ? (strong ? 0.5 : 0.3) : (strong ? 1 : 0.6);
-    /* .on 是「很快亮起來」的過渡；拿掉之後換成慢慢淡出的過渡 */
-    el.classList.add('on');
-    el.style.opacity = String(peak);
+    const peak = store.reduceMotion ? (strong ? 0.45 : 0.3) : (strong ? 1 : 0.75);
+    el.style.setProperty('--peak', String(peak));
+    /* 先拿掉 class 並強制重排，動畫才會從頭播 —— 連續被刺時每一下都要重新閃 */
+    el.classList.remove('blink');
+    void el.offsetWidth;
+    el.classList.add('blink');
     clearTimeout(hurtTimer);
-    hurtTimer = setTimeout(() => {
-      el.classList.remove('on');
-      el.style.opacity = '0';
-    }, 60);
+    hurtTimer = setTimeout(() => el.classList.remove('blink'), 560);
   }
 
   function buzz(ms) {
@@ -386,7 +389,15 @@
 
   /* ================= 資訊欄 ================= */
 
-  let hudCache = { depth: -1, hp: -1, world: -1, speed: '' };
+  let hudCache = { depth: -1, hp: -1, world: -1, speed: '', compact: null };
+
+  /** 窄的薄狀態列擠不下一整排愛心（手機直向 10 顆就會被裁掉），改用「愛心＋數字」。
+   * 平板直向有 800 多 px，照樣排一整排愛心比較好讀，所以要看寬度不是只看方向。 */
+  function narrowHud() {
+    try {
+      return window.matchMedia('(orientation: portrait)').matches && window.innerWidth < 620;
+    } catch (e) { return false; }
+  }
 
   function updateHud(force) {
     const s = G.match;
@@ -397,9 +408,11 @@
       els.hudDepth.textContent = meters;
       hudCache.depth = meters;
     }
-    if (force || p.hp !== hudCache.hp) {
-      els.hudHp.innerHTML = SvgUI.hearts(p.hp, p.hpMax, s.diff.hpAsNumber);
+    const compact = s.diff.hpAsNumber || narrowHud();
+    if (force || p.hp !== hudCache.hp || compact !== hudCache.compact) {
+      els.hudHp.innerHTML = SvgUI.hearts(p.hp, p.hpMax, compact);
       hudCache.hp = p.hp;
+      hudCache.compact = compact;
     }
     const speed = '×' + s.scrollMul.toFixed(1);
     if (force || speed !== hudCache.speed) {
@@ -407,19 +420,34 @@
       hudCache.speed = speed;
       sound.setTempo(s.scrollMul);
     }
-    if (force || s.world !== hudCache.world) {
+    if (force || s.world !== hudCache.world || compact !== hudCache.compactWorld) {
       const sc = Scenes.sceneFor(s.world);
-      els.hudWorld.textContent = sc.name + '（第 ' + (s.world + 1) + ' 層）';
+      /* 直向只放世界名稱，「（第 N 層）」擠不下也不重要 */
+      els.hudWorld.textContent = compact ? sc.name : sc.name + '（第 ' + (s.world + 1) + ' 層）';
       hudCache.world = s.world;
+      hudCache.compactWorld = compact;
     }
     const nextAt = (s.world + 1) * Rules.C.MILESTONE;
-    els.hudNext.textContent = '下一層還有 ' + Math.max(0, Math.ceil(nextAt - p.best)) + ' m';
+    const left = Math.max(0, Math.ceil(nextAt - p.best));
+    els.hudNext.textContent = '下一層還有 ' + left + ' m';
+    if (els.liveSpikes) {
+      els.liveSpikes.textContent = p.stats.spikes;
+      els.liveSprings.textContent = p.stats.springs;
+      els.liveFakes.textContent = p.stats.fakes;
+      els.liveCeil.textContent = p.stats.ceilingSeconds.toFixed(1) + ' 秒';
+    }
+    if (els.hudWorldFill) {
+      const into = Math.max(0, Math.min(1, (p.best % Rules.C.MILESTONE) / Rules.C.MILESTONE));
+      els.hudWorldFill.style.width = (into * 100).toFixed(1) + '%';
+    }
     if (force) {
       els.hudDiff.textContent = s.diff.name;
       els.hudNet.textContent = '單機一人挑戰';
       const rec = store.records[s.difficulty];
       els.hudBest.textContent = rec && rec.depth ? '本機最深 ' + rec.depth + ' m' : '還沒有紀錄';
       els.hudHpRow.hidden = false;
+      els.hudName.textContent = p.name;
+      els.hudAvatar.innerHTML = Render.kidAvatarSvg(charOf(p.char), 50);
     }
   }
 
@@ -646,6 +674,7 @@
     view.resize();
     updateRotateTip();
     syncPads();
+    if (G.match) updateHud(true);
   });
   window.addEventListener('orientationchange', () => setTimeout(() => {
     applyRenderOptions(); view.resize(); updateRotateTip();

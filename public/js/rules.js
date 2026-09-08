@@ -119,6 +119,7 @@
       invuln: 0,
       ceilAccum: 0,
       hurtBy: null,                    /* 最近一次扣血的來源，前端用來決定要播哪一種受傷特效 */
+      ceilCool: 0,                     /* 天花板扣血的冷卻（秒），碰到就立刻扣、之後要等冷卻 */
       sinking: 0,                      /* 比正常位置低幾格（超過 SINK_WARN 才算，給前端做警示強度） */
       fell: false,                     /* 是不是掉出畫面下緣摔死的 */
       pressed: false,
@@ -250,20 +251,18 @@
     const headY = player.y - C.PLAYER_H;
     if (headY >= cameraTop - EPS) {
       player.pressed = false;
-      /* 註：這裡刻意「不」把 ceilAccum 歸零。
-       * 天花板會把玩家推穿階梯，所以接觸永遠是斷斷續續的（實測平均一次只有 0.15 秒、
-       * 最長 0.4 秒），要求「連續」接觸滿一個間隔的話就永遠扣不到血，
-       * §0.1 的「被上方天花板刺頂住持續扣血」等於被刪掉。
-       * 改成累計總接觸時間，被頂得越多就扣得越多，語意才對得上。 */
       return false;
     }
     player.y = cameraTop + C.PLAYER_H;
     player.pressed = true;
     player.stats.ceilingSeconds += dt;
     if (diff.ceilInterval == null) return true;      /* 幼幼班：軟綿綿的雲朵，不扣血 */
-    player.ceilAccum += dt;
-    while (player.ceilAccum >= diff.ceilInterval) {
-      player.ceilAccum -= diff.ceilInterval;
+    /* 碰到天花板的刺就「立刻」扣 1 顆，之後要等冷卻才會再扣。
+     * 不能用「累計接觸時間滿一個間隔才扣」—— 天花板會把人推穿階梯，接觸都是斷斷續續的
+     * （實測平均一次 0.15 秒），玩家會連續被刺 4 次才掉 1 顆血，
+     * 從他的角度看就是「刺到我卻沒扣血」。 */
+    if (player.ceilCool <= 0) {
+      player.ceilCool = diff.ceilInterval;
       damage(player, 1, 'ceiling', out);
     }
     return true;
@@ -343,6 +342,7 @@
       if (!p.alive) { p.invuln = Math.max(0, p.invuln - dt); continue; }
       p.aliveTime += dt;
       p.invuln = Math.max(0, p.invuln - dt);
+      p.ceilCool = Math.max(0, p.ceilCool - dt);
       p.hurtFlash = Math.max(0, p.hurtFlash - dt);
 
       const cmd = (inputs && inputs[p.id]) || null;

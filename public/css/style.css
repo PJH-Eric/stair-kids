@@ -331,10 +331,57 @@ b { font-weight: 700; }
   padding: calc(58px + var(--safe-t)) 14px 14px calc(14px + var(--safe-l));
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   font-size: 14px;
   overflow: hidden;
 }
+/* 玩家卡：頭像＋暱稱 */
+.side-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.side-avatar {
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--line);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.side-avatar svg { display: block; }
+.side-name { font-weight: 700; font-size: 15px; color: var(--brand-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.side-block { display: flex; flex-direction: column; gap: 4px; }
+/* 世界進度條 */
+.world-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .08);
+  overflow: hidden;
+}
+.world-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #FFC46B, var(--brand));
+  transition: width .2s linear;
+}
+/* 這局的即時統計 */
+.side-live { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.block-label { font-size: 12px; margin-bottom: 4px; }
+.live-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.live-list li { display: flex; justify-content: space-between; gap: 8px; color: var(--ink-soft); }
+.live-list b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* 把紀錄與連線狀態推到最底下，左欄才不會上面擠一堆、下面一大片空白 */
+.side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
 .side-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .side-label { color: var(--ink-soft); font-size: 12.5px; flex: 0 0 34px; }
 .side-depth strong { font-size: 30px; color: var(--brand-dark); line-height: 1; }
@@ -367,7 +414,7 @@ b { font-weight: 700; }
   font-family: inherit;
 }
 
-/* 受傷時整個樓梯畫面閃一圈紅光（踩到刺、被天花板頂）。
+/* 受傷時整個樓梯畫面閃爍紅色（踩到刺、被天花板的刺頂到）。
  * 這是不透明度變化不是位移，開了「減少動態」也留著，只是弱一點。 */
 .hurt-flash {
   position: absolute;
@@ -375,14 +422,23 @@ b { font-weight: 700; }
   pointer-events: none;
   opacity: 0;
   z-index: 20;
+  --peak: 1;
   background:
-    radial-gradient(ellipse at center, rgba(255, 40, 40, 0) 45%, rgba(214, 25, 40, .85) 100%);
-  box-shadow: inset 0 0 0 5px rgba(255, 70, 70, .9);
-  transition: opacity .28s ease-out;
+    radial-gradient(ellipse at center, rgba(255, 40, 40, 0) 38%, rgba(214, 25, 40, .92) 100%);
+  box-shadow: inset 0 0 0 6px rgba(255, 60, 60, .95);
 }
-.hurt-flash.on {
-  opacity: 1;
-  transition: opacity .04s ease-in;
+
+/* 閃三下再淡掉，才看得出是「閃爍」而不是單純亮一下 */
+@keyframes hurt-blink {
+  0%   { opacity: var(--peak); }
+  16%  { opacity: 0; }
+  32%  { opacity: var(--peak); }
+  48%  { opacity: 0; }
+  64%  { opacity: var(--peak); }
+  100% { opacity: 0; }
+}
+.hurt-flash.blink {
+  animation: hurt-blink .52s ease-out;
 }
 
 /* 疊在樓梯畫面上的提示 */
@@ -552,25 +608,41 @@ b { font-weight: 700; }
 
 @media (orientation: portrait) {
   .game-wrap { flex-direction: column; }
+  /* 直向壓成上方薄狀態列。重點是「絕對不能橫向溢出」——
+   * 溢出的話難度與世界會被推到畫面外，玩家根本看不到。 */
   .side {
     flex: 0 0 auto;
     flex-direction: row;
     align-items: center;
-    gap: 12px;
+    justify-content: space-between;
+    gap: 8px;
     border-right: 0;
     border-bottom: 2px solid var(--line);
-    padding: calc(8px + var(--safe-t)) 108px 8px calc(12px + var(--safe-l));
-    overflow-x: auto;
+    padding: calc(6px + var(--safe-t)) 100px 6px calc(10px + var(--safe-l));
+    overflow: hidden;
     white-space: nowrap;
   }
-  .side-row { flex: 0 0 auto; }
-  .side-label { flex: 0 0 auto; }
-  .side-depth strong { font-size: 22px; }
-  .side-row.small { display: none; }
-  #hud-next { display: none; }
+  .side-who, .side-foot, .side-live, .world-bar, #hud-next { display: none; }
+  .side-row { flex: 0 0 auto; gap: 4px; }
+  .side-label { display: none; }              /* 標籤省掉，數字與圖示自己說明得夠清楚 */
+  .side-block { flex-direction: row; align-items: center; }
+  .side-depth strong { font-size: 21px; }
+  .side-depth .unit { font-size: 12px; }
+  /* 愛心縮小並禁止換行，10～12 顆才擠得進窄螢幕又不會把狀態列撐成兩層 */
+  #hud-hp-row { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+  .hearts { flex-wrap: nowrap; }
+  .hearts .heart { width: 13px; height: 13px; flex: 0 0 auto; }
+  #hud-world { max-width: 26vw; overflow: hidden; text-overflow: ellipsis; }
   /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊） */
   .pad-left { left: calc(14px + var(--safe-l)); }
   .pad-right { left: auto; right: calc(14px + var(--safe-r)); }
+}
+
+/* 很窄的手機（≤ 380px）：再讓一步，難度文字收掉只留速度倍率 */
+@media (orientation: portrait) and (max-width: 380px) {
+  .side { padding-right: 92px; gap: 6px; }
+  #hud-diff { display: none; }
+  .hearts .heart { width: 11px; height: 11px; }
 }
 
 /* 手機橫向：高度不足 → 按鍵縮小、資訊欄再收窄 */
@@ -581,9 +653,26 @@ b { font-weight: 700; }
   .side-row.small { display: none; }
 }
 
-/* 桌機寬版：資訊欄維持窄，樓梯畫面居中不要無限拉寬 */
+/* 桌機寬版：整組置中並限寬，不要讓樓梯畫面在一片空曠中變成一條細柱 */
 @media (min-width: 1100px) {
   .side { flex: 0 0 300px; }
+  .game-wrap {
+    /* 一定要給 width，只給 max-width 的話 absolute + inset 會讓 flex 容器塌成 0 */
+    left: 50%;
+    right: auto;
+    width: 100%;
+    max-width: 1180px;
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 2px var(--line), 0 18px 50px rgba(120, 80, 40, .18);
+  }
+}
+
+/* 手機橫向：高度不足，資訊欄再瘦一點把寬度讓給樓梯 */
+@media (orientation: landscape) and (max-height: 430px) {
+  .side { flex: 0 0 168px; font-size: 12px; gap: 4px; }
+  .side-who, .side-live { display: none; }
+  .side-depth strong { font-size: 20px; }
+  .hearts .heart { width: 12px; height: 12px; }
 }
 
 /* 沒有觸控就不顯示方向鍵（由 app.js 依裝置能力加上 .no-touch，

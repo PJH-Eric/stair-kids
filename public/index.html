@@ -136,6 +136,12 @@
   <div class="game-wrap">
     <!-- 資訊欄：桌機／橫向在左邊且刻意小；直向壓成上方薄狀態列 -->
     <aside class="side" id="side">
+      <!-- 桌機／橫向才顯示的玩家卡：頭像＋暱稱，把左欄的空白填起來 -->
+      <div class="side-who" id="side-who">
+        <div class="side-avatar" id="hud-avatar"></div>
+        <div class="side-name" id="hud-name"></div>
+      </div>
+
       <div class="side-row side-depth">
         <span class="side-label">深度</span>
         <strong id="hud-depth">0</strong><span class="unit">m</span>
@@ -149,13 +155,33 @@
         <span id="hud-diff">普通</span>
         <span class="chip" id="hud-speed">×1.0</span>
       </div>
-      <div class="side-row">
-        <span class="side-label">世界</span>
-        <span id="hud-world">幼稚園</span>
+
+      <!-- 世界進度：直接畫成一條進度條，比「還有幾公尺」好讀 -->
+      <div class="side-block" id="side-world">
+        <div class="side-row">
+          <span class="side-label">世界</span>
+          <span id="hud-world">幼稚園</span>
+        </div>
+        <div class="world-bar"><i id="hud-world-fill"></i></div>
+        <div class="side-row small" id="hud-next">下一層還有 100 m</div>
       </div>
-      <div class="side-row small" id="hud-next">下一層還有 100 m</div>
-      <div class="side-row small" id="hud-net">單機（M0）</div>
-      <div class="side-row small" id="hud-best"></div>
+
+      <!-- 這局的即時統計。桌機／橫向才顯示，順便把左欄的空白填起來；
+           M1 之後對手的深度與血量會接在這下面。 -->
+      <div class="side-block side-live" id="side-live">
+        <div class="side-label block-label">這局</div>
+        <ul class="live-list">
+          <li><span>踩到刺</span><b id="live-spikes">0</b></li>
+          <li><span>踩到彈簧</span><b id="live-springs">0</b></li>
+          <li><span>踩破假階</span><b id="live-fakes">0</b></li>
+          <li><span>被刺頂到</span><b id="live-ceil">0.0 秒</b></li>
+        </ul>
+      </div>
+
+      <div class="side-foot">
+        <div class="side-row small" id="hud-best"></div>
+        <div class="side-row small" id="hud-net">單機一人挑戰</div>
+      </div>
     </aside>
 
     <!-- 樓梯畫面 -->
