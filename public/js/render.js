@@ -8,6 +8,11 @@
 
   let uid = 0;
   const C_FLASH = 0.22;                 /* 刺階閃白光的長度（秒），要跟 rules.js 的 step.flash 一致 */
+  /* 角色尺寸一律問規則核心，不在這裡另抄一份（抄了就會漂）。
+   * SVG 的本地座標是 100 × 160，剛好是 1 : 1.6，所以只要 PLAYER_H = PLAYER_W × 1.6
+   * 就可以用單一縮放，不會把小朋友壓扁。 */
+  const playerW = () => (root.Rules ? root.Rules.C.PLAYER_W : 1.25);
+  const playerH = () => (root.Rules ? root.Rules.C.PLAYER_H : 2.0);
   const CEIL_UNITS = 1.25;              /* 畫面最上面留給天花板的高度（格）。
                                          * 天花板的底座本來畫在 cameraTop 以上，也就是畫面外，
                                          * 結果只剩白色的刺露在淺色背景上，等於看不見。
@@ -327,6 +332,8 @@
       canvas.height = Math.round(view.h * dpr);
       view.viewH = opts.viewH || 18;
       /* 垂直方向要放得下「天花板 ＋ 可見高度」 */
+      /* 場地寬固定 12 格；高度方向要多留 CEIL_UNITS 給天花板。
+       * 取兩者的最小值，畫面才不會被裁掉。 */
       view.scale = Math.min(view.w / 12, view.h / (view.viewH + CEIL_UNITS));
       view.offX = (view.w - 12 * view.scale) / 2;
       view.offY = CEIL_UNITS * view.scale;              /* cameraTop 對到的畫面 y */
@@ -933,7 +940,8 @@
     const TURN_TIME = 0.11;               /* 正面↔側身轉過去要多久（秒） */
 
     function drawActors(state, time, dt) {
-      const k = view.scale / 100;          /* 本地 100 單位 = 1 格 */
+      const pw = playerW(), ph = playerH();
+      const k = view.scale * pw / 100;     /* 本地 100 單位 = PLAYER_W 格 */
       for (const p of state.players) {
         const a = actors.get(p.id);
         if (!a) continue;
@@ -945,8 +953,8 @@
         const rate = (dt || 0) / TURN_TIME;
         a.turn += Math.max(-rate, Math.min(rate, wantTurn - a.turn));
         if (rate <= 0 || Math.abs(wantTurn - a.turn) < 0.02) a.turn = wantTurn;
-        const x = px(p.x) - view.scale / 2;
-        const y = py(p.y, state.cameraTop) - view.scale * 1.6;
+        const x = px(p.x) - view.scale * pw / 2;
+        const y = py(p.y, state.cameraTop) - view.scale * ph;
         a.g.setAttribute('transform', 'translate(' + x.toFixed(1) + ',' + y.toFixed(1) + ')');
         a.inner.setAttribute('transform', 'scale(' + k.toFixed(4) + ')');
         const pose = !p.alive ? 'stun'
@@ -956,7 +964,7 @@
           : p.state === 'walk' ? 'walk' : 'idle';
         poseKid(a.inner, pose, time, { face: a.mirror, turn: a.turn });
         a.g.setAttribute('opacity', (p.invuln > 0 && Math.floor(time * 14) % 2) ? '0.45' : '1');
-        a.label.setAttribute('x', (view.scale / 2).toFixed(1));
+        a.label.setAttribute('x', (view.scale * pw / 2).toFixed(1));
         a.label.setAttribute('y', '-6');
         a.label.setAttribute('font-size', Math.max(10, Math.min(16, view.scale * 0.42)).toFixed(1));
         a.label.style.display = state.players.length > 1 ? '' : 'none';

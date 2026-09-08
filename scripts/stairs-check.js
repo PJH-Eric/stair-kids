@@ -5,6 +5,7 @@
 'use strict';
 
 const Stairs = require('../public/js/stairs.js');
+const Rules = require('../public/js/rules.js');
 const C = Stairs.C;
 const KIND = Stairs.KIND;
 const LAYERS = Number(process.env.LAYERS) || 10000;
@@ -191,7 +192,7 @@ for (const difficulty of ['baby', 'easy', 'normal', 'hard']) {
   /* ---- 出生平台 ---- */
   const first = layers[0][0];
   ok(first.spawn === true && first.depth === 0 && Math.abs((first.x1 - first.x0) - C.SPAWN_WIDTH) < 1e-9,
-    difficulty + '：第 0 層是寬 8 格的出生大平台');
+    difficulty + '：第 0 層是出生大平台（寬 ' + Stairs.C.SPAWN_WIDTH + ' 格）');
 }
 
 /* ---- 同 seed 完全重現 ---- */
@@ -208,6 +209,49 @@ console.log('\n【重現性】');
   while (gen.depth < 200) inc.push(...Stairs.nextLayer(gen));
   ok(JSON.stringify(pure) === JSON.stringify(inc.filter(s => s.depth <= 200)),
     'makeStairs（純函式）與 createGen＋nextLayer（逐段生成）結果一致');
+}
+
+/* ---- 空隙一定看得出來過不過得去（Eric：「間隙判斷不夠明顯，以為能下去」） ---- */
+console.log('\n【空隙的可讀性】');
+{
+  const PW = Rules.C.PLAYER_W;
+  const MIN = Stairs.C.MIN_PASS;
+  ok(MIN > PW + 0.5,
+    '「一定過得去」的門檻比玩家寬度還多留半格以上（' + MIN + ' > ' + PW + '）');
+
+  for (const diff of ['baby', 'easy', 'normal', 'hard']) {
+    const gen = Stairs.createGen('gap-' + diff, diff);
+    const layers = [];
+    while (gen.layer < LAYERS) layers.push(Stairs.nextLayer(gen));
+    let wallBad = 0, sepBad = 0, passable = 0;
+    for (const layer of layers) {
+      for (const st of layer) {
+        /* 貼牆的縫：0（貼死）或 ≥ MIN，不允許中間的模糊值 */
+        const left = st.x0;
+        const right = Stairs.C.FIELD_W - st.x1;
+        for (const g of [left, right]) {
+          if (g > 1e-9 && g < MIN - 1e-9) wallBad++;
+          if (g >= MIN - 1e-9) passable++;
+        }
+      }
+      if (layer.length === 2) {
+        const sep = Stairs.spanGap(layer[0].x0, layer[0].x1, layer[1].x0, layer[1].x1);
+        if (sep > 1e-9 && sep < MIN - 1e-9) sepBad++;
+        else if (sep >= MIN - 1e-9) passable++;
+      }
+    }
+    ok(wallBad === 0, diff + '：牆邊沒有「看起來能過、其實過不去」的細縫', wallBad + ' 處');
+    ok(sepBad === 0, diff + '：同一層兩階之間也沒有模糊的細縫', sepBad + ' 處');
+    ok(gen.blurry === 0, diff + '：不需要為了可達性放行模糊細縫', gen.blurry + ' 層');
+    ok(passable > LAYERS * 0.5, diff + '：真的過得去的縫夠多（不是靠塞滿階梯規避）',
+      passable + ' 處 / ' + LAYERS + ' 層');
+  }
+}
+
+/* ---- 垂直空間夠玩家站（角色放大之後要重新確認） ---- */
+{
+  ok(Stairs.C.GAP_MIN > Rules.C.PLAYER_H + 0.5,
+    '層間最小垂直間距容得下放大後的角色再加半格（' + Stairs.C.GAP_MIN + ' > ' + Rules.C.PLAYER_H + '）');
 }
 
 console.log('\n────────────────────────────');

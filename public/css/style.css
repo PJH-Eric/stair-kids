@@ -726,15 +726,16 @@ button.soon-item:active { transform: translateY(2px); }
   .side-row.small { display: none; }
 }
 
-/* 桌機寬版：整組置中並限寬，不要讓樓梯畫面在一片空曠中變成一條細柱 */
+/* 桌機寬版：整組置中並限寬，不要讓樓梯畫面在一片空曠中變成一條細柱。
+ * 限寬從 1180 放到 1320、資訊欄從 300 收到 276，可操作的場地就多拿到 164px。 */
 @media (min-width: 1100px) {
-  .side { flex: 0 0 300px; }
+  .side { flex: 0 0 276px; }
   .game-wrap {
     /* 一定要給 width，只給 max-width 的話 absolute + inset 會讓 flex 容器塌成 0 */
     left: 50%;
     right: auto;
     width: 100%;
-    max-width: 1180px;
+    max-width: 1320px;
     transform: translateX(-50%);
     box-shadow: 0 0 0 2px var(--line), 0 18px 50px rgba(120, 80, 40, .18);
   }
@@ -755,4 +756,40 @@ button.soon-item:active { transform: translateY(2px); }
 @media (prefers-reduced-motion: reduce) {
   .overlay.countdown span, .overlay.milestone span { animation: none; }
   .big-btn { transition: none; }
+}
+
+/* ---------- 這一下扣了幾顆（傷害 1～5 隨機，數字要看得到） ---------- */
+
+.dmg-pop {
+  position: absolute;
+  left: 50%;
+  top: 26%;
+  transform: translate(-50%, 0);
+  font-size: 40px;
+  font-weight: 900;
+  color: #FF3B57;
+  text-shadow: 0 2px 0 #fff, 0 0 14px rgba(255, 59, 87, .55);
+  pointer-events: none;
+  z-index: 6;
+  opacity: 0;
+}
+.dmg-pop.big { font-size: 58px; }
+.dmg-pop.pop { animation: dmg-rise .68s cubic-bezier(.2, .8, .3, 1) forwards; }
+.dmg-pop[hidden] { display: none !important; }
+
+@keyframes dmg-rise {
+  0%   { opacity: 0; transform: translate(-50%, 14px) scale(.7); }
+  18%  { opacity: 1; transform: translate(-50%, 0) scale(1.15); }
+  40%  { opacity: 1; transform: translate(-50%, -6px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -46px) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 減少動態時不用位移，只留淡入淡出（數字本身還是要看得到） */
+  .dmg-pop.pop { animation: dmg-fade .68s linear forwards; }
+  @keyframes dmg-fade {
+    0% { opacity: 0; }
+    20%, 60% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; }
+  }
 }

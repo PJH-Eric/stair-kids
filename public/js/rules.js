@@ -27,22 +27,30 @@
     STEP: 1 / 60,                /* 固定步長（秒） */
     STEP_MS: 1000 / 60,          /* 固定步長（毫秒），stepMatch 收的是毫秒 */
     FIELD_W: Stairs.C.FIELD_W,   /* 場地寬 12 格 */
-    VIEW_H: 18,                  /* 可見高度 18 格 */
-    VIEW_H_SHORT: 14,            /* 手機橫向縮短的可見高度（規劃書 §7.1） */
-    CAMERA_LEAD: 12,             /* 鏡頭跟在「最深存活者 − 12 格」，領先者維持在畫面下方 1/3 */
+    VIEW_H: 14,                  /* 可見高度（格）。18 → 14 是為了把畫面拉近。
+                                  * 每一格的像素變大 → 角色變明顯、場地那 12 格的可操作寬度
+                                  * 也跟著吃掉更多畫面寬（近正方形視窗實測 66% → 76%）。
+                                  * 這條線同時是「掉出畫面就摔死」的死亡線，所以 CAMERA_LEAD
+                                  * 要一起往上收，落後的緩衝才不會被壓掉。 */
+    VIEW_H_SHORT: 12,            /* 手機橫向縮短的可見高度（規劃書 §7.1） */
+    CAMERA_LEAD: 8.5,            /* 鏡頭跟在「最深存活者 − 8.5 格」，領先者維持在畫面下方 6/10；
+                                  * 死亡線之前還留 5.5 格＝約 0.55 秒的下沉緩衝（跟改動前一樣）。 */
     CAMERA_CATCHUP: 8.0,         /* 鏡頭最高追隨速度（格／秒）。
                                   * 這是「掉出畫面外會摔死」成立的關鍵：自由落體最快 18 格／秒，
                                   * 追不上的那 10 格／秒就是你往畫面下緣沉下去的速度。
                                   * 實測連續踩空約 16 格（5～6 層）就會沉出畫面。 */
     SINK_WARN: 2.0,              /* 比正常位置低這麼多格就開始在畫面下緣警示 */
-    PLAYER_W: 1.0,
-    PLAYER_H: 1.6,
+    PLAYER_W: 1.25,              /* 角色放大：1.0 → 1.25 格（畫面上寬了 25%），
+                                  * 這樣「這條縫我塞不塞得進去」用眼睛就判斷得出來。
+                                  * 高寬比固定 1.6，SVG 的 100×160 本地座標才不會變形。 */
+    PLAYER_H: 2.0,
     MOVE_SPEED: 6.0,             /* 水平速度（格／秒），按住就是等速、無加速度 */
     GRAVITY: 30.0,               /* 重力（格／秒²） */
     MAX_FALL: 18.0,              /* 最大落速（格／秒），避免穿階 */
     BELT_SPEED: 3.0,             /* 輸送帶帶動速度：逆走剩 6 − 3 = 3 格／秒 */
     SPRING_VY: 9.0,              /* ★ 彈簧向上初速（規劃書 §1.3）；見 README 待確認清單第 1 條 */
-    SPIKE_DAMAGE: 1,             /* 踩刺 −1 顆愛心 */
+    SPIKE_DAMAGE: 1,             /* 保留給幼幼班等沒有傷害表的情況；實際扣血看 rollSpikeDamage() */
+    SPIKE_DEEP_WORLDS: 3,        /* 傷害從「淺處範圍」推到「深處範圍」要幾個世界（＝300 公尺） */
     INVULN: 0.6,                 /* 扣血後的無敵閃爍（只擋「同類」傷害） */
     FAKE_DELAY: 0.25,            /* 假階踩到幾秒後崩解 */
     SPIKE_FLASH: 0.22,           /* 踩到刺時那一階閃白光的長度（純畫面，render.js 用同一個值） */
@@ -90,10 +98,15 @@
     /* 幼幼班照 §0.2 的「鼓勵式不死」：鏡頭永遠追得上，所以不可能沉出畫面，也不會摔死 */
     baby: makeDifficulty('baby', '幼幼班', 1.2, 30, 0.05, 1.5, 20, null,
       { cloudCeiling: true, hpAsNumber: true, endless: true, versus: false,
-        fallOut: false, cameraCatchup: null }),
-    easy: makeDifficulty('easy', '簡單', 2.0, 20, 0.10, 2.0, 12, 0.9),
-    normal: makeDifficulty('normal', '普通', 2.8, 20, 0.12, 2.2, 10, 0.6),
-    hard: makeDifficulty('hard', '困難', 3.6, 20, 0.14, 2.5, 8, 0.4)
+        fallOut: false, cameraCatchup: null, spikeDamage: null }),
+    /* 三段對戰難度刻意拉開（Eric：「難易度不太明顯」）。
+     * 「大概被刺幾次會死」＝ hp ÷ 平均傷害：簡單 ≈ 9 次、普通 ≈ 5 次、困難 ≈ 2～3 次。 */
+    easy: makeDifficulty('easy', '簡單', 1.8, 22, 0.08, 1.8, 14, 1.2,
+      { spikeDamage: { base: [1, 2], deep: [1, 3] } }),
+    normal: makeDifficulty('normal', '普通', 2.8, 20, 0.12, 2.2, 10, 0.6,
+      { spikeDamage: { base: [1, 3], deep: [2, 4] } }),
+    hard: makeDifficulty('hard', '困難', 3.6, 18, 0.15, 2.6, 9, 0.4,
+      { spikeDamage: { base: [2, 3], deep: [3, 5] } })
   };
   const DIFFICULTY_LIST = ['baby', 'easy', 'normal', 'hard'];
 
@@ -124,6 +137,8 @@
       invuln: 0,
       ceilAccum: 0,
       hurtBy: null,                    /* 最近一次扣血的來源，前端用來決定要播哪一種受傷特效 */
+      hurtAmount: 0,                   /* 最近一次扣了幾顆（傷害是 1～5 隨機，畫面要顯示數字） */
+      ceilHits: 0,                     /* 被天花板刺到幾次；當亂數的 tag，保證回溯重演算出同一個值 */
       ceilCool: 0,                     /* 天花板扣血的冷卻（秒），碰到就立刻扣、之後要等冷卻 */
       sinking: 0,                      /* 比正常位置低幾格（超過 SINK_WARN 才算，給前端做警示強度） */
       fell: false,                     /* 是不是掉出畫面下緣摔死的 */
@@ -253,7 +268,11 @@
    * 推力大於腳下的階梯：被頂到就會被推穿階梯往下掉。天花板的威脅因此不是
    * 「站在原地慢慢被扣血」，而是「把你一路推下去，推到你沉出畫面下緣摔死」。
    */
-  function applyCeiling(player, cameraTop, diff, dt, out) {
+  /**
+   * 被天花板的刺頂住。
+   * @param {object} s 這一局的狀態（抽傷害要用 seed 與現在的世界，才能前後端一致）
+   */
+  function applyCeiling(s, player, cameraTop, diff, dt, out) {
     const headY = player.y - C.PLAYER_H;
     if (headY >= cameraTop - EPS) {
       player.pressed = false;
@@ -275,7 +294,8 @@
      * 從他的角度看就是「刺到我卻沒扣血」。 */
     if (player.ceilCool <= 0) {
       player.ceilCool = diff.ceilInterval;
-      damage(player, 1, 'ceiling', out);
+      player.ceilHits++;
+      damage(player, rollSpikeDamage(s, player, 'ceil' + player.ceilHits), 'ceiling', out);
     }
     return true;
   }
@@ -290,14 +310,41 @@
     return true;
   }
 
+  /**
+   * 這個難度、這個深度，被刺到會扣幾顆愛心的範圍（Eric 指定：1～5 之間，看模式與玩到多深）。
+   * base 是淺處、deep 是第 SPIKE_DEEP_WORLDS 個世界之後，中間線性內插。
+   */
+  function spikeDamageRange(diff, world) {
+    const d = diff && diff.spikeDamage;
+    if (!d) return [C.SPIKE_DAMAGE, C.SPIKE_DAMAGE];
+    const k = clamp((world || 0) / C.SPIKE_DEEP_WORLDS, 0, 1);
+    const lo = Math.round(d.base[0] + (d.deep[0] - d.base[0]) * k);
+    const hi = Math.round(d.base[1] + (d.deep[1] - d.base[1]) * k);
+    return [lo, Math.max(lo, hi)];
+  }
+
+  /**
+   * 抽這一次的傷害。要「隨機」但也要「可重現」：
+   * 客戶端會回溯重演（net.js），連續的亂數序列會被多消耗，兩邊就對不起來，
+   * 所以這裡不用亂數序列，而是把 seed ＋ 玩家 ＋ 這次事件揉成雜湊值取餘數。
+   * 同一次事件不管算幾遍都是同一個數字，前後端也一定一致。
+   */
+  function rollSpikeDamage(s, player, tag) {
+    const range = spikeDamageRange(s.diff, s.world);
+    if (range[1] <= range[0]) return range[0];
+    const h = RNG.hashSeed(s.seed + '|' + player.id + '|' + tag);
+    return range[0] + (h % (range[1] - range[0] + 1));
+  }
+
   function damage(player, amount, source, out) {
     if (!player.alive) return false;
     if (source === 'spike' && player.invuln > 0) return false;
     player.hp = Math.max(0, player.hp - amount);
     player.hurtFlash = 0.35;
     player.hurtBy = source;
+    player.hurtAmount = amount;
     if (source === 'spike') player.invuln = C.INVULN;
-    if (out) out.push({ type: 'hurt', player: player.id, source: source, hp: player.hp });
+    if (out) out.push({ type: 'hurt', player: player.id, source: source, amount: amount, hp: player.hp });
     if (player.hp <= 0) {
       player.alive = false;
       player.state = 'stun';
@@ -455,7 +502,7 @@
     /* ---- 天花板 ---- */
     for (const p of s.players) {
       if (!p.alive) continue;
-      const pressed = applyCeiling(p, s.cameraTop, s.diff, dt, events);
+      const pressed = applyCeiling(s, p, s.cameraTop, s.diff, dt, events);
       if (!pressed) continue;
       p.state = 'ceiling';
       /* 被推到腳下那一階以下 → 離開階梯開始往下掉（推力大於階梯） */
@@ -558,7 +605,7 @@
         p.stats.spikes++;
         step.flash = C.SPIKE_FLASH;    /* 這一階閃白光（純畫面，不影響規則） */
         events.push({ type: 'spike', player: p.id, step: step.id });
-        damage(p, C.SPIKE_DAMAGE, 'spike', events);
+        damage(p, rollSpikeDamage(s, p, step.id), 'spike', events);
       }
       return;
     }
@@ -657,6 +704,7 @@
     makeStairs: Stairs.makeStairs,
     resolveLanding, resolvePush, applyCeiling, checkResult,
     damage, heal, scrollMultiplier, stepById, overlapsX, feetSpan,
+    spikeDamageRange, rollSpikeDamage,
     worldSceneIndex, worldIsNight
   };
 });

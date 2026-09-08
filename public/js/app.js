@@ -26,6 +26,7 @@
     liveFakes: $('#live-fakes'), liveCeil: $('#live-ceil'),
     hudNet: $('#hud-net'), hudBest: $('#hud-best'),
     hurtFlash: $('#overlay-hurt'),
+    dmgPop: $('#dmg-pop'),
     countdown: $('#overlay-countdown'), countdownNum: $('#countdown-num'),
     milestone: $('#overlay-milestone'), milestoneText: $('#milestone-text'),
     rotateTip: $('#rotate-tip'), rotateClose: $('#rotate-close'),
@@ -409,22 +410,23 @@
           const p = s.players.find(x => x.id === e.player);
           /* 粒子從刺階的接觸點往上噴，比從角色身上噴更看得懂發生了什麼 */
           if (p) view.burst('spike', p.x, st ? st.depth : p.y, s.cameraTop);
-          view.kick(9);
-          flashHurt(true);
-          buzz(35);
           break;
         }
-        case 'hurt':
-          /* 踩刺已經有自己的一整套聲音與畫面（上面那個 case），這裡只處理天花板 */
+        case 'hurt': {
+          /* 震動、閃紅光、跳出來的數字都跟「這一下扣幾顆」成正比 ——
+           * 傷害改成 1～5 隨機之後，玩家要能一眼分出「刮到一下」跟「踩慘了」。 */
+          const amount = e.amount || 1;
           if (e.source === 'ceiling') {
             /* 天花板上面也是刺，被刺到的反饋要跟踩到刺階一樣明顯 */
             sound.play('warn');
             sound.play('spike');
-            view.kick(8);
-            flashHurt(true);
-            buzz(35);
           }
+          view.kick(6 + amount * 2.5);
+          flashHurt(amount >= 2);
+          buzz(20 + amount * 18);
+          popDamage(amount);
           break;
+        }
         case 'milestone': {
           sound.play('milestone');
           els.milestoneText.textContent = e.meters + ' m！' + Scenes.sceneFor(e.world).name;
@@ -465,6 +467,22 @@
           break;
       }
     }
+  }
+
+  /** 跳出「−N」告訴玩家這一下扣了幾顆愛心 */
+  let dmgTimer = 0;
+  function popDamage(n) {
+    const el = els.dmgPop;
+    if (!el) return;
+    el.textContent = '−' + n;
+    el.classList.toggle('big', n >= 3);
+    el.hidden = false;
+    /* 跟 flashHurt 一樣：先拿掉 class 強制重排，連續被扎才會每一下重新播 */
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+    clearTimeout(dmgTimer);
+    dmgTimer = setTimeout(() => { el.hidden = true; el.classList.remove('pop'); }, 700);
   }
 
   /** 受傷時畫面閃一圈紅光。減少動態時不關掉、只調弱（這是透明度不是位移） */

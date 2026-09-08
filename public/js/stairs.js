@@ -32,13 +32,26 @@
   /** 安全落點＝普通階或輸送帶（規劃書 §3「保底安全落點」） */
   const SAFE_KINDS = [KIND.NORMAL, KIND.BELT];
 
+  /**
+   * 「看得出來過不過得去」的最小空隙（格）。
+   *
+   * 落地判定是「身體只要碰到階梯就站得住」（rules.js 的 overlapsX），
+   * 所以要從一個空隙掉下去，整個身體都得塞進去 —— 空隙必須比玩家還寬。
+   * 舊版的同層兩階最小間隔是 0.9 格，比 1.0 格的玩家還窄，
+   * 於是畫面上明明有一條縫，走過去卻掉不下去；貼牆的細縫也一樣。
+   * 現在的規則是：任何空隙要嘛 0（貼死），要嘛 ≥ MIN_PASS，中間的模糊值一律不產生。
+   * MIN_PASS 取玩家寬度的兩倍，留下的餘裕在畫面上一眼就看得出來。
+   */
+  const MIN_PASS = 2.5;
+
   const C = {
     FIELD_W: 12.0,        /* 場地寬（格），左右是牆 */
-    GAP_MIN: 2.0,         /* 層間垂直間距下限 */
-    GAP_MAX: 3.0,         /* 層間垂直間距上限 */
-    WIDTH_MIN: 2.5,       /* 一般階梯寬下限 */
-    WIDTH_MAX: 4.0,       /* 一般階梯寬上限 */
-    SPAWN_WIDTH: 8.0,     /* 第 0 層出生大平台（唯一的例外層） */
+    MIN_PASS: MIN_PASS,
+    GAP_MIN: 2.6,         /* 層間垂直間距下限（玩家高 2.0 格，太密會一直被天花板夾） */
+    GAP_MAX: 3.6,         /* 層間垂直間距上限 */
+    WIDTH_MIN: 2.8,       /* 一般階梯寬下限 */
+    WIDTH_MAX: 4.2,       /* 一般階梯寬上限 */
+    SPAWN_WIDTH: 6.0,     /* 第 0 層出生大平台（唯一的例外層）；兩側各留 3 格＞MIN_PASS */
     WIDE_WIDTH: 5.0,      /* 喘息點的較寬普通階 */
     WIDE_EVERY: 12,       /* 每 12 層一個喘息點 */
     SAFE_WINDOW: 4,       /* 每 4 層至少一層安全落點 */
@@ -47,8 +60,8 @@
     GRAVITY: 30.0,        /* 重力（格／秒²），可達性算式用 */
     REACH_SAFETY: 0.8,    /* 可達性安全係數（規劃書 §3 的 ×0.8） */
     TWO_STEP_CHANCE: 0.18,/* 「偶爾兩階」的機率 */
-    TWO_STEP_MIN_GAP: 0.9,/* 同一層兩階之間至少留這麼寬，免得看起來像一整片 */
-    TWO_STEP_MAX_SEP: 6.0,/* 同一層兩階最遠只能隔這麼開；理由見 x0RangeAll() 的註解 */
+    TWO_STEP_MIN_GAP: MIN_PASS,  /* 同一層兩階之間的空隙＝一定過得去的寬度（見 MIN_PASS） */
+    TWO_STEP_MAX_SEP: 6.4,/* 同一層兩階最遠只能隔這麼開；理由見 x0RangeAll() 的註解 */
     BELT_RATE: 0.14,      /* ★ 規劃書沒給輸送帶比例，這是實作假設值（見 README 待確認清單） */
     SPRING_RATE: 0.10     /* ★ 規劃書沒給彈簧比例，這是實作假設值（見 README 待確認清單） */
   };
@@ -60,9 +73,9 @@
    */
   const RATES = {
     baby:   { spike: 0.00, fake: 0.00 },   /* 幼幼班：完全不出現 */
-    easy:   { spike: 0.08, fake: 0.08 },
-    normal: { spike: 0.14, fake: 0.14 },
-    hard:   { spike: 0.20, fake: 0.18 }
+    easy:   { spike: 0.06, fake: 0.06 },
+    normal: { spike: 0.15, fake: 0.14 },
+    hard:   { spike: 0.24, fake: 0.20 }
   };
 
   function ratesOf(difficulty) {
@@ -102,7 +115,8 @@
       depth: 0,                 /* 上一層的深度 */
       prev: null,               /* 上一層：{ depth, steps: [...] } */
       run: { belt: 0, spring: 0, spike: 0, fake: 0 },  /* 特殊階連續幾層 */
-      unsafeRun: 0              /* 連續幾層沒有安全落點 */
+      unsafeRun: 0,             /* 連續幾層沒有安全落點 */
+      blurry: 0                 /* 為了可達性而放行的模糊細縫層數（見 clearX0） */
     };
   }
 
@@ -175,6 +189,54 @@
     return { lo: lo, hi: hi };
   }
 
+  /**
+   * 把「靠牆的模糊細縫」吸附掉：離牆的空隙若小於 MIN_PASS 就直接貼上去。
+   * 這樣玩家看到牆邊有縫就是真的過得去，沒縫就是真的沒有，不會再誤判。
+   */
+  function clearWallGaps(x0, width) {
+    const room = C.FIELD_W - width;
+    if (room <= 0) return 0;
+    if (room < MIN_PASS * 2) return x0;          /* 太寬，左右都給不出一條像樣的縫 */
+    if (x0 > 0 && x0 < MIN_PASS) return 0;
+    if (room - x0 > 0 && room - x0 < MIN_PASS) return room;
+    return x0;
+  }
+
+  /**
+   * 在「可達的 x0 範圍」裡抽一個不會產生模糊細縫的位置。
+   *
+   * 可以抽的位置＝ {貼左牆} ∪ [MIN_PASS, room−MIN_PASS] ∪ {貼右牆}，再跟可達範圍取交集。
+   * 直接對抽出來的值做吸附是不行的：吸附會把階梯推出可達範圍，實測會生出 25 處死路。
+   * 所以要先把模糊帶從可抽的區間裡挖掉，再抽。
+   * 交集空掉的時候（可達範圍整段都落在模糊帶裡）以可達性為優先 —— 寧可有一條看不太出來的縫，
+   * 也不能生出走不到的下一層。gen.blurry 會記下這種情形，stairs-check 會盯著它的比例。
+   */
+  function clearX0(gen, r, width) {
+    const room = C.FIELD_W - width;
+    if (room <= 0) return 0;
+    const opts = [];
+    const push = (lo, hi) => {
+      const a = Math.max(lo, r.lo);
+      const b = Math.min(hi, r.hi);
+      if (b >= a - 1e-9) opts.push([a, Math.max(a, b)]);
+    };
+    if (room < MIN_PASS * 2) {
+      push(r.lo, r.hi);                          /* 超寬階：走到邊緣直接掉，不需要縫 */
+    } else {
+      push(0, 0);                                /* 貼左牆 */
+      push(MIN_PASS, room - MIN_PASS);           /* 兩側都留得下一條看得出來的縫 */
+      push(room, room);                          /* 貼右牆 */
+    }
+    if (!opts.length) {
+      gen.blurry++;
+      return gen.rng.range(r.lo, r.hi);
+    }
+    /* 依區段長度加權；貼牆是「點」，給一個基本權重，才不會永遠貼牆或永遠不貼牆 */
+    const items = opts.map(o => ({ v: o, w: Math.max(0.7, o[1] - o[0]) }));
+    const pickOpt = gen.rng.weighted(items);
+    return gen.rng.range(pickOpt[0], pickOpt[1]);
+  }
+
   function makeStep(gen, layer, n, depth, x0, width, kind) {
     const step = {
       id: 'L' + layer + '-' + n,
@@ -217,7 +279,7 @@
     let kind = pickKind(gen, allowed);
     const width = isWide ? C.WIDE_WIDTH : gen.rng.range(C.WIDTH_MIN, C.WIDTH_MAX);
     const r = x0RangeAll(prevSteps, width, span);
-    const x0 = gen.rng.range(r.lo, r.hi);
+    const x0 = clearX0(gen, r, width);
     /* 彈簧階不緊接在刺階正下方（彈上去馬上被頂又落回刺上，太惡意） */
     if (kind === KIND.SPRING && prevSpikes.some(s => spanGap(x0, x0 + width, s.x0, s.x1) <= 0)) {
       kind = KIND.NORMAL;
@@ -230,7 +292,7 @@
       const r2 = x0RangeAll(prevSteps, w2, span);
       let placed = null;
       for (let attempt = 0; attempt < 12 && !placed; attempt++) {
-        const cand = gen.rng.range(r2.lo, r2.hi);
+        const cand = clearX0(gen, r2, w2);
         const sep = spanGap(cand, cand + w2, steps[0].x0, steps[0].x1);
         /* 太近看起來像一整片，太遠會讓下一層找不到「兩邊都走得到」的落點 */
         if (sep >= C.TWO_STEP_MIN_GAP && sep <= C.TWO_STEP_MAX_SEP) placed = cand;
@@ -287,6 +349,6 @@
   return {
     KIND, KIND_LIST, SAFE_KINDS, RATES, C,
     createGen, nextLayer, advance, makeStairs,
-    ratesOf, reachSpan, spanGap, x0Range, x0RangeAll
+    ratesOf, reachSpan, spanGap, x0Range, x0RangeAll, clearWallGaps
   };
 });

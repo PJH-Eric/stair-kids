@@ -187,11 +187,16 @@ group('五種階梯');
   near(2 - top, C.SPRING_VY * C.SPRING_VY / (2 * C.GRAVITY), 0.1, '彈起高度符合 v²/2g（1.35 格）');
 }
 {
-  /* 刺階：−1 愛心 ＋ 0.6 秒無敵，不僵直 */
+  /* 刺階：扣 1～5 顆（依難度與深度隨機）＋ 0.6 秒無敵，不僵直 */
   const s = sandbox({ steps: [wide(1, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
   const hp0 = s.players[0].hp;
   run(s, 0.3);
-  eq(s.players[0].hp, hp0 - 1, '踩到刺階扣 1 顆愛心');
+  const range = Rules.spikeDamageRange(Rules.DIFFICULTY.normal, 0);
+  const lost = hp0 - s.players[0].hp;
+  ok(lost >= range[0] && lost <= range[1],
+    '踩到刺階扣的愛心落在這個難度的範圍內（普通淺處 ' + range[0] + '～' + range[1] + ' 顆）',
+    '實際扣 ' + lost + ' 顆');
+  eq(s.players[0].hurtAmount, lost, '扣了幾顆有記在 hurtAmount（畫面要顯示數字）');
   ok(s.players[0].invuln > 0, '踩刺後進入無敵閃爍');
   eq(s.players[0].stats.spikes, 1, '踩刺次數有記到「這局統計」');
   const before = s.players[0].hp;
@@ -256,9 +261,10 @@ group('回血（踩到非刺的地方）');
 }
 {
   const s = sandbox({ steps: [wide(0.2, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 12 }] });
-  s.players[0].hp = 5;
-  Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
-  eq(s.players[0].hp, 4, '踩到刺階只扣血，不會回血');
+  s.players[0].hp = 9;
+  const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
+  ok(s.players[0].hp < 9, '踩到刺階會扣血');
+  ok(!r.events.some(e => e.type === 'heal'), '踩到刺階只扣血，不會回血');
 }
 {
   const s = sandbox({ steps: [wide(0.2, 0, 12)], at: [{ x: 6, y: 0, vy: 12 }] });
@@ -340,32 +346,37 @@ group('鏡頭與保底下捲');
 /* ---------------------------------------------------------- */
 group('天花板');
 {
-  /* 扣血：碰到就立刻扣 1 顆，之後要等冷卻。直接測 applyCeiling，時間軸最乾淨。 */
+  /* 扣血節奏：碰到就立刻扣一次，之後要等冷卻。直接測 applyCeiling，時間軸最乾淨。
+   * 注意「一次扣幾顆」現在是 1～5 隨機（依難度與深度），所以這裡量的是「扣了幾次」。 */
   const applyCeiling = Rules.applyCeiling;
   const count = (id, seconds) => {
     const diff = Rules.DIFFICULTY[id];
-    const p = { y: 0, hp: 999, hpMax: 999, alive: true, invuln: 0, ceilCool: 0, pressed: false,
-      hurtFlash: 0, hurtBy: null, stats: { ceilingSeconds: 0 } };
+    const st = { seed: 'ceil-test', world: 0, diff: diff };
+    const p = { id: 'p1', y: 0, hp: 9999, hpMax: 9999, alive: true, invuln: 0, ceilCool: 0,
+      pressed: false, ceilHits: 0, hurtFlash: 0, hurtBy: null, hurtAmount: 0,
+      stats: { ceilingSeconds: 0 } };
     const out = [];
     const hits = [];
+    const amounts = [];
     for (let i = 0; i < Math.round(seconds / C.STEP); i++) {
       p.ceilCool = Math.max(0, p.ceilCool - C.STEP);   /* stepMatch 每一步都會做這件事 */
       const before = p.y;
       const hp = p.hp;
-      applyCeiling(p, p.y - C.PLAYER_H + 0.5, diff, C.STEP, out);
+      applyCeiling(st, p, p.y - C.PLAYER_H + 0.5, diff, C.STEP, out);
       p.y = before;                      /* 固定住位置，才量得到扣血節奏 */
-      if (p.hp < hp) hits.push(i * C.STEP);
+      if (p.hp < hp) { hits.push(i * C.STEP); amounts.push(hp - p.hp); }
     }
-    return { lost: 999 - p.hp, sec: p.stats.ceilingSeconds, by: p.hurtBy, hits: hits };
+    return { lost: 9999 - p.hp, sec: p.stats.ceilingSeconds, by: p.hurtBy,
+      hits: hits, amounts: amounts };
   };
   const n = count('normal', 3.0);
-  near(n.hits[0], 0, 1e-9, '碰到天花板的刺就「立刻」扣 1 顆，不用等滿一個間隔');
-  eq(n.lost, 5, '普通：之後每 0.6 秒最多再扣 1 顆（3 秒共 5 顆）');
+  near(n.hits[0], 0, 1e-9, '碰到天花板的刺就「立刻」扣血，不用等滿一個間隔');
+  eq(n.hits.length, 5, '普通：之後每 0.6 秒最多再扣一次（3 秒共 5 次）');
   near(n.hits[1] - n.hits[0], 0.6, 1e-6, '兩次扣血之間剛好隔一個冷卻');
   eq(n.by, 'ceiling', '被天花板扣血時傷害來源記成 ceiling');
-  eq(count('easy', 3.0).lost, 4, '簡單：冷卻 0.9 秒（3 秒共 4 顆）');
-  eq(count('hard', 3.0).lost, 8, '困難：冷卻 0.4 秒（3 秒共 8 顆）');
-  eq(count('baby', 3.0).lost, 0, '幼幼班：軟綿綿的雲朵，被頂到完全不扣血');
+  eq(count('easy', 3.0).hits.length, 3, '簡單：冷卻 1.2 秒（3 秒共 3 次）');
+  eq(count('hard', 3.0).hits.length, 8, '困難：冷卻 0.4 秒（3 秒共 8 次）');
+  eq(count('baby', 3.0).hits.length, 0, '幼幼班：軟綿綿的雲朵，被頂到完全不扣血');
   near(n.sec, 3.0, 0.05, '被頂住的秒數有記到「這局統計」');
 }
 {
@@ -375,7 +386,11 @@ group('天花板');
   s.cameraTop = -C.PLAYER_H + 0.5;
   const hp0 = s.players[0].hp;
   const ev = run(s, 0.05);
-  eq(s.players[0].hp, hp0 - 1, '被天花板的刺頂到，當下就掉 1 顆愛心');
+  const ceilRange = Rules.spikeDamageRange(Rules.DIFFICULTY.normal, 0);
+  const ceilLost = hp0 - s.players[0].hp;
+  ok(ceilLost >= ceilRange[0] && ceilLost <= ceilRange[1],
+    '被天花板的刺頂到，當下就掉血（' + ceilRange[0] + '～' + ceilRange[1] + ' 顆）',
+    '實際掉 ' + ceilLost + ' 顆');
   ok(ev.some(e => e.type === 'hurt' && e.source === 'ceiling'), '同時發出 ceiling 的 hurt 事件（前端閃紅光）');
 }
 {
@@ -392,19 +407,38 @@ group('天花板');
   ok(s.players[0].y > 0.5, '下一刻真的往下掉了');
 }
 {
-  /* 這是「下不去」的回歸測試：被頂到之後不能變成死亡螺旋 */
+  /* 這是「下不去」的回歸測試。舊的 bug 是：位置每一格都被夾回 cameraTop+身高，
+   * 玩家只能跟著鏡頭走，每踩一階掉血，完全沒有自主權。
+   * 傷害改成 1～5 隨機之後「撐 12 秒」不再是合理的標準，
+   * 所以這裡驗的是真正的重點：被推下去之後能不能離開天花板。 */
   const steps = [];
-  for (let i = 0; i < 400; i++) steps.push(wide(i * 2.5, 2, 6));
+  for (let i = 0; i < 400; i++) steps.push(wide(i * 2.6, 2, 6));
   const s = sandbox({ steps: steps, at: [{ x: 4, y: 0, onStep: 'T0' }] });
   s.players[0].onStep = 'T0';
+  s.players[0].hp = 9999;                 /* 這一項只看能不能脫離，不看血量 */
+  s.players[0].hpMax = 9999;
   s.cameraTop = -C.PLAYER_H + 0.5;
-  const ev = run(s, 12);
-  eq(s.phase, 'playing', '被天花板頂到、下方每 2.5 格都有階梯：12 秒後還活著（不是死亡螺旋）');
+  let freeFrames = 0, maxClear = 0;
+  const ev = [];
+  for (let i = 0; i < Math.round(3 / C.STEP); i++) {
+    const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
+    for (const e of r.events) ev.push(e);
+    const p = s.players[0];
+    if (!p.pressed) freeFrames++;
+    const clear = (p.y - C.PLAYER_H) - s.cameraTop;   /* 頭頂離天花板多遠 */
+    if (clear > maxClear) maxClear = clear;
+  }
+  eq(s.phase, 'playing', '被天花板頂到還活著（血量不設限的情況下）');
+  ok(freeFrames > 30, '被推下去之後真的離開了天花板（' + freeFrames + ' 格沒被頂住）');
+  ok(maxClear > 1.5, '頭頂跟天花板之間拉開過 1.5 格以上（' + maxClear.toFixed(2) + ' 格）');
   const hurts = ev.filter(e => e.type === 'hurt').length;
   const heals = ev.filter(e => e.type === 'heal').length;
   ok(hurts > 3, '過程中確實一直被扎（' + hurts + ' 次）');
-  ok(heals >= hurts - 1, '但每踩到一階就回 1 顆，一來一往打平（回血 ' + heals + ' 次）');
-  ok(s.players[0].y > 25, '而且真的一路往下走（下降 ' + s.players[0].y.toFixed(0) + ' 格）');
+  ok(heals > 0, '中間有踩到階梯回血（' + heals + ' 次）');
+  const lostTotal = ev.filter(e => e.type === 'hurt').reduce((n, e) => n + e.amount, 0);
+  ok(lostTotal > hurts,
+    '每一次被扎扣 1～5 顆，總量比「一次一顆」多（' + hurts + ' 次共扣 ' + lostTotal + ' 顆）');
+  ok(s.players[0].y > 7, '而且真的一路往下走（3 秒下降 ' + s.players[0].y.toFixed(0) + ' 格）');
 }
 {
   /* 彈簧在天花板正下方：原本會無限彈跳到死 */
@@ -456,11 +490,12 @@ group('推擠（對戰唯一的互動）');
   near(b.x - a.x, C.PLAYER_W, 1e-6, '推開後剛好不重疊');
 }
 {
-  const a = { id: 'a', index: 0, x: 0.5, y: 5, alive: true };    /* 貼左牆 */
-  const b = { id: 'b', index: 1, x: 1.0, y: 5, alive: true };
+  const wall = C.PLAYER_W / 2;                                   /* 貼左牆時身體中心的 x */
+  const a = { id: 'a', index: 0, x: wall, y: 5, alive: true };
+  const b = { id: 'b', index: 1, x: wall + 0.5, y: 5, alive: true };
   Rules.resolvePush(a, b);
-  near(a.x, 0.5, 1e-9, '對方貼牆時推的人自己被擋住（可以卡牆但不穿模）');
-  near(b.x, 1.5, 1e-6, '被擋住的位移全部給另一邊，總之不重疊');
+  near(a.x, wall, 1e-9, '對方貼牆時推的人自己被擋住（可以卡牆但不穿模）');
+  near(b.x, wall + C.PLAYER_W, 1e-6, '被擋住的位移全部給另一邊，總之不重疊');
 }
 {
   const a = { id: 'a', index: 0, x: 6, y: 5, alive: true };
@@ -524,9 +559,9 @@ group('四段難度參數（規劃書 §1.7）');
 {
   const table = {
     baby:   { scrollBase: 1.2, accelEvery: 30, accelRate: 0.05, scrollCap: 1.5, hp: 20, ceilInterval: null, spikeRate: 0.00, fakeRate: 0.00 },
-    easy:   { scrollBase: 2.0, accelEvery: 20, accelRate: 0.10, scrollCap: 2.0, hp: 12, ceilInterval: 0.9, spikeRate: 0.08, fakeRate: 0.08 },
-    normal: { scrollBase: 2.8, accelEvery: 20, accelRate: 0.12, scrollCap: 2.2, hp: 10, ceilInterval: 0.6, spikeRate: 0.14, fakeRate: 0.14 },
-    hard:   { scrollBase: 3.6, accelEvery: 20, accelRate: 0.14, scrollCap: 2.5, hp: 8, ceilInterval: 0.4, spikeRate: 0.20, fakeRate: 0.18 }
+    easy:   { scrollBase: 1.8, accelEvery: 22, accelRate: 0.08, scrollCap: 1.8, hp: 14, ceilInterval: 1.2, spikeRate: 0.06, fakeRate: 0.06 },
+    normal: { scrollBase: 2.8, accelEvery: 20, accelRate: 0.12, scrollCap: 2.2, hp: 10, ceilInterval: 0.6, spikeRate: 0.15, fakeRate: 0.14 },
+    hard:   { scrollBase: 3.6, accelEvery: 18, accelRate: 0.15, scrollCap: 2.6, hp: 9, ceilInterval: 0.4, spikeRate: 0.24, fakeRate: 0.20 }
   };
   eq(Rules.DIFFICULTY_LIST.join(','), 'baby,easy,normal,hard', '四段難度：幼幼班／簡單／普通／困難');
   for (const id in table) {
@@ -676,7 +711,8 @@ group('樓梯生成（規劃書 §3）');
   const first = Stairs.makeStairs('spawn', 'normal', 0, 20)[0];
   eq(first.depth, 0, '第 0 層在深度 0');
   eq(first.spawn, true, '第 0 層是出生平台');
-  near(first.x1 - first.x0, 8, 1e-9, '出生平台寬 8 格（唯一的例外層）');
+  near(first.x1 - first.x0, Stairs.C.SPAWN_WIDTH, 1e-9,
+    '出生平台寬 ' + Stairs.C.SPAWN_WIDTH + ' 格（唯一的例外層，兩側各留得下一條過得去的縫）');
   near((first.x0 + first.x1) / 2, 6, 1e-9, '出生平台在場地正中間');
 }
 {

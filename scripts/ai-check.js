@@ -139,10 +139,28 @@ for (const gameDiff of DIFFS) {
     gameDiff + '：困難的深度至少是幼幼班的 2 倍（' +
     fmt(r.hard.depth / r.baby.depth, 1) + ' 倍）');
 
-  /* 5. 越弱的 AI 越容易死 */
-  ok(r.baby.deathRate > r.easy.deathRate && r.easy.deathRate > r.normal.deathRate,
-    gameDiff + '：越弱的 AI 死亡率越高',
+  /* 5. 越弱的 AI 越容易死。
+   * 注意「困難」這個遊戲難度會讓四段 AI 全部 100% 陣亡 —— 那不是測試壞了，
+   * 是這個難度本來就該致命（傷害 2～5 顆、血量只有 9 顆）。
+   * 死亡率天花板打滿的時候，能分辨強弱的就只剩深度與下降速度。 */
+  /* 死亡率是比例，200 局的抽樣誤差 SE = √(p(1−p)/n) 最大約 3.5 個百分點，
+   * 所以要允許「兩個標準誤以內的倒掛」，不然這一項會隨機紅字。 */
+  const se = p => 2 * Math.sqrt(Math.max(p * (1 - p), 0.0001) / GAMES);
+  let monoDeath = true;
+  for (let i = 1; i < L.length; i++) {
+    const prev = r[L[i - 1]].deathRate, cur = r[L[i]].deathRate;
+    if (cur > prev + se(prev) + se(cur)) monoDeath = false;
+  }
+  const saturated = L.every(l => r[l].deathRate >= 0.999);
+  ok(monoDeath, gameDiff + '：越弱的 AI 死亡率不會比較低（單調不遞增）',
     L.map(l => fmt(r[l].deathRate * 100, 0) + '%').join(' → '));
+  if (saturated) {
+    console.log('    註：這個難度四段 AI 全部陣亡（死亡率打滿 100%），強弱要看深度與下降速度。');
+  } else {
+    ok(r.baby.deathRate > r.hard.deathRate,
+      gameDiff + '：最弱的 AI 死亡率明顯高於最強的',
+      fmt(r.baby.deathRate * 100, 0) + '% vs ' + fmt(r.hard.deathRate * 100, 0) + '%');
+  }
 
   /* 6. 會避刺的 AI 真的比較少踩到刺（看「落地的階梯裡有幾成是刺」） */
   let monoSpike = true;

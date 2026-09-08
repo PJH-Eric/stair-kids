@@ -164,8 +164,15 @@ console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單�
     '簡單 ' + fmt(avg.easy.speed) + '、困難 ' + fmt(avg.hard.speed));
   ok(avg.easy.meters > 20 && avg.normal.meters > 20 && avg.hard.meters > 20,
     '三段難度都能穩定跑完一局並拿到成績');
-  ok(avg.hard.meters > avg.easy.meters,
-    '同樣時間內越難掉得越深（' + fmt(avg.easy.meters) + ' → ' + fmt(avg.hard.meters) + ' m）');
+  /* 舊版比的是「總公尺數」，但那個數字被存活時間汙染了：
+   * 簡單會一路撐到 90 秒上限，公尺數自然多；困難早早就死，公尺數自然少。
+   * 「越難越明顯」該看的是兩件分開的事 —— 掉得多快，以及撐多久。 */
+  ok(avg.easy.speed < avg.normal.speed && avg.normal.speed < avg.hard.speed,
+    '越難掉得越快，而且三段是單調的（' + fmt(avg.easy.speed) + ' → ' + fmt(avg.normal.speed) +
+    ' → ' + fmt(avg.hard.speed) + ' m／秒）');
+  ok(avg.easy.secs > avg.normal.secs && avg.normal.secs > avg.hard.secs,
+    '越難撐得越短，三段也是單調的（' + fmt(avg.easy.secs) + ' → ' + fmt(avg.normal.secs) +
+    ' → ' + fmt(avg.hard.secs) + ' 秒）');
   const camSpeed = id => Rules.DIFFICULTY[id].scrollBase;
   ok(camSpeed('easy') < camSpeed('normal') && camSpeed('normal') < camSpeed('hard'),
     '難度的保底下捲速度本身是單調遞增的（2.0 < 2.8 < 3.6）');
