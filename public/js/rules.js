@@ -46,6 +46,11 @@
     INVULN: 0.6,                 /* 扣血後的無敵閃爍（只擋「同類」傷害） */
     FAKE_DELAY: 0.25,            /* 假階踩到幾秒後崩解 */
     SPIKE_FLASH: 0.22,           /* 踩到刺時那一階閃白光的長度（純畫面，render.js 用同一個值） */
+    CEIL_PUSH: 14.0,             /* 被天花板刺到時往下推的初速（格／秒）。
+                                  * 一定要大於保底下捲，否則玩家會「黏」在天花板上：
+                                  * 位置每 tick 被夾回 cameraTop+1.6，只能跟著鏡頭走，
+                                  * 每踩一階掉 1 顆血，8 秒內必死，完全沒有自主權。 */
+    HEAL_ON_LAND: 1,             /* 踩到非刺的階梯回復幾顆愛心（參考原作） */
     MILESTONE: 100,              /* 每 100 公尺慶祝＋換世界 */
     WORLD_COUNT: 6,              /* 六套世界，用完循環並套夜間配色 */
     KEEP_ABOVE: 30,              /* 鏡頭上方保留幾格的舊階梯 */
@@ -127,8 +132,9 @@
       aliveTime: 0,
       flash: 0,
       hurtFlash: 0,
+      healFlash: 0,
       overlapWith: null,
-      stats: { spikes: 0, springs: 0, fakes: 0, ceilingSeconds: 0, pushes: 0, deepestWorld: 0 }
+      stats: { spikes: 0, springs: 0, fakes: 0, ceilingSeconds: 0, pushes: 0, heals: 0, deepestWorld: 0 }
     };
   }
 
@@ -255,6 +261,12 @@
     }
     player.y = cameraTop + C.PLAYER_H;
     player.pressed = true;
+    /* 往下推：給一個明確的向下初速。
+     * 這同時解掉兩件事 ——
+     *   1. 不會再被黏在天花板上（下一個 tick 就脫離接觸）。
+     *   2. 踩到彈簧被彈上來撞到天花板時，向上的速度會被抵銷，
+     *      不會在天花板下面無限彈跳（原本會一直彈到死）。 */
+    if (player.vy < C.CEIL_PUSH) player.vy = C.CEIL_PUSH;
     player.stats.ceilingSeconds += dt;
     if (diff.ceilInterval == null) return true;      /* 幼幼班：軟綿綿的雲朵，不扣血 */
     /* 碰到天花板的刺就「立刻」扣 1 顆，之後要等冷卻才會再扣。
@@ -265,6 +277,16 @@
       player.ceilCool = diff.ceilInterval;
       damage(player, 1, 'ceiling', out);
     }
+    return true;
+  }
+
+  /** 回血（踩到非刺的階梯）。回到滿血就不再有效果 */
+  function heal(player, amount, source, out) {
+    if (!player.alive || player.hp >= player.hpMax) return false;
+    player.hp = Math.min(player.hpMax, player.hp + amount);
+    player.healFlash = 0.3;
+    player.stats.heals += amount;
+    if (out) out.push({ type: 'heal', player: player.id, source: source, hp: player.hp });
     return true;
   }
 
@@ -344,6 +366,7 @@
       p.invuln = Math.max(0, p.invuln - dt);
       p.ceilCool = Math.max(0, p.ceilCool - dt);
       p.hurtFlash = Math.max(0, p.hurtFlash - dt);
+      p.healFlash = Math.max(0, p.healFlash - dt);
 
       const cmd = (inputs && inputs[p.id]) || null;
       p.dir = cmd && cmd.dir ? (cmd.dir > 0 ? 1 : -1) : 0;
@@ -503,6 +526,10 @@
   /** 踩到階梯的當下效果 */
   function landOn(s, p, step, events) {
     events.push({ type: 'land', player: p.id, step: step.id, kind: step.kind });
+    /* 踩到非刺的地方回復 1 顆愛心（參考原作）。
+     * 這也是「被天花板一路往下推」不會變成死亡螺旋的關鍵：
+     * 被扎 −1、踩到下一階 +1，一來一往打平，真正扣血的是刺階。 */
+    if (step.kind !== KIND.SPIKE) heal(p, C.HEAL_ON_LAND, step.kind, events);
     if (step.kind === KIND.SPRING) {
       p.vy = -C.SPRING_VY;
       p.onStep = null;
@@ -593,6 +620,7 @@
           fakes: p.stats.fakes,
           ceilingSeconds: p.stats.ceilingSeconds,
           pushes: p.stats.pushes,
+          heals: p.stats.heals,
           deepestWorld: p.stats.deepestWorld
         }
       }))
@@ -614,7 +642,7 @@
     createMatch, stepMatch, endMatch,
     makeStairs: Stairs.makeStairs,
     resolveLanding, resolvePush, applyCeiling, checkResult,
-    damage, scrollMultiplier, stepById, overlapsX, feetSpan,
+    damage, heal, scrollMultiplier, stepById, overlapsX, feetSpan,
     worldSceneIndex, worldIsNight
   };
 });

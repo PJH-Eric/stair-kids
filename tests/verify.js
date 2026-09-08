@@ -242,6 +242,40 @@ group('五種階梯');
 }
 
 /* ---------------------------------------------------------- */
+group('回血（踩到非刺的地方）');
+{
+  const kinds = ['normal', 'belt', 'spring', 'fake'];
+  for (const kind of kinds) {
+    const extra = kind === 'belt' ? { kind: kind, belt: 1 } : { kind: kind };
+    const s = sandbox({ steps: [wide(0.2, 0, 12, extra)], at: [{ x: 6, y: 0, vy: 12 }] });
+    s.players[0].hp = 5;
+    const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
+    eq(s.players[0].hp, 6, '踩到' + kind + '回復 1 顆愛心');
+    ok(r.events.some(e => e.type === 'heal'), '踩到' + kind + '會發出 heal 事件（畫面播回血特效）');
+  }
+}
+{
+  const s = sandbox({ steps: [wide(0.2, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 12 }] });
+  s.players[0].hp = 5;
+  Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
+  eq(s.players[0].hp, 4, '踩到刺階只扣血，不會回血');
+}
+{
+  const s = sandbox({ steps: [wide(0.2, 0, 12)], at: [{ x: 6, y: 0, vy: 12 }] });
+  const full = s.players[0].hp;
+  const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
+  eq(s.players[0].hp, full, '滿血時踩到階梯不會超過上限');
+  ok(!r.events.some(e => e.type === 'heal'), '滿血就不發 heal 事件');
+}
+{
+  const s = sandbox({ steps: [wide(0.2, 0, 12)], at: [{ x: 6, y: 0, vy: 12 }] });
+  s.players[0].hp = 3;
+  run(s, 2);
+  eq(s.players[0].hp, 4, '一直站在同一階上只回一次（回血是「踩到」的當下，不是站著就回）');
+  eq(s.players[0].stats.heals, 1, '回血次數有記到「這局統計」');
+}
+
+/* ---------------------------------------------------------- */
 group('鏡頭與保底下捲');
 {
   const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
@@ -349,10 +383,41 @@ group('天花板');
   const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   s.cameraTop = -C.PLAYER_H + 0.5;
-  run(s, 0.1);
-  eq(s.players[0].state, 'ceiling', '狀態標成被頂住（畫面會播警告與紅色閃爍）');
-  ok(s.players[0].y > 0, '被天花板推穿腳下的階梯，開始往下掉');
+  const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
+  eq(s.players[0].state, 'ceiling', '被頂到的當下狀態標成 ceiling（畫面會播警告與紅色閃爍）');
   eq(s.players[0].onStep, null, '被推穿之後就不站在那一階上了');
+  ok(r.events.some(e => e.type === 'hurt' && e.source === 'ceiling'), '同時扣血');
+  near(s.players[0].vy, C.CEIL_PUSH, 1e-6, '被頂到會拿到向下的初速（不會黏在天花板上）');
+  run(s, 0.1);
+  ok(s.players[0].y > 0.5, '下一刻真的往下掉了');
+}
+{
+  /* 這是「下不去」的回歸測試：被頂到之後不能變成死亡螺旋 */
+  const steps = [];
+  for (let i = 0; i < 400; i++) steps.push(wide(i * 2.5, 2, 6));
+  const s = sandbox({ steps: steps, at: [{ x: 4, y: 0, onStep: 'T0' }] });
+  s.players[0].onStep = 'T0';
+  s.cameraTop = -C.PLAYER_H + 0.5;
+  const ev = run(s, 12);
+  eq(s.phase, 'playing', '被天花板頂到、下方每 2.5 格都有階梯：12 秒後還活著（不是死亡螺旋）');
+  const hurts = ev.filter(e => e.type === 'hurt').length;
+  const heals = ev.filter(e => e.type === 'heal').length;
+  ok(hurts > 3, '過程中確實一直被扎（' + hurts + ' 次）');
+  ok(heals >= hurts - 1, '但每踩到一階就回 1 顆，一來一往打平（回血 ' + heals + ' 次）');
+  ok(s.players[0].y > 25, '而且真的一路往下走（下降 ' + s.players[0].y.toFixed(0) + ' 格）');
+}
+{
+  /* 彈簧在天花板正下方：原本會無限彈跳到死 */
+  const s = sandbox({
+    steps: [Object.assign(wide(2, 2, 6), { kind: 'spring' })],
+    at: [{ x: 4, y: 2, onStep: 'T0' }]
+  });
+  s.players[0].onStep = 'T0';
+  s.cameraTop = 2 - C.PLAYER_H + 0.4;
+  const ev = run(s, 3);
+  const springs = ev.filter(e => e.type === 'spring').length;
+  ok(springs <= 1, '踩到彈簧撞到天花板不會無限彈（彈了 ' + springs + ' 次）');
+  ok(s.players[0].y > 12 || s.players[0].fell, '會被天花板推著往下離開，不會卡在上面');
 }
 {
   /* 幼幼班同樣情境：不扣血、不會死 */

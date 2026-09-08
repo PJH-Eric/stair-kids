@@ -70,6 +70,9 @@ function botDir(s, p) {
   return d > 0 ? 1 : -1;
 }
 
+/* 加了「踩到非刺的階梯回 1 顆血」之後，會操作的玩家幾乎不會死
+ * （每次落地都回血，而鏡頭又跟著你，所以根本碰不到天花板）。
+ * 所以驗收改成「跑到時間上限就手動收局」，而不是假設一定會死。 */
 function play(difficulty, seed, maxSeconds, endAfter) {
   const s = Rules.createMatch({
     difficulty: difficulty,
@@ -90,31 +93,37 @@ function play(difficulty, seed, maxSeconds, endAfter) {
       break;
     }
   }
-  return { state: s, tally: tally, seconds: ticks * Rules.STEP };
+  const timedOut = s.phase !== 'over';
+  if (timedOut) Rules.endMatch(s, 'manual');
+  return { state: s, tally: tally, seconds: ticks * Rules.STEP, timedOut: timedOut };
 }
 
 console.log('單機一局跑完（貪心機器人）');
 
 const results = {};
+const CAP = 180;
 for (const difficulty of ['easy', 'normal', 'hard']) {
-  const r = play(difficulty, 'match-' + difficulty, 600);
+  const r = play(difficulty, 'match-' + difficulty, CAP);
   const me = r.state.result && r.state.result.players[0];
   results[difficulty] = { r: r, me: me };
   console.log('\n【' + Rules.DIFFICULTY[difficulty].name + '】');
-  console.log('    撐了 ' + fmt(r.seconds) + ' 秒，下到 ' + (me ? me.meters : '-') + ' m，' +
-    '到 ' + (me ? me.world + 1 : '-') + ' 層世界，最終速度倍率 ×' + fmt(r.state.scrollMul));
-  console.log('    踩刺 ' + (me ? me.stats.spikes : '-') + ' 次｜彈簧 ' + (me ? me.stats.springs : '-') +
-    ' 次｜踩破假階 ' + (me ? me.stats.fakes : '-') + ' 次｜被頂 ' + (me ? fmt(me.stats.ceilingSeconds) : '-') + ' 秒');
+  console.log('    ' + (r.timedOut ? '跑到 ' + CAP + ' 秒上限還活著' : '撐了 ' + fmt(r.seconds) + ' 秒後死掉') +
+    '，下到 ' + me.meters + ' m，到 ' + (me.world + 1) + ' 層世界，' +
+    '最終速度倍率 ×' + fmt(r.state.scrollMul) + '，血量 ' + me.hp + '/' + Rules.DIFFICULTY[difficulty].hp);
+  console.log('    踩刺 ' + me.stats.spikes + ' 次｜回血 ' + me.stats.heals + ' 次｜彈簧 ' + me.stats.springs +
+    ' 次｜踩破假階 ' + me.stats.fakes + ' 次｜被頂 ' + fmt(me.stats.ceilingSeconds) + ' 秒');
 
   ok(r.state.phase === 'over', difficulty + '：一局能從開始玩到結算');
   ok(!!me, difficulty + '：結算有這位玩家的資料');
   ok(me && me.meters > 30, difficulty + '：機器人至少下得了 30 m（實際 ' + (me ? me.meters : 0) + ' m）');
-  ok(me && me.hp === 0 && r.state.result.endedBy === 'dead', difficulty + '：結束原因是血歸零');
   ok(r.tally.start === 1, difficulty + '：倒數結束後發出一次 start');
   ok((r.tally.countdown || 0) >= 1, difficulty + '：倒數期間有倒數事件');
-  ok(r.tally.over === 1, difficulty + '：結算事件只發一次');
+  /* 跑到時間上限是我們自己叫 endMatch 收的，不會發 over 事件 */
+  ok(r.timedOut ? (r.tally.over || 0) === 0 : r.tally.over === 1,
+    difficulty + '：' + (r.timedOut ? '跑到上限手動收局（沒有 over 事件是正常的）' : '結算事件只發一次'));
   ok((r.tally.milestone || 0) === (me ? me.world : -1), difficulty + '：里程碑事件數等於經過的世界層數');
   ok(r.seconds > 15, difficulty + '：一局長度像樣（' + fmt(r.seconds) + ' 秒）');
+  ok(me.stats.heals > 0, difficulty + '：踩到非刺的階梯有回血（' + me.stats.heals + ' 次）');
 }
 
 console.log('\n【幼幼班】');
@@ -135,15 +144,17 @@ console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單�
 {
   const avg = {};
   for (const difficulty of ['easy', 'normal', 'hard']) {
-    let secs = 0, meters = 0;
+    let secs = 0, meters = 0, survived = 0;
     for (let i = 0; i < 5; i++) {
-      const r = play(difficulty, 'diff-' + difficulty + '-' + i, 600);
+      const r = play(difficulty, 'diff-' + difficulty + '-' + i, 90);
       secs += r.seconds;
       meters += r.state.result.players[0].meters;
+      if (r.timedOut) survived++;
     }
-    avg[difficulty] = { secs: secs / 5, meters: meters / 5, speed: meters / secs };
-    console.log('    ' + Rules.DIFFICULTY[difficulty].name + '：平均撐 ' + fmt(avg[difficulty].secs) +
-      ' 秒、下到 ' + fmt(avg[difficulty].meters) + ' m、平均 ' + fmt(avg[difficulty].speed) + ' m／秒');
+    avg[difficulty] = { secs: secs / 5, meters: meters / 5, speed: meters / secs, survived: survived };
+    console.log('    ' + Rules.DIFFICULTY[difficulty].name + '：平均 ' + fmt(avg[difficulty].secs) +
+      ' 秒、下到 ' + fmt(avg[difficulty].meters) + ' m、' + fmt(avg[difficulty].speed) + ' m／秒' +
+      '（5 局裡有 ' + survived + ' 局撐到 90 秒上限）');
   }
   /* 注意：這隻貪心機器人只是驗收用的假手，撐多久很吃它自己的爛決策，
    * 所以這裡只驗「下降速度跟著難度變快」這個規則層面的結果。
@@ -153,6 +164,8 @@ console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單�
     '簡單 ' + fmt(avg.easy.speed) + '、困難 ' + fmt(avg.hard.speed));
   ok(avg.easy.meters > 20 && avg.normal.meters > 20 && avg.hard.meters > 20,
     '三段難度都能穩定跑完一局並拿到成績');
+  ok(avg.hard.meters > avg.easy.meters,
+    '同樣時間內越難掉得越深（' + fmt(avg.easy.meters) + ' → ' + fmt(avg.hard.meters) + ' m）');
   const camSpeed = id => Rules.DIFFICULTY[id].scrollBase;
   ok(camSpeed('easy') < camSpeed('normal') && camSpeed('normal') < camSpeed('hard'),
     '難度的保底下捲速度本身是單調遞增的（2.0 < 2.8 < 3.6）');

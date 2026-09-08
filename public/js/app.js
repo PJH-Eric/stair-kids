@@ -28,8 +28,10 @@
     rotateTip: $('#rotate-tip'), rotateClose: $('#rotate-close'),
     pads: $('#pads'), padLeft: $('#pad-left'), padRight: $('#pad-right'),
     pause: $('#overlay-pause'), resume: $('#btn-resume'), restart: $('#btn-restart'), goHome: $('#btn-home'),
+    ovResult: $('#ov-result'),
     resultTitle: $('#result-title'), resultHero: $('#result-hero'), resultNew: $('#result-new'),
     resultList: $('#result-list'), again: $('#btn-again'), changeDiff: $('#btn-change-diff'),
+    resultHome: $('#btn-result-home'),
     modal: $('#modal-settings'), modalClose: $('#btn-settings-close'), setMsg: $('#set-msg'),
     setBgm: $('#set-bgm'), setBgmVol: $('#set-bgm-vol'),
     setSfx: $('#set-sfx'), setSfxVol: $('#set-sfx-vol'),
@@ -59,7 +61,9 @@
     sceneFrom: null,
     sceneT: 1,
     milestoneTimer: 0,
-    sinkBeep: 0
+    sinkBeep: 0,
+    prev: { ready: false, cameraTop: 0, players: {} },
+    healPulse: false
   };
 
   const charOf = id => Characters.byId(id);
@@ -93,7 +97,7 @@
 
   /* ================= 畫面切換 ================= */
 
-  const BACK_TO = { setup: 'home', online: 'home', help: 'home', result: 'home' };
+  const BACK_TO = { setup: 'home', online: 'home', help: 'home' };
 
   function show(name) {
     G.screen = name;
@@ -101,6 +105,7 @@
     els.nav.hidden = !BACK_TO[name];
     if (BACK_TO[name]) els.back.dataset.go = BACK_TO[name];
     els.pads.classList.toggle('hidden', name !== 'game');
+    if (name !== 'game' && els.ovResult) els.ovResult.hidden = true;
     syncPads();
     els.finishBtn.hidden = true;
     if (name === 'home') renderHomeRecords();
@@ -204,6 +209,7 @@
     G.acc = 0;
     G.last = 0;
     G.milestoneTimer = 0;
+    G.prev = { ready: false, cameraTop: 0, players: {} };
     G.scene = Scenes.sceneFor(0);
     G.sceneFrom = null;
     G.sceneT = 1;
@@ -212,6 +218,7 @@
     sound.setScene(0);
     sound.setTempo(1);
     els.milestone.hidden = true;
+    if (els.ovResult) els.ovResult.hidden = true;
     show('game');
     els.finishBtn.hidden = !G.match.diff.endless;
     updateHud(true);
@@ -227,6 +234,7 @@
     els.pause.hidden = true;
     els.countdown.hidden = true;
     els.milestone.hidden = true;
+    if (els.ovResult) els.ovResult.hidden = true;
     if (els.hurtFlash) els.hurtFlash.classList.remove('blink');
     view.clearActors();
     input.clear();
@@ -249,6 +257,8 @@
       let guard = 0;
       while (G.acc >= Rules.STEP_MS && guard++ < 12) {
         G.acc -= Rules.STEP_MS;
+        /* 畫面內插用：推進之前先記下「上一格」的鏡頭與角色位置 */
+        snapshotPrev(s);
         const cmd = input.read();
         const r = Rules.stepMatch(s, { p1: { dir: cmd.dir } }, Rules.STEP_MS);
         handleEvents(r.events);
@@ -278,8 +288,48 @@
     if (s.phase === 'countdown') els.countdownNum.textContent = Math.max(1, Math.ceil(s.countdown));
 
     const scene = blendScene(G.sceneFrom, G.scene, G.sceneT);
-    view.draw(s, scene, charOf, G.time, G.paused ? 0 : dt);
+    /* 用「上一格」與「這一格」之間的內插來畫，畫面才不會跟著 60Hz 的固定步長一格一格跳。
+     * 規則核心完全不動，只是畫的時候取中間值。 */
+    view.draw(interpolated(s), scene, charOf, G.time, G.paused ? 0 : dt);
     updateHud(false);
+  }
+
+  /* ---------- 畫面內插（讓滾動變柔順） ---------- */
+
+  /**
+   * 規則核心是固定 1/60 秒一步，但畫面可能是 60Hz、120Hz 或不穩定的間隔。
+   * 直接畫「最後跑完那一步」的狀態，就會有些畫格重複、有些跳兩格 —— 看起來就是頓。
+   * 所以每一步之前先存一份位置，畫的時候按照累積器的餘數插值。
+   */
+  function snapshotPrev(s) {
+    G.prev.cameraTop = s.cameraTop;
+    for (const p of s.players) {
+      let e = G.prev.players[p.id];
+      if (!e) { e = G.prev.players[p.id] = { x: p.x, y: p.y }; }
+      e.x = p.x;
+      e.y = p.y;
+    }
+    G.prev.ready = true;
+  }
+
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  function interpolated(s) {
+    if (!G.prev.ready || G.paused || s.phase !== 'playing') return s;
+    const t = Math.max(0, Math.min(1, G.acc / Rules.STEP_MS));
+    /* 用原型繼承做一層薄薄的「畫面用狀態」：只覆蓋位置，
+     * 其他欄位（階梯、難度、狀態旗標）都直接讀原本的，階梯的動畫計時也還是寫回同一份物件。 */
+    const view = Object.create(s);
+    view.cameraTop = lerp(G.prev.cameraTop, s.cameraTop, t);
+    view.players = s.players.map(p => {
+      const e = G.prev.players[p.id];
+      if (!e) return p;
+      const shown = Object.create(p);
+      shown.x = lerp(e.x, p.x, t);
+      shown.y = lerp(e.y, p.y, t);
+      return shown;
+    });
+    return view;
   }
 
   /* ================= 事件 → 音效、粒子、震動 ================= */
@@ -343,6 +393,12 @@
           G.scene = Scenes.sceneFor(e.world);
           G.sceneT = store.reduceMotion ? 1 : 0;
           sound.setScene(e.scene);
+          break;
+        }
+        case 'heal': {
+          sound.play('heal');
+          /* 愛心排跳一下（updateHud 會重畫 innerHTML，所以要在下一格才加 class） */
+          G.healPulse = true;
           break;
         }
         case 'sinking':
@@ -413,7 +469,12 @@
       els.hudHp.innerHTML = SvgUI.hearts(p.hp, p.hpMax, compact);
       hudCache.hp = p.hp;
       hudCache.compact = compact;
+      if (G.healPulse) {
+        const row = els.hudHp.querySelector('.hearts');
+        if (row) { row.classList.remove('gain'); void row.offsetWidth; row.classList.add('gain'); }
+      }
     }
+    G.healPulse = false;
     const speed = '×' + s.scrollMul.toFixed(1);
     if (force || speed !== hudCache.speed) {
       els.hudSpeed.textContent = speed;
@@ -487,6 +548,7 @@
       ['被天花板頂住', me.stats.ceilingSeconds.toFixed(1) + ' 秒'],
       ['踩到彈簧', me.stats.springs + ' 次'],
       ['踩破假階', me.stats.fakes + ' 次'],
+      ['回復血量', me.stats.heals + ' 顆'],
       ['到達最深世界', Scenes.sceneFor(me.stats.deepestWorld).name],
       ['本機最深', saved.best.depth + ' m']
     ];
@@ -495,8 +557,12 @@
       '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('');
 
     els.finishBtn.hidden = true;
-    show('result');
+    /* 不換路由：樓梯定格留在後面，結算蓋在上面（跟打地鼠一樣） */
+    els.ovResult.hidden = false;
+    els.pads.classList.add('hidden');
+    input.clear();
     if (G.raf) { cancelAnimationFrame(G.raf); G.raf = 0; }
+    els.again.focus();
   }
 
   /* ================= 暫停選單（Esc；只有三顆） ================= */
@@ -652,6 +718,7 @@
   els.start.addEventListener('click', () => { sound.unlock(); startMatch(); });
   els.again.addEventListener('click', () => { sound.unlock(); startMatch(); });
   els.changeDiff.addEventListener('click', () => goto('setup'));
+  els.resultHome.addEventListener('click', () => goto('home'));
   els.resume.addEventListener('click', () => togglePause(false));
   els.restart.addEventListener('click', () => { togglePause(false); startMatch(); });
   els.goHome.addEventListener('click', () => { togglePause(false); goto('home'); });

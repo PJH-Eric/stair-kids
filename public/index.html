@@ -196,6 +196,24 @@
         <span>轉成直向比較好玩</span>
         <button type="button" class="mini-btn" id="rotate-close">知道了</button>
       </div>
+
+      <!-- 結算：跟打地鼠一樣直接蓋在畫面上，不換路由，樓梯定格留在後面 -->
+      <div class="stage-overlay" id="ov-result" hidden role="dialog" aria-modal="true" aria-labelledby="result-title">
+        <div class="ov-card">
+          <h2 id="result-title">這局結束</h2>
+          <div class="result-hero" id="result-hero"></div>
+          <p class="result-new" id="result-new" hidden>破紀錄了！</p>
+          <div class="result-stats">
+            <h3>這局統計</h3>
+            <ul id="result-list"></ul>
+          </div>
+          <div class="ov-btns">
+            <button id="btn-again" class="big-btn primary" type="button">再玩一次</button>
+            <button id="btn-change-diff" class="big-btn" type="button">換難度</button>
+            <button id="btn-result-home" class="big-btn ghost" type="button">回首頁</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -203,24 +221,6 @@
   <div class="pads" id="pads">
     <button class="pad pad-left" id="pad-left" type="button" aria-label="往左"></button>
     <button class="pad pad-right" id="pad-right" type="button" aria-label="往右"></button>
-  </div>
-</section>
-
-<!-- ============ 結算 ============ -->
-<section id="screen-result" class="screen">
-  <div class="panel result">
-    <h2 id="result-title">這局結束</h2>
-    <div class="result-hero" id="result-hero"></div>
-    <p class="result-new" id="result-new" hidden>破紀錄了！</p>
-    <div class="result-stats">
-      <h3>這局統計</h3>
-      <ul id="result-list"></ul>
-    </div>
-    <div class="panel-actions">
-      <button id="btn-again" class="big-btn primary" type="button">再玩一次</button>
-      <button id="btn-change-diff" class="big-btn" type="button">換難度</button>
-      <button class="big-btn ghost" type="button" data-go="home">回首頁</button>
-    </div>
   </div>
 </section>
 

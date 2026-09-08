@@ -397,6 +397,13 @@ b { font-weight: 700; }
   color: var(--brand-dark);
 }
 .hearts { display: inline-flex; align-items: center; gap: 1px; flex-wrap: wrap; }
+/* 回血時愛心排跳一下。回血很頻繁，所以只做這個局部提示，不做全畫面特效 */
+@keyframes heart-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.hearts.gain { animation: heart-pop .28s ease-out; transform-origin: left center; }
 .hearts .heart { display: block; }
 .hearts.number { gap: 4px; }
 .hearts.number b { font-size: 17px; color: #D6314F; }
@@ -545,6 +552,48 @@ b { font-weight: 700; }
   text-align: center;
 }
 .pause-card h2 { color: var(--brand-dark); }
+
+/* 結算浮層：蓋在樓梯畫面上，樓梯定格留在後面（沿用打地鼠「不另外換路由」的做法） */
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  overflow-y: auto;
+  background: rgba(60, 40, 20, .42);
+  backdrop-filter: blur(2px);
+  animation: ov-in .22s ease-out;
+}
+.stage-overlay[hidden] { display: none !important; }
+@keyframes ov-in { from { opacity: 0; } to { opacity: 1; } }
+.ov-card {
+  width: min(100%, 420px);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--cream);
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.ov-card h2 { color: var(--brand-dark); font-size: 1.3rem; }
+.ov-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
+.ov-btns .big-btn { flex: 1 1 130px; min-width: 0; font-size: 16px; padding: 12px 14px; }
+
+/* 矮畫面（手機橫向）把結算卡片壓緊一點，按鈕才不會被推到看不到 */
+@media (max-height: 460px) {
+  .ov-card { padding: 10px 12px; }
+  .ov-card h2 { font-size: 1.05rem; margin-bottom: 2px; }
+  .result-hero .kid-full { height: 74px; width: auto; }
+  .result-stats { padding: 8px 10px; margin-top: 6px; }
+  .result-stats ul { font-size: 12px; }
+  .ov-btns { margin-top: 8px; }
+  .ov-btns .big-btn { padding: 9px 10px; font-size: 14px; }
+}
 
 .panel.result { max-width: 560px; text-align: center; }
 .result-hero { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 6px; }
