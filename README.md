@@ -1,7 +1,7 @@
 # 小朋友下樓梯（stair-kids）
 
 一直往下跑的經典下樓梯遊戲。只有左右兩個方向，沒有跳；畫面上緣的天花板會越玩越快地追下來，
-下得越深分數越高。**目前進度：M0（單機一人挑戰一局可玩）。**
+下得越深分數越高。**目前進度：M1（四段 AI ＋ 跟電腦對戰）。**
 
 規格唯一來源是 [`規劃書.md`](規劃書.md)，本檔只寫「怎麼跑起來」與「M0 做了什麼」。
 
@@ -28,10 +28,11 @@ npm start
 ## 怎麼驗
 
 ```
-npm run verify        # 下面三支全部跑一次
-npm test              # tests/verify.js       規則核心單元測試
+npm run verify        # 下面四支全部跑一次
+npm test              # tests/verify.js          規則核心單元測試
 npm run test:stairs   # scripts/stairs-check.js  一萬層樓梯驗收
-npm run test:match    # scripts/match-check.js   單機一局跑完
+npm run test:match    # scripts/match-check.js   單機與對戰一局跑完
+npm run test:ai       # scripts/ai-check.js      四段 AI 的行為差異
 ```
 
 三支都是零依賴的純 Node，不需要瀏覽器。
@@ -69,7 +70,36 @@ npm run test:match    # scripts/match-check.js   單機一局跑完
 - **伺服器** `server.js`：零依賴，靜態檔案 ＋ `/health` ＋ `/api/presence` ＋ 自寫 WebSocket（`lib/ws.js`）
   的最小端點，M2 才接上房間迴圈。
 
-**M1 之後（AI、線上、觀戰、聊天）都還沒做**，但規則核心已經留好共用介面：
+## M1 做完了什麼
+
+- **四段 AI** `public/js/ai.js`：只輸出 `{ dir: -1 | 0 | 1 }`，跟真人走同一個輸入管道，不作弊
+  （只看得到已經生成的階梯，還會依難度砍成「預看 N 層」；不加速、不改血量）。
+  反應延遲、預看層數、避刺／避假階、彈簧的用法、挑寬階、推人、失誤率都依難度分四段。
+- **跟電腦對戰**：同一座樓梯、會互相推擠、倒數 3 秒、玩家一死就結束（不必等電腦死）。
+  難度由玩家挑一個，電腦用同一個（規劃書 §1.7）；**幼幼班不開放對戰**。
+  資訊欄多一區對手的深度與血量（只給數字，不顯示領先／落後差距）。
+  結算改成勝負標題＋勝方大頭貼＋兩行數據，統計多了「被推開」與「對手最深」。
+- **`scripts/ai-check.js`**：四段 AI 各跑 200 局（8 秒跑完），驗平均深度單調遞增、
+  差距大於雜訊、死亡率遞減、落地的階梯裡刺的比例遞減、不作弊、同 seed 可重現。
+
+### 四段 AI 的實測差異（各 200 局、每局上限 90 秒）
+
+| 遊戲難度 | AI | 平均深度 | 平均下降速度 | 死亡率 | 落地裡的刺 |
+|---|---|---|---|---|---|
+| 普通 | 幼幼班 | 120.7 m | 3.63 m/秒 | 90.0% | 7.3% |
+| 普通 | 簡單 | 223.0 m | 3.57 m/秒 | 47.5% | 7.1% |
+| 普通 | 普通 | 294.9 m | 3.51 m/秒 | 10.5% | 6.5% |
+| 普通 | 困難 | 318.0 m | 3.68 m/秒 | 7.0% | 6.5% |
+
+有兩件事要記著（`ai-check` 的註解裡也寫了）：
+
+1. **只要 AI 好到不會死，深度就被「保底下捲速度」綁住** —— 鏡頭一直往下捲，
+   玩家再快也只是跟著走。所以普通與困難這一對在高難度會收斂到同一個數字，
+   真正的差別在下降速度與死亡率。這不是 bug，是這款遊戲的節奏本來就由下捲速度決定。
+2. **「會不會避刺」只能看「落地的階梯裡有幾成是刺」**。用「每局幾次」或「每 100 公尺幾次」
+   都會得到相反的結論 —— 強的 AI 落地次數多很多（150 次／局 對 32 次／局）。
+
+**M2 之後（線上、觀戰、聊天）還沒做**，但規則核心已經留好共用介面：
 `createMatch / stepMatch / makeStairs / resolveLanding / resolvePush / applyCeiling / checkResult`，
 AI 與線上都只要送 `{ dir: -1 | 0 | 1 }` 這種和真人一模一樣的輸入。
 
@@ -247,6 +277,7 @@ stair-kids/
 │  └─ js/
 │     ├─ config.js          唯一的 server URL 入口（GAME_SERVER_URL）
 │     ├─ rules.js           ★ 共用純函式規則核心
+│     ├─ ai.js              四段電腦對手（只輸出 -1／0／1，不作弊）
 │     ├─ stairs.js          樓梯程序生成器（可達性保證）
 │     ├─ rng.js             可注入種子亂數
 │     ├─ render.js          Canvas 畫場景與階梯、SVG 畫小朋友
@@ -255,7 +286,7 @@ stair-kids/
 │     ├─ audio.js  storage.js  app.js
 │     └─ themes/            characters.js（8 隻）／scenes.js（六套世界）／nicknames.js
 ├─ tests/verify.js          規則核心單元測試
-├─ scripts/                 stairs-check.js／match-check.js／inject-server-url.js
+├─ scripts/                 stairs-check.js／match-check.js／ai-check.js／inject-server-url.js
 ├─ .env.example  .gitignore  render.yaml  啟動遊戲.bat  規劃書.md
 └─ .github/workflows/pages.yml
 ```

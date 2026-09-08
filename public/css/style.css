@@ -274,6 +274,25 @@ b { font-weight: 700; }
 }
 .soon-item h3 { margin: 0; font-size: 16px; }
 .soon-item p { margin: 2px 0 0; font-size: 13px; color: var(--ink-soft); }
+/* 可以按的那一項（跟電腦對戰） */
+button.soon-item {
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  border-style: solid;
+  border-color: var(--line);
+  cursor: pointer;
+  width: 100%;
+}
+button.soon-item:hover { background: #fff; border-color: var(--brand); }
+button.soon-item:active { transform: translateY(2px); }
+.badge.go { background: var(--green); }
+
+/* 對手區塊 */
+.side-foe { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.side-foe #hud-foe-name { font-weight: 700; color: var(--red); }
+.side-depth.small-depth strong { font-size: 20px; color: var(--red); }
+
 .badge {
   background: var(--brand);
   color: #fff;
@@ -600,6 +619,8 @@ b { font-weight: 700; }
 .result-hero .kid-full { filter: drop-shadow(0 6px 12px rgba(120, 80, 40, .25)); }
 .result-line { font-size: 15px; color: var(--ink-soft); }
 .result-line b { font-size: 22px; color: var(--brand-dark); }
+.result-line.champ { font-weight: 700; }
+.result-line.champ b { color: var(--green); }
 .result-new { color: var(--pink); font-weight: 800; font-size: 18px; }
 .result-new[hidden] { display: none; }
 .result-stats {
@@ -672,6 +693,9 @@ b { font-weight: 700; }
     white-space: nowrap;
   }
   .side-who, .side-foot, .side-live, .world-bar, #hud-next { display: none; }
+  /* 直向的薄狀態列只留對手深度，血量與名字擠不下 */
+  .side-foe { margin: 0; padding: 0; border: 0; flex-direction: row; align-items: center; }
+  .side-foe .side-row:not(.side-depth) { display: none; }
   .side-row { flex: 0 0 auto; gap: 4px; }
   .side-label { display: none; }              /* 標籤省掉，數字與圖示自己說明得夠清楚 */
   .side-block { flex-direction: row; align-items: center; }

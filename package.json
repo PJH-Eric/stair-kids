@@ -9,7 +9,8 @@
     "test": "node tests/verify.js",
     "test:stairs": "node scripts/stairs-check.js",
     "test:match": "node scripts/match-check.js",
-    "verify": "node tests/verify.js && node scripts/stairs-check.js && node scripts/match-check.js",
+    "test:ai": "node scripts/ai-check.js",
+    "verify": "node tests/verify.js && node scripts/stairs-check.js && node scripts/match-check.js && node scripts/ai-check.js",
     "inject": "node scripts/inject-server-url.js"
   },
   "engines": {

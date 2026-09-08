@@ -13,7 +13,10 @@
     homeArt: $('#home-art'), homeRecords: $('#home-records'),
     nickname: $('#in-nickname'), charPicker: $('#char-picker'),
     diffPicker: $('#diff-picker'), diffNote: $('#diff-note'),
-    start: $('#btn-start'),
+    setupTitle: $('#setup-title'), setupHint: $('#setup-hint'), diffLabel: $('#diff-label'),
+    vsAi: $('#btn-vs-ai'), start: $('#btn-start'),
+    sideFoe: $('#side-foe'), hudFoeName: $('#hud-foe-name'),
+    hudFoeDepth: $('#hud-foe-depth'), hudFoeHp: $('#hud-foe-hp'),
     canvas: $('#canvas'), actors: $('#actors'), stage: $('#stage'),
     hudDepth: $('#hud-depth'), hudHp: $('#hud-hp'), hudHpRow: $('#hud-hp-row'),
     hudDiff: $('#hud-diff'), hudSpeed: $('#hud-speed'),
@@ -55,6 +58,8 @@
     acc: 0,
     time: 0,                 /* 給動畫用的連續時間 */
     paused: false,
+    mode: 'solo',                /* 'solo' 一個人玩｜'ai' 跟電腦對戰 */
+    ai: null,                    /* 對戰時的 AI 控制器 */
     difficulty: store.difficulty || 'normal',
     char: store.char || 'yuan',
     scene: Scenes.sceneFor(0),
@@ -153,7 +158,24 @@
     hard: '一開始就很快，刺階與假階都多，只有 8 顆愛心。'
   };
 
+  /** 對戰不開放幼幼班：不會死就分不出勝負（規劃書 §0.2） */
+  function diffChoices() {
+    return G.mode === 'ai'
+      ? Rules.DIFFICULTY_LIST.filter(id => Rules.DIFFICULTY[id].versus)
+      : Rules.DIFFICULTY_LIST;
+  }
+
   function renderSetup() {
+    const vs = G.mode === 'ai';
+    els.setupTitle.textContent = vs ? '跟電腦對戰' : '一個人玩';
+    els.setupHint.textContent = vs
+      ? '兩個人在同一座樓梯上，會互相推擠。倒數 3 秒後開始，你一死就結束這局。'
+      : '選一隻小朋友，挑一個難度，就可以開始無限往下跑。';
+    els.diffLabel.textContent = vs ? '難度（電腦對手用同一個難度）' : '難度';
+    els.start.textContent = vs ? '開始對戰' : '開始下樓梯';
+    /* 從一個人玩切到對戰時，如果原本選的是幼幼班就退回普通 */
+    if (vs && !Rules.DIFFICULTY[G.difficulty].versus) G.difficulty = 'normal';
+
     els.nickname.value = store.nickname || '';
     els.nickname.placeholder = Nicknames.random();
 
@@ -161,7 +183,7 @@
       '<button class="char-opt" type="button" role="radio" data-char="' + c.id + '" aria-checked="' +
       (c.id === G.char) + '">' + Render.kidAvatarSvg(c, 56) + c.name + '</button>').join('');
 
-    els.diffPicker.innerHTML = Rules.DIFFICULTY_LIST.map(id => {
+    els.diffPicker.innerHTML = diffChoices().map(id => {
       const d = Rules.DIFFICULTY[id];
       const r = store.records[id];
       return '<button class="diff-opt" type="button" role="radio" data-diff="' + id + '" aria-checked="' +
@@ -199,11 +221,29 @@
     Store.save(store);
 
     /* 每一局都換新的樓梯 seed（不做同座樓梯重打） */
+    const seed = RNG.newSeed();
+    const vs = G.mode === 'ai';
+    const players = [{ id: 'p1', name: name, char: G.char, kind: 'human' }];
+    if (vs) {
+      /* 電腦對手：難度跟玩家共用同一個（規劃書 §1.7），角色挑一隻跟你不一樣的 */
+      const foeChar = Characters.CHARACTERS.find(c => c.id !== G.char) || Characters.CHARACTERS[0];
+      /* 別跟玩家撞名 */
+      let foeName = Nicknames.random();
+      for (let i = 0; i < 12 && foeName === name; i++) foeName = Nicknames.random();
+      players.push({
+        id: 'ai1',
+        name: foeName + '（' + Rules.DIFFICULTY[G.difficulty].name + '）',
+        char: foeChar.id,
+        kind: 'ai',
+        aiLevel: G.difficulty
+      });
+    }
     G.match = Rules.createMatch({
       difficulty: G.difficulty,
-      mode: 'solo',
-      players: [{ id: 'p1', name: name, char: G.char, kind: 'human' }]
-    }, RNG.newSeed());
+      mode: vs ? 'versus' : 'solo',
+      players: players
+    }, seed);
+    G.ai = vs ? Ai.create(G.difficulty, 'ai1', seed) : null;
 
     G.paused = false;
     G.acc = 0;
@@ -230,6 +270,7 @@
     if (G.raf) cancelAnimationFrame(G.raf);
     G.raf = 0;
     G.match = null;
+    G.ai = null;
     G.paused = false;
     els.pause.hidden = true;
     els.countdown.hidden = true;
@@ -260,7 +301,10 @@
         /* 畫面內插用：推進之前先記下「上一格」的鏡頭與角色位置 */
         snapshotPrev(s);
         const cmd = input.read();
-        const r = Rules.stepMatch(s, { p1: { dir: cmd.dir } }, Rules.STEP_MS);
+        const inputs = { p1: { dir: cmd.dir } };
+        /* AI 跟真人走同一個管道，也在同一個固定步長裡決策 */
+        if (G.ai) inputs.ai1 = G.ai.read(s, Rules.STEP);
+        const r = Rules.stepMatch(s, inputs, Rules.STEP_MS);
         handleEvents(r.events);
         if (s.phase === 'over') break;
       }
@@ -501,9 +545,21 @@
       const into = Math.max(0, Math.min(1, (p.best % Rules.C.MILESTONE) / Rules.C.MILESTONE));
       els.hudWorldFill.style.width = (into * 100).toFixed(1) + '%';
     }
+    /* 對手（只給數字，不顯示領先／落後差距 —— 規劃書 §0.3） */
+    const foe = s.players[1];
+    if (foe) {
+      els.hudFoeDepth.textContent = Math.floor(foe.best);
+      if (force || foe.hp !== hudCache.foeHp || compact !== hudCache.compact) {
+        els.hudFoeHp.innerHTML = SvgUI.hearts(foe.hp, foe.hpMax, compact);
+        hudCache.foeHp = foe.hp;
+      }
+      if (force) els.hudFoeName.textContent = foe.name + (foe.alive ? '' : '（淘汰）');
+      if (!foe.alive) els.hudFoeName.textContent = foe.name + '（淘汰）';
+    }
     if (force) {
+      els.sideFoe.hidden = !foe;
       els.hudDiff.textContent = s.diff.name;
-      els.hudNet.textContent = '單機一人挑戰';
+      els.hudNet.textContent = foe ? '跟電腦對戰' : '單機一人挑戰';
       const rec = store.records[s.difficulty];
       els.hudBest.textContent = rec && rec.depth ? '本機最深 ' + rec.depth + ' m' : '還沒有紀錄';
       els.hudHpRow.hidden = false;
@@ -521,26 +577,46 @@
 
   function finish(result) {
     const me = result.players[0];
+    const foe = result.players[1] || null;
+    const win = foe ? result.winner === me.id : null;
     const saved = Store.record(store, {
       difficulty: result.difficulty,
       depth: me.depth,
       world: me.world,
-      char: me.char
+      char: me.char,
+      versus: foe ? { kind: 'ai', win: win } : null
     });
     store = Store.load();
 
-    els.resultTitle.textContent =
-      result.endedBy === 'manual' ? '這局結束'
+    els.resultTitle.textContent = foe
+      ? (result.draw ? '平手！' : win ? '你贏了！' : '你輸了')
+      : result.endedBy === 'manual' ? '這局結束'
       : result.endedBy === 'fell' ? '摔下去了'
       : '沒血了';
-    els.resultHero.innerHTML =
-      Render.kidFullSvg(charOf(me.char), 132) +
-      '<div class="result-line">' + me.name + ' 下到 <b>' + me.meters + ' m</b>' +
-      '　撐了 ' + fmtTime(me.survived) + '</div>' +
-      '<div class="result-line">' + Rules.DIFFICULTY[result.difficulty].name +
-      '・最深到 ' + Scenes.sceneFor(me.world).name + '</div>';
+
+    /* 對戰：勝方的大頭貼放大，下面各一行數據（規劃書 §7.6） */
+    const line = (p, tag) =>
+      '<div class="result-line' + (tag ? ' ' + tag : '') + '">' + p.name +
+      ' 下到 <b>' + p.meters + ' m</b>　撐了 ' + fmtTime(p.survived) +
+      (p.fell ? '（摔下去）' : p.alive ? '' : '（沒血了）') + '</div>';
+    if (foe) {
+      const champ = result.draw ? me : (win ? me : foe);
+      const other = champ === me ? foe : me;
+      els.resultHero.innerHTML =
+        Render.kidFullSvg(charOf(champ.char), 118) +
+        line(champ, 'champ') + line(other) +
+        '<div class="result-line">' + Rules.DIFFICULTY[result.difficulty].name +
+        '・最深到 ' + Scenes.sceneFor(me.world).name + '</div>';
+    } else {
+      els.resultHero.innerHTML =
+        Render.kidFullSvg(charOf(me.char), 132) +
+        line(me) +
+        '<div class="result-line">' + Rules.DIFFICULTY[result.difficulty].name +
+        '・最深到 ' + Scenes.sceneFor(me.world).name + '</div>';
+    }
     els.resultNew.hidden = !saved.record;
-    if (saved.record) { sound.play('win'); view.burst('milestone', 6, 0, 0); }
+    if (saved.record || win) { sound.play('win'); view.burst('milestone', 6, 0, 0); }
+    else if (foe) sound.play('dead');
 
     /* 這局統計（一人挑戰自動省略「被推開」） */
     const rows = [
@@ -553,6 +629,7 @@
       ['本機最深', saved.best.depth + ' m']
     ];
     if (result.mode === 'versus') rows.splice(4, 0, ['被推開', me.stats.pushes + ' 次']);
+    if (foe) rows.push(['對手最深', foe.meters + ' m']);
     els.resultList.innerHTML = rows.map(r =>
       '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('');
 
@@ -713,8 +790,17 @@
   $$('[data-go]').forEach(btn => btn.addEventListener('click', () => {
     sound.unlock();
     sound.play('click');
+    /* 首頁的「一個人玩」與跟別人玩畫面的「一個人玩」都要切回單機模式 */
+    if (btn.dataset.go === 'setup') G.mode = 'solo';
+    if (btn.dataset.go === 'home') G.mode = 'solo';
     goto(btn.dataset.go);
   }));
+  els.vsAi.addEventListener('click', () => {
+    sound.unlock();
+    sound.play('click');
+    G.mode = 'ai';
+    goto('setup');
+  });
   els.start.addEventListener('click', () => { sound.unlock(); startMatch(); });
   els.again.addEventListener('click', () => { sound.unlock(); startMatch(); });
   els.changeDiff.addEventListener('click', () => goto('setup'));

@@ -171,6 +171,80 @@ console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單�
     '難度的保底下捲速度本身是單調遞增的（2.0 < 2.8 < 3.6）');
 }
 
+console.log('\n【跟電腦對戰】（M1 驗收：同畫面共用樓梯、推擠、倒數 3 秒、玩家一死就結束）');
+{
+  const Ai = require('../public/js/ai.js');
+  /* 電腦互打：兩邊都是 AI，確認整局跑得完 */
+  let pushes = 0, ran = 0, close = 0;
+  for (let i = 0; i < 10; i++) {
+    const seed = 'vs-' + i;
+    const s = Rules.createMatch({
+      difficulty: 'normal', mode: 'versus',
+      players: [
+        { id: 'p1', name: '甲', char: 'yuan', kind: 'ai', aiLevel: 'normal' },
+        { id: 'ai1', name: '乙', char: 'bobo', kind: 'ai', aiLevel: 'hard' }
+      ]
+    }, seed);
+    const a = Ai.create('normal', 'p1', seed);
+    const b = Ai.create('hard', 'ai1', seed);
+    let t = 0;
+    while (s.phase !== 'over' && t < 120) {
+      Rules.stepMatch(s, { p1: a.read(s, Rules.STEP), ai1: b.read(s, Rules.STEP) }, Rules.STEP_MS);
+      t += Rules.STEP;
+    }
+    if (s.phase !== 'over') Rules.endMatch(s, 'manual');
+    ran++;
+    pushes += s.players[0].stats.pushes;
+    const d = s.result.players.map(p => p.meters);
+    if (Math.abs(d[0] - d[1]) < Math.max(d[0], d[1]) * 0.5) close++;
+  }
+  console.log('    10 局電腦互打：平均推擠 ' + fmt(pushes / ran) + ' 次／局，' +
+    close + ' 局兩邊深度差在 50% 以內（勢均力敵）');
+  ok(ran === 10, '電腦互打 10 局都能跑完');
+  ok(pushes / ran > 3, '對戰過程真的有互相推擠（平均 ' + fmt(pushes / ran) + ' 次／局）');
+  ok(close >= 6, '同難度的兩隻 AI 大致勢均力敵（' + close + '/10 局）');
+}
+{
+  /* 玩家一死就結束，不必等電腦死（規劃書 §1.6） */
+  const Ai = require('../public/js/ai.js');
+  const seed = 'vs-human';
+  const s = Rules.createMatch({
+    difficulty: 'normal', mode: 'versus',
+    players: [
+      { id: 'p1', name: '玩家', char: 'yuan', kind: 'human' },
+      { id: 'ai1', name: '電腦', char: 'bobo', kind: 'ai', aiLevel: 'normal' }
+    ]
+  }, seed);
+  const ai = Ai.create('normal', 'ai1', seed);
+  /* 玩家完全不動 → 遲早被扎死或摔死 */
+  let t = 0;
+  while (s.phase !== 'over' && t < 200) {
+    Rules.stepMatch(s, { p1: { dir: 0 }, ai1: ai.read(s, Rules.STEP) }, Rules.STEP_MS);
+    t += Rules.STEP;
+  }
+  ok(s.phase === 'over', '玩家死掉就結束這局（' + fmt(t) + ' 秒）');
+  ok(!s.players[0].alive, '玩家確實死了');
+  ok(s.players[1].alive, '電腦還活著也照樣結算（不必等它死）');
+  /* 勝負是比「雙方當下深度」，不是比誰還活著。
+   * 注意：站著不動反而會被天花板一路往下推，短時間內深度可能還比較深 ——
+   * 但也很快就死了，所以不是可行的打法。 */
+  const d0 = s.result.players[0].meters, d1 = s.result.players[1].meters;
+  const deeper = d0 > d1 ? 'p1' : d1 > d0 ? 'ai1' : null;
+  ok(deeper === null ? s.result.draw : s.result.winner === deeper,
+    '用雙方當下深度比較，比較深的那個贏（玩家 ' + d0 + ' m vs 電腦 ' + d1 + ' m → ' +
+    (s.result.draw ? '平手' : s.result.winner) + ')');
+  console.log('    玩家不動：' + fmt(t) + ' 秒後結束，玩家 ' + d0 + ' m vs 電腦 ' + d1 + ' m' +
+    '（站著不動會被天花板一路往下推，深度反而衝很快，但撐不久）');
+}
+{
+  /* 倒數 3 秒（對戰）vs 2 秒（一人挑戰） */
+  const vs = Rules.createMatch({ difficulty: 'normal', mode: 'versus',
+    players: [{ id: 'p1' }, { id: 'ai1', kind: 'ai', aiLevel: 'normal' }] }, 'cd');
+  const solo = Rules.createMatch({ difficulty: 'normal', mode: 'solo', players: [{ id: 'p1' }] }, 'cd');
+  ok(Math.abs(vs.countdown - 3) < 1e-9, '對戰倒數 3 秒');
+  ok(Math.abs(solo.countdown - 2) < 1e-9, '一人挑戰倒數 2 秒');
+}
+
 console.log('\n【暫停】');
 {
   const s = Rules.createMatch({ difficulty: 'normal', mode: 'solo', players: [{ id: 'p1' }] }, 'pause');

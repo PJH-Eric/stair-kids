@@ -36,8 +36,8 @@
 <!-- ============ 一個人玩：選角色與難度 ============ -->
 <section id="screen-setup" class="screen">
   <div class="panel">
-    <h2>一個人玩</h2>
-    <p class="hint">選一隻小朋友，挑一個難度，就可以開始無限往下跑。</p>
+    <h2 id="setup-title">一個人玩</h2>
+    <p class="hint" id="setup-hint">選一隻小朋友，挑一個難度，就可以開始無限往下跑。</p>
 
     <label class="field">
       <span>你的名字</span>
@@ -50,7 +50,7 @@
     </div>
 
     <div class="field">
-      <span>難度</span>
+      <span id="diff-label">難度</span>
       <div id="diff-picker" class="diff-picker" role="radiogroup" aria-label="難度"></div>
       <p class="diff-note" id="diff-note"></p>
     </div>
@@ -66,13 +66,13 @@
   <div class="panel">
     <h2>跟別人玩</h2>
     <div class="soon-list">
-      <div class="soon-item">
+      <button class="soon-item live" type="button" id="btn-vs-ai">
         <div>
           <h3>跟電腦對戰</h3>
-          <p>同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段。</p>
+          <p>同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段。玩家一死就結束。</p>
         </div>
-        <span class="badge">M1 再開放</span>
-      </div>
+        <span class="badge go">開始</span>
+      </button>
       <div class="soon-item">
         <div>
           <h3>線上大廳</h3>
@@ -81,9 +81,9 @@
         <span class="badge">M2／M3 再開放</span>
       </div>
     </div>
-    <p class="hint">目前這個版本是 M0：先把規則核心與一個人玩的部分做到能玩、能驗證。</p>
+    <p class="hint">幼幼班不開放對戰 —— 不會死就分不出勝負。</p>
     <div class="panel-actions">
-      <button class="big-btn primary" type="button" data-go="setup">先一個人玩</button>
+      <button class="big-btn ghost" type="button" data-go="setup">一個人玩</button>
     </div>
   </div>
 </section>
@@ -166,8 +166,23 @@
         <div class="side-row small" id="hud-next">下一層還有 100 m</div>
       </div>
 
-      <!-- 這局的即時統計。桌機／橫向才顯示，順便把左欄的空白填起來；
-           M1 之後對手的深度與血量會接在這下面。 -->
+      <!-- 對手（對戰才顯示）。只給數字，不顯示領先／落後差距（規劃書 §0.3） -->
+      <div class="side-block side-foe" id="side-foe" hidden>
+        <div class="side-row">
+          <span class="side-label">對手</span>
+          <span id="hud-foe-name"></span>
+        </div>
+        <div class="side-row side-depth small-depth">
+          <span class="side-label">深度</span>
+          <strong id="hud-foe-depth">0</strong><span class="unit">m</span>
+        </div>
+        <div class="side-row">
+          <span class="side-label">血量</span>
+          <span id="hud-foe-hp"></span>
+        </div>
+      </div>
+
+      <!-- 這局的即時統計。桌機／橫向才顯示，順便把左欄的空白填起來。 -->
       <div class="side-block side-live" id="side-live">
         <div class="side-label block-label">這局</div>
         <ul class="live-list">
@@ -275,6 +290,7 @@
 <script src="js/rng.js"></script>
 <script src="js/stairs.js"></script>
 <script src="js/rules.js"></script>
+<script src="js/ai.js"></script>
 <script src="js/themes/characters.js"></script>
 <script src="js/themes/scenes.js"></script>
 <script src="js/themes/nicknames.js"></script>
