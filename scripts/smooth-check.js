@@ -281,7 +281,6 @@ group('按著方向鍵走：畫面上要順順地走，不會被往回拉');
   ok(!!meNow && !!foeNow, '兩個角色都在畫面上');
   /* 先往「離對手遠」的方向走，驗單純的移動；再往對手身上走，驗推擠 */
   const awayDir = meNow && foeNow ? (meNow.x >= foeNow.x ? 1 : -1) : 1;
-  const towardDir = -awayDir;
   const key = d => (d > 0 ? 'ArrowRight' : 'ArrowLeft');
   /* 一格畫面最多能走多少：水平速度 ＋ 輸送帶帶動速度 */
   const walkBound = (C.MOVE_SPEED + C.BELT_SPEED) * (1 / 60) * 1.2 + 0.02;
@@ -300,28 +299,71 @@ group('按著方向鍵走：畫面上要順順地走，不會被往回拉');
    * 同時記下伺服器判定的距離，才分得出「真的擠在一起」與「只是從旁邊掉過去」。 */
   const pushFrames = [];
   const srvGaps = [];
+  const pushDirs = [];
   const myPerson = w.socketPerson.get(w.sockets[w.sockets.length - 1]);
-  w.win.dispatch('keydown', { code: key(towardDir) });
+  /* 每一格都往對手所在的方向按（對手會跑，固定按一邊常常追不到），
+   * 這樣才保證真的擠在一起、量得到重疊。 */
+  let held = null;
   w.advance(2500, Object.assign({}, opt, {
     onFrame: () => {
-      pushFrames.push(readActors(w));
+      const actors = readActors(w);
+      const me2 = actors.find(x => x.name === mine);
+      const foe2 = actors.find(x => x.name === '小乙');
+      let dirNow = 0;
+      if (me2 && foe2) {
+        dirNow = me2.x >= foe2.x ? -1 : 1;
+        const want = key(dirNow);
+        if (held !== want) {
+          if (held) w.win.dispatch('keyup', { code: held });
+          w.win.dispatch('keydown', { code: want });
+          held = want;
+        }
+      }
+      pushFrames.push(actors);
+      pushDirs.push(dirNow);
       const m = w.theRoom() && w.theRoom().match;
       const sm = m && m.players.find(p => p.id === myPerson.id);
       const sf = m && m.players.find(p => p.id !== myPerson.id);
       srvGaps.push(sm && sf ? { dx: Math.abs(sm.x - sf.x), dy: Math.abs(sm.y - sf.y) } : null);
     }
   }));
-  w.win.dispatch('keyup', { code: key(towardDir) });
-  const push = horizontal(pushFrames, mine, towardDir);
-  let missing = 0;
-  for (const actors of pushFrames) if (actors.length !== 2) missing++;
-  ok(push.n > 100, '推擠這段取樣夠多', push.n + ' 幀');
+  if (held) w.win.dispatch('keyup', { code: held });
+
+  /* 推擠時的位移與回退（方向每一格都可能不同，所以自己算） */
+  let pushMax = 0, pushBack = 0, pushN = 0, missing = 0;
+  for (let i = 1; i < pushFrames.length; i++) {
+    if (pushFrames[i].length !== 2) missing++;
+    const p = pushFrames[i - 1].find(a => a.name === mine);
+    const q = pushFrames[i].find(a => a.name === mine);
+    if (!p || !q || !q.scale || pushDirs[i] === 0 || pushDirs[i] !== pushDirs[i - 1]) continue;
+    pushN++;
+    const d = (q.x - p.x) / q.scale;
+    if (Math.abs(d) > pushMax) pushMax = Math.abs(d);
+    const back = -d * pushDirs[i];
+    if (back > pushBack) pushBack = back;
+  }
+  ok(pushN > 80, '推擠這段取樣夠多', pushN + ' 幀');
   ok(missing === 0, '推擠的時候兩個角色都一直在畫面上（不會閃掉）',
     missing + ' 幀少了角色');
-  ok(push.max <= walkBound + 0.15, '推擠的時候不會瞬移',
-    '最大 ' + push.max.toFixed(3) + ' 格');
-  ok(push.back <= 0.15, '推擠的時候不會被拉一大段回去（修好前 0.57 格）',
-    '最大回退 ' + push.back.toFixed(4) + ' 格');
+  ok(pushMax <= walkBound + 0.15, '推擠的時候不會瞬移',
+    '最大 ' + pushMax.toFixed(3) + ' 格');
+  ok(pushBack <= 0.15, '推擠的時候不會被拉一大段回去（修好前 0.57 格）',
+    '最大回退 ' + pushBack.toFixed(4) + ' 格');
+
+  /* 放開按鍵之後不能再滑（剛推完最容易抓到：那時候通常還有校正在補）。校正的視覺補正如果在「站著不動」的時候抹掉，
+   * 角色就會自己走幾像素 —— 那就是使用者說的「滑動」（見 net.js 的 IDLE_SMOOTH_RATE）。 */
+  const idleFrames = sample(w, 400, opt);
+  const idle = horizontal(idleFrames, mine, awayDir);
+  let idleMove = 0;
+  for (let i = 1; i < idleFrames.length; i++) {
+    const p = idleFrames[i - 1].find(a => a.name === mine);
+    const q = idleFrames[i].find(a => a.name === mine);
+    if (!p || !q || !q.scale) continue;
+    idleMove += Math.abs(q.x - p.x) / q.scale;
+  }
+  ok(idle.n > 15, '放手後這段取樣夠多', idle.n + ' 幀');
+  ok(idleMove <= 0.05, '放開按鍵之後就停住，不會再滑（修好前會滑 0.13 格）',
+    '400ms 內總共移動 ' + idleMove.toFixed(4) + ' 格');
 
   /* 推擠時畫面上不能重疊。伺服器上的間距永遠 >= 身寬（resolvePush 會分開），
    * 但對手刻意畫在 100ms 前，所以「剛好貼著」在畫面上會疊進去半個身體

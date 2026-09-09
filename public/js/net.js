@@ -30,7 +30,13 @@
     CLOCK_SNAP: 0.25,     /* 差超過這麼多秒就直接對時（重連、分頁切回來） */
     HARD_SNAP: 4.0,       /* 誤差大於 4 格就直接歸位（傳送、重新連線） */
     DEAD_ZONE: 0.02,      /* 誤差小於這個就當沒事，免得一直微抖 */
-    SMOOTH: 0.12,         /* 校正的視覺位移在幾秒內補完 */
+    SMOOTH: 0.12,         /* 校正的視覺位移在幾秒內補完（有在動的時候） */
+    /* 站著不動的時候，補正要抹得非常慢。
+     * 抹掉補正等於讓角色自己移動幾像素 —— 在移動中完全看不見（混在速度裡），
+     * 但站著不動時就是「沒按方向鍵卻自己滑一下」。實測 200ms 延遲時有 10.6% 的
+     * 畫格會這樣滑（單機是 0%），這就是使用者說的「滑動」。 */
+    IDLE_SMOOTH_RATE: 0.15,
+    OFFSET_MAX: 0.5,      /* 視覺補正的上限（格）；超過就不再疊，避免站太久累積 */
     INPUT_MIN_MS: 33,     /* 輸入意圖最快多久送一次（沒變就用這個節流） */
     MAX_REPLAY: 40,       /* 一次最多重演幾步，避免延遲爆掉時卡死 */
     LEAD_PAD_MS: 10,      /* 超前量的安全邊際 */
@@ -78,7 +84,10 @@
       snaps: [],                    /* [{ time, at, players }] 對手內插用 */
       playAt: null,                 /* 對手的播放時鐘（對局時間） */
       playWall: null,               /* 上面那個時鐘對應的真實時間 */
-      offset: { x: 0, y: 0, t: 0 }, /* 校正後的視覺補正（自己） */
+      /* 校正後的視覺補正（只加在自己身上）。
+       * 兩個軸各有自己的計時器：抹掉補正等於讓角色自己動幾像素，
+       * 所以水平的補正要等「有在左右移動」才抹，垂直的要等「有在上下移動」才抹。 */
+      offset: { x: 0, y: 0, tx: 0, ty: 0 },
       /* 連線品質 */
       rtt: 0, jitter: 0, lastPongAt: 0, lastPingAt: 0, hb: 0,
       /* 本地模擬要比「收到的伺服器時間」超前多少（＝單向延遲＋一個 tick），
@@ -221,7 +230,7 @@
       st.log.length = 0;
       st.snaps.length = 0;
       st.playAt = st.playWall = null;
-      st.offset.x = st.offset.y = st.offset.t = 0;
+      st.offset.x = st.offset.y = st.offset.tx = st.offset.ty = 0;
       st.result = null;
       /* 上一局的事件不能留到下一局：沒人在讀的時候（結算已經停掉畫面迴圈）
        * 這個佇列會一直積著，下一局第一格一次倒出來，其中那顆 'over' 會
@@ -384,7 +393,7 @@
         if (e > st.err.max) st.err.max = e;
         if (e > C.HARD_SNAP) {
           st.count.hardSnaps++;
-          st.offset.x = st.offset.y = st.offset.t = 0;   /* 太遠就直接歸位，不平滑 */
+          st.offset.x = st.offset.y = st.offset.tx = st.offset.ty = 0;   /* 太遠就直接歸位，不平滑 */
         } else if (e > C.DEAD_ZONE) {
           st.count.corrections++;
           /* 還沒補完的視覺位移要「疊上去」，不能直接蓋掉。
@@ -392,9 +401,10 @@
            * 一次純水平的校正（dy≈0）會把還在補的垂直位移直接清成 0，
            * 角色就瞬移一整格（實測 1.29 格，站到假階上崩解時最明顯）。 */
           const left = visualOffset();
-          st.offset.x = left.x + dx;
-          st.offset.y = left.y + dy;
-          st.offset.t = C.SMOOTH;
+          st.offset.x = clampOffset(left.x + dx);
+          st.offset.y = clampOffset(left.y + dy);
+          st.offset.tx = C.SMOOTH;
+          st.offset.ty = C.SMOOTH;
         }
       }
 
@@ -504,7 +514,21 @@
         emitPredicted(r.events);
         ran++;
       }
-      if (st.offset.t > 0) st.offset.t = Math.max(0, st.offset.t - dt / 1000);
+      /* 補正的衰減速度看「自己有沒有在動」：
+       * 動的時候正常抹掉（0.12 秒，混在移動裡看不見）；
+       * 站著不動時抹得很慢（每秒只走 0.15 個 SMOOTH），
+       * 那點殘留差幾像素根本看不出來，但可以完全避免「沒按卻自己滑」。 */
+      if (st.offset.tx > 0 || st.offset.ty > 0) {
+        const mine = st.match.players.find(p => isMe(p.id));
+        const sec = dt / 1000;
+        /* 水平：有按方向鍵才抹（混在移動裡看不見）；沒按就幾乎不動它 ——
+         * 硬要在站著的時候抹掉，看起來就是「沒按卻自己滑一下」。 */
+        const rx = st.dir === 0 ? C.IDLE_SMOOTH_RATE : 1;
+        /* 垂直：在空中（有垂直速度）才抹；站在階梯上就先留著。 */
+        const ry = (!mine || Math.abs(mine.vy) < 0.5) ? C.IDLE_SMOOTH_RATE : 1;
+        st.offset.tx = Math.max(0, st.offset.tx - sec * rx);
+        st.offset.ty = Math.max(0, st.offset.ty - sec * ry);
+      }
       applyRemoteInterpolation();
       return ran;
     }
@@ -612,11 +636,15 @@
       }
     }
 
+    const clampOffset = v => Math.max(-C.OFFSET_MAX, Math.min(C.OFFSET_MAX, v));
+
     /** 自己的視覺補正量（render 時把它加回去，校正就不會看到瞬移） */
     function visualOffset() {
-      if (st.offset.t <= 0) return { x: 0, y: 0 };
-      const k = st.offset.t / C.SMOOTH;
-      return { x: st.offset.x * k, y: st.offset.y * k };
+      if (st.offset.tx <= 0 && st.offset.ty <= 0) return { x: 0, y: 0 };
+      return {
+        x: st.offset.x * Math.max(0, st.offset.tx) / C.SMOOTH,
+        y: st.offset.y * Math.max(0, st.offset.ty) / C.SMOOTH
+      };
     }
 
     /** 這一格畫到兩個固定步之間的哪裡（0～1），給畫面內插用 */

@@ -784,6 +784,153 @@ group('左右移動與推擠：按著一邊不能被往回拉（實測會抖）'
 }
 
 /* ---------------------------------------------------------- */
+group('沒按方向鍵的時候不能自己滑（跟單機比）');
+{
+  /* 曾經發生的事：線上的左右移動「會滑」。
+   * 原因不是速度算錯，而是視覺補正的抹除時機：每次校正都會把誤差抹在 0.12 秒裡，
+   * 抹掉補正等於讓角色自己走幾像素 —— 在移動中完全看不見（混在速度裡），
+   * 但站著不動時就是「沒按方向鍵卻自己滑一下」。實測 200ms 延遲時有 10.6% 的
+   * 沒按畫格在滑（單機是 0%）。
+   * 現在補正分成兩個軸各自衰減：水平的要等「有在左右移動」才抹，
+   * 垂直的要等「有在空中」才抹（見 net.js 的 IDLE_SMOOTH_RATE）。 */
+  const IDEAL = Rules.C.MOVE_SPEED / 60;
+  const lerp3 = (a, b, t) => a + (b - a) * t;
+
+  /** 一段取樣裡「沒按卻在移動」的比例與最大幅度 */
+  function slideStats(rows) {
+    let noInput = 0, moved = 0, worst = 0;
+    const speeds = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i], q = rows[i - 1];
+      if (!r.ok || !q.ok) continue;
+      if (r.dir === 0 && q.dir === 0) {
+        noInput++;
+        const d = Math.abs(r.x - q.x);
+        if (d > 0.02) { moved++; if (d > worst) worst = d; }
+      } else if (r.dir !== 0 && r.dir === q.dir) {
+        speeds.push((r.x - q.x) * r.dir);
+      }
+    }
+    const mean = speeds.length ? speeds.reduce((s, v) => s + v, 0) / speeds.length : 0;
+    const sd = speeds.length
+      ? Math.sqrt(speeds.reduce((s, v) => s + (v - mean) * (v - mean), 0) / speeds.length) : 0;
+    return { noInput: noInput, rate: noInput ? moved / noInput : 0, worst: worst, sd: sd };
+  }
+
+  /** 只在「不會被別的力量推動」的畫格採樣：活著、不在輸送帶上、沒貼牆、沒被推 */
+  function usable(s, me, foe) {
+    const onStep = me.onStep ? s.steps.find(x => x.id === me.onStep) : null;
+    const half = Rules.C.PLAYER_W / 2;
+    return me.alive && !(onStep && onStep.kind === 'belt') &&
+      me.x > half + 1e-6 && me.x < Rules.C.FIELD_W - half - 1e-6 &&
+      !(foe && foe.alive && Math.abs(foe.x - me.x) < Rules.C.PLAYER_W + 0.4 &&
+        Math.abs(foe.y - me.y) < Rules.C.PLAYER_H);
+  }
+
+  /* --- 單機基準（沒有網路，這就是「順」的定義） --- */
+  const base = (() => {
+    const prev = { players: {}, ready: false };
+    const snap = s => {
+      for (const p of s.players) {
+        let e = prev.players[p.id];
+        if (!e) e = prev.players[p.id] = { x: p.x, y: p.y };
+        e.x = p.x; e.y = p.y;
+      }
+      prev.ready = true;
+    };
+    const s = Rules.createMatch({
+      difficulty: 'normal', mode: 'versus',
+      players: [
+        { id: 'p1', name: '甲', char: 'yuan', kind: 'human' },
+        { id: 'p2', name: '乙', char: 'mimi', kind: 'ai' }
+      ]
+    }, 'slide-solo');
+    const b1 = Ai.create('normal', 'p1', 3), b2 = Ai.create('normal', 'p2', 9);
+    let acc = 0;
+    const rows = [];
+    for (let f = 0; f < 60 * 40 && s.phase !== 'over'; f++) {
+      acc += 1000 / 60;
+      let dir = 0;
+      while (acc >= STEP_MS) {
+        acc -= STEP_MS;
+        snap(s);
+        dir = b1.read(s, Rules.STEP).dir;
+        Rules.stepMatch(s, { p1: { dir: dir }, p2: { dir: b2.read(s, Rules.STEP).dir } }, STEP_MS);
+        if (s.phase === 'over') break;
+      }
+      if (!prev.ready || s.phase !== 'playing') continue;
+      const me = s.players[0], foe = s.players[1];
+      rows.push({
+        dir: dir, x: lerp3(prev.players.p1.x, me.x, acc / STEP_MS), ok: usable(s, me, foe)
+      });
+    }
+    return slideStats(rows);
+  })();
+  ok(base.noInput > 200, '單機基準取樣夠多', base.noInput + ' 個沒按的畫格');
+  ok(base.rate === 0, '單機完全不會自己滑（這是基準）',
+    (base.rate * 100).toFixed(1) + '%、每幀速度標準差 ' + base.sd.toFixed(4));
+
+  /* --- 線上 --- */
+  for (const lag of [80, 200]) {
+    const prev = { players: {}, ready: false };
+    const snap = s => {
+      for (const p of s.players) {
+        let e = prev.players[p.id];
+        if (!e) e = prev.players[p.id] = { x: p.x, y: p.y };
+        e.x = p.x; e.y = p.y;
+      }
+      prev.ready = true;
+    };
+    const w = createWorld({ lag: lag, seed: 8 });
+    const a = w.connect('甲', 'yuan', { beforeStep: snap });
+    const b = w.connect('乙', 'mimi');
+    w.advance(400);
+    a.actions.create('滑動房', 'normal');
+    w.advance(400);
+    b.actions.join(a.state.room.id, 'player');
+    w.advance(400);
+    a.actions.ready(true);
+    b.actions.ready(true);
+    w.advance(400);
+    a.actions.start();
+    w.advance(400);
+    const meId = a.state.me.id;
+    const brainA = Ai.create('normal', meId, 3);
+    const driveB = drive(b, 'normal', 9);
+    const rows = [];
+    w.advance(40000, () => {
+      /* advance() 是「先跑完這一格，再叫 onFrame」，所以要先記下這一格實際用的
+       * 方向（也就是上一格決定的 st.dir），才不會把方向的標籤錯開一格 ——
+       * 錯開的話「剛放手那一格」會被算成沒按，量出來的滑動全是假的。 */
+      const dirUsed = a.state.dir;
+      const m = a.match;
+      if (m && m.phase === 'playing' && prev.ready) {
+        const me = m.players.find(p => p.id === meId);
+        const foe = m.players.find(p => p.id !== meId);
+        const e = prev.players[meId];
+        if (me && e) {
+          rows.push({
+            dir: dirUsed,
+            x: lerp3(e.x, me.x, a.alpha()) + a.visualOffset().x,
+            ok: usable(m, me, foe)
+          });
+        }
+      }
+      if (m) a.setDir(brainA.read(m, Rules.STEP).dir);
+      driveB();
+    });
+    const s = slideStats(rows);
+    const detail = '沒按卻在移動 ' + (s.rate * 100).toFixed(1) + '%（' + s.noInput +
+      ' 幀）、單幀最大 ' + s.worst.toFixed(4) + ' 格、速度標準差 ' + s.sd.toFixed(4);
+    ok(s.noInput > 200, lag + 'ms：取樣夠多', s.noInput + ' 個沒按的畫格');
+    /* 修好之前：80ms 是 2.5%（最大 0.05 格）、200ms 是 10.6%（最大 0.10 格） */
+    ok(s.rate <= 0.005, lag + 'ms：沒按方向鍵時不會自己滑（修好前 80ms 2.5%、200ms 10.6%）', detail);
+    ok(s.worst <= 0.02, lag + 'ms：連一點點都不該滑（走一格畫格是 0.1 格）', detail);
+    ok(s.sd <= 0.02, lag + 'ms：按著的時候速度穩定（每幀 0.1 格）', detail);
+  }
+}
+
+/* ---------------------------------------------------------- */
 group('自己被刺到的反饋要即時（不等伺服器）');
 {
   /* 曾經發生的事：線上對戰被刺到，閃光、震動、火花都慢半拍 ——
