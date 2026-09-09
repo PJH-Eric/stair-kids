@@ -582,6 +582,8 @@
     const cmd = G.spectating ? { dir: 0 } : input.read();
     online.frame(now, cmd.dir);
     handleEvents(online.takeEvents());
+    /* 結算 callback 會在事件處理中取消動畫並清掉角色；不要讓同一幀在清除後又畫回最後一幀。 */
+    if (!G.raf || G.screen !== 'game') return;
 
     els.countdown.hidden = s.phase !== 'countdown';
     if (s.phase === 'countdown') els.countdownNum.textContent = Math.max(1, Math.ceil(s.countdown));
@@ -1011,6 +1013,8 @@
       const rec = store.records[result.difficulty];
       els.hudBest.textContent = rec && rec.depth ? '本機最深 ' + rec.depth + ' m' : '還沒有紀錄';
     }
+    /* 結算會立刻停止動畫，沒有下一幀可讓渲染器依 alive 清理，所以先清掉畫面角色。 */
+    view.clearActors();
     /* 不換路由：樓梯定格留在後面，結算蓋在上面（跟打地鼠一樣） */
     els.ovResult.hidden = false;
     els.pads.classList.add('hidden');

@@ -102,6 +102,19 @@ const render = loadRender().create(canvas, actorSvg);
 const scene = Scenes.sceneFor(0);
 const charOf = Characters.byId;
 
+const appSource = fs.readFileSync(require.resolve('../public/js/app.js'), 'utf8');
+const finishStart = appSource.indexOf('  function finish(result, meId) {');
+const finishEnd = appSource.indexOf('  /* ================= 暫停選單', finishStart);
+assert.ok(finishStart >= 0 && finishEnd > finishStart, '找到結算流程');
+assert.match(appSource.slice(finishStart, finishEnd), /view\.clearActors\(\)/,
+  '結算時會清除畫面上的角色');
+const onlineFrameStart = appSource.indexOf('  function onlineFrame(s, now, dt) {');
+const onlineFrameEnd = appSource.indexOf('  /* ---------- 畫面內插', onlineFrameStart);
+assert.ok(onlineFrameStart >= 0 && onlineFrameEnd > onlineFrameStart, '找到線上畫面流程');
+assert.match(appSource.slice(onlineFrameStart, onlineFrameEnd),
+  /handleEvents\(online\.takeEvents\(\)\);[\s\S]*if \(!G\.raf \|\| G\.screen !== 'game'\) return;/,
+  '結算後不會讓同一個線上畫格把角色重新畫回來');
+
 render.draw(stateWith(true), scene, charOf, 0, 0);
 assert.equal(actorSvg.children.length, 1, '存活玩家會被畫出來');
 
