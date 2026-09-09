@@ -395,6 +395,22 @@ group('天花板');
   ok(ev.some(e => e.type === 'hurt' && e.source === 'ceiling'), '同時發出 ceiling 的 hurt 事件（前端閃紅光）');
 }
 {
+  /* 對戰時環境傷害不能只套用在玩家一號；AI 被天花板刺到也要立刻扣血。 */
+  const s = sandbox({
+    mode: 'versus',
+    players: [{ id: 'p1', name: 'A', kind: 'human' }, { id: 'ai1', name: 'B', kind: 'ai' }],
+    steps: [wide(0, 0, Stairs.C.FIELD_W)],
+    at: [{ x: 6, y: 0, onStep: 'T0' }, { x: 6, y: 0, onStep: 'T0' }],
+    cameraTop: -C.PLAYER_H + 0.5
+  });
+  const ai = s.players[1];
+  const hp0 = ai.hp;
+  const r = Rules.stepMatch(s, { p1: { dir: 0 }, ai1: { dir: 0 } }, Rules.STEP_MS);
+  ok(ai.hp < hp0, '電腦被天花板刺到會立刻扣血', '原本 ' + hp0 + ' 顆，實際 ' + ai.hp + ' 顆');
+  ok(r.events.some(e => e.type === 'hurt' && e.player === 'ai1' && e.source === 'ceiling'),
+    '電腦受天花板傷害會發出對應 hurt 事件');
+}
+{
   /* 被頂到會被推穿腳下的階梯往下掉（推力大於階梯） */
   const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';

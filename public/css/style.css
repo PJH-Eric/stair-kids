@@ -457,6 +457,12 @@ button.soon-item:active { transform: translateY(2px); }
 .hearts.number { gap: 4px; }
 .hearts.number b { font-size: 17px; color: #D6314F; }
 .hearts.number i { font-style: normal; font-size: 12px; color: var(--ink-soft); }
+@keyframes foe-hp-hit {
+  0%, 100% { filter: none; transform: scale(1); }
+  35% { filter: drop-shadow(0 0 5px rgba(214, 49, 79, .8)); transform: scale(1.12); }
+}
+#hud-foe-hp { display: inline-flex; }
+#hud-foe-hp.foe-hit { animation: foe-hp-hit .45s ease-out; transform-origin: left center; }
 
 .stage { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
 #canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }

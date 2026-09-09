@@ -675,11 +675,13 @@
           /* 震動、閃紅光、跳出來的數字都跟「這一下扣幾顆」成正比 ——
            * 傷害改成 1～5 隨機之後，玩家要能一眼分出「刮到一下」跟「踩慘了」。 */
           const amount = e.amount || 1;
+          const hpTarget = syncHpHud(e.player, e.hp);
           if (e.source === 'ceiling') {
             /* 天花板上面也是刺，被刺到的反饋要跟踩到刺階一樣明顯 */
             sound.play('warn');
             sound.play('spike');
           }
+          if (hpTarget === 'foe') pulseFoeHp();
           if (!isMine(e)) break;
           view.kick(6 + amount * 2.5);
           flashHurt(amount >= 2);
@@ -703,6 +705,7 @@
         }
         case 'heal': {
           sound.play('heal');
+          syncHpHud(e.player, e.hp);
           /* 愛心排跳一下（updateHud 會重畫 innerHTML，所以要在下一格才加 class） */
           G.healPulse = true;
           break;
@@ -733,6 +736,7 @@
 
   /** 跳出「−N」告訴玩家這一下扣了幾顆愛心 */
   let dmgTimer = 0;
+  let foeHpTimer = 0;
   function popDamage(n) {
     const el = els.dmgPop;
     if (!el) return;
@@ -745,6 +749,36 @@
     el.classList.add('pop');
     clearTimeout(dmgTimer);
     dmgTimer = setTimeout(() => { el.hidden = true; el.classList.remove('pop'); }, 700);
+  }
+
+  /** 受傷事件抵達時先同步血量，對手的愛心不必等下一次狀態輪詢才變化。 */
+  function syncHpHud(playerId, hp) {
+    const s = G.match;
+    if (!s || hp == null) return null;
+    const p = s.players.find(x => x.id === playerId);
+    if (!p) return null;
+    const compact = s.diff.hpAsNumber || narrowHud();
+    if (p.id === G.meId) {
+      els.hudHp.innerHTML = SvgUI.hearts(hp, p.hpMax, compact);
+      els.hudHp.setAttribute('aria-label', '血量 ' + hp + '/' + p.hpMax);
+      return 'me';
+    }
+    const foe = foePlayer(s);
+    if (!foe || foe.id !== p.id) return null;
+    els.hudFoeHp.innerHTML = SvgUI.hearts(hp, p.hpMax, compact);
+    els.hudFoeHp.setAttribute('aria-label', '血量 ' + hp + '/' + p.hpMax);
+    return 'foe';
+  }
+
+  /** 對手受傷時讓血量欄短暫提示，避免只看到角色姿勢卻誤以為沒有扣血。 */
+  function pulseFoeHp() {
+    const el = els.hudFoeHp;
+    if (!el) return;
+    el.classList.remove('foe-hit');
+    void el.offsetWidth;
+    el.classList.add('foe-hit');
+    clearTimeout(foeHpTimer);
+    foeHpTimer = setTimeout(() => el.classList.remove('foe-hit'), 450);
   }
 
   /** 受傷時畫面閃一圈紅光。減少動態時不關掉、只調弱（這是透明度不是位移） */
@@ -769,7 +803,7 @@
 
   /* ================= 資訊欄 ================= */
 
-  let hudCache = { depth: -1, hp: -1, world: -1, speed: '', compact: null };
+  let hudCache = { depth: -1, hp: -1, foeHp: -1, foeId: null, world: -1, speed: '', compact: null };
 
   /** 窄的薄狀態列擠不下一整排愛心（手機直向 10 顆就會被裁掉），改用「愛心＋數字」。
    * 平板直向有 800 多 px，照樣排一整排愛心比較好讀，所以要看寬度不是只看方向。 */
@@ -792,6 +826,7 @@
     const compact = s.diff.hpAsNumber || narrowHud();
     if (force || p.hp !== hudCache.hp || compact !== hudCache.compact) {
       els.hudHp.innerHTML = SvgUI.hearts(p.hp, p.hpMax, compact);
+      els.hudHp.setAttribute('aria-label', '血量 ' + p.hp + '/' + p.hpMax);
       hudCache.hp = p.hp;
       hudCache.compact = compact;
       if (G.healPulse) {
@@ -835,12 +870,17 @@
     const foe = foePlayer(s);
     if (foe) {
       els.hudFoeDepth.textContent = Math.floor(foe.best);
-      if (force || foe.hp !== hudCache.foeHp || compact !== hudCache.compact) {
+      if (force || foe.id !== hudCache.foeId || foe.hp !== hudCache.foeHp || compact !== hudCache.compact) {
         els.hudFoeHp.innerHTML = SvgUI.hearts(foe.hp, foe.hpMax, compact);
+        els.hudFoeHp.setAttribute('aria-label', '血量 ' + foe.hp + '/' + foe.hpMax);
         hudCache.foeHp = foe.hp;
+        hudCache.foeId = foe.id;
       }
       if (force) els.hudFoeName.textContent = foe.name + (foe.alive ? '' : '（淘汰）');
       if (!foe.alive) els.hudFoeName.textContent = foe.name + '（淘汰）';
+    } else {
+      hudCache.foeHp = -1;
+      hudCache.foeId = null;
     }
     if (force) {
       els.sideFoe.hidden = !foe;
