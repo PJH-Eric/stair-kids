@@ -321,7 +321,7 @@
 
   function create(canvas, actorSvg) {
     const ctx = canvas.getContext('2d');
-    const view = { scale: 30, offX: 0, offY: 0, w: 360, h: 540, viewH: 18, fieldBottom: 540, dpr: 1 };
+    const view = { scale: 30, offX: 0, offY: 0, w: 360, h: 540, viewH: 18, fieldBottom: 540, voidTop: 540, dpr: 1 };
     let shake = 0;
     let particles = [];
     const opts = { reduceMotion: false, colorAssist: false, depthGuide: false, viewH: 18 };
@@ -350,6 +350,9 @@
       view.offX = (view.w - fieldW * view.scale) / 2;
       view.offY = CEIL_UNITS * view.scale;              /* cameraTop 對到的畫面 y */
       view.fieldBottom = view.offY + view.viewH * view.scale;
+      /* 寬度先達到限制時，畫布可能比「天花板＋可見區＋深淵」更高。
+       * 深淵仍只保留 VOID_UNITS 的高度，紅色下墜警示也要跟著這個起點下移。 */
+      view.voidTop = Math.max(view.fieldBottom, view.h - VOID_UNITS * view.scale);
       view.fieldPx = fieldW * view.scale;
       /* 寬螢幕上高度才是瓶頸：場地寬度已經被視窗高度綁死，舞台再寬也只是多出兩片牆。
        * 所以回報一個「舞台最多需要多寬」，讓 app.js 把整組面板收到這個寬度，
@@ -828,14 +831,14 @@
      * 不可以畫成近黑的實心色塊 —— 那看起來像「畫面被裁掉」而不是「下面是深淵」，
      * 原本最深到 85% 不透明，實測就是這個感覺。 */
     function drawVoid() {
-      if (view.fieldBottom >= view.h - 0.5) return;
+      if (view.voidTop >= view.h - 0.5) return;
       ctx.save();
       /* 漸層走完整段深淵，不要寫死 40px：縮放差很多時會變成上半漸層、下半死黑一片 */
-      const g = ctx.createLinearGradient(0, view.fieldBottom, 0, view.h);
+      const g = ctx.createLinearGradient(0, view.voidTop, 0, view.h);
       g.addColorStop(0, 'rgba(74,52,38,.16)');
       g.addColorStop(1, 'rgba(48,32,22,.42)');
       ctx.fillStyle = g;
-      ctx.fillRect(0, view.fieldBottom, view.w, view.h - view.fieldBottom);
+      ctx.fillRect(0, view.voidTop, view.w, view.h - view.voidTop);
       ctx.restore();
     }
 
@@ -852,7 +855,7 @@
       /* sinking 從 0 到約 5.6 格就會掉出去，換算成 0～1 的危險程度 */
       const k = Math.min(1, worst / 5.6);
       const pulse = opts.reduceMotion ? 1 : 0.8 + 0.2 * Math.sin(time * 14);
-      const bottom = view.fieldBottom;
+      const bottom = view.voidTop;
       const band = Math.max(60, view.viewH * view.scale * 0.24);
       const bar = Math.max(16, view.viewH * view.scale * 0.035);
       ctx.save();
