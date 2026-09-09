@@ -8,7 +8,7 @@
   const $$ = sel => [...document.querySelectorAll(sel)];
 
   const els = {
-    nav: $('#screen-nav'), back: $('#btn-back'),
+    nav: $('#screen-nav'), back: $('#btn-back'), leaveRoom: $('#btn-leave-room'),
     settingsBtn: $('#btn-settings'), finishBtn: $('#btn-finish'),
     homeArt: $('#home-art'), homeRecords: $('#home-records'),
     nickname: $('#in-nickname'), charPicker: $('#char-picker'),
@@ -108,6 +108,13 @@
   /* 「我」不一定是 players[0]：線上對戰的席位順序由伺服器決定，觀戰時根本沒有我。
    * 所有 HUD 與結算都走這兩個函式，才不會在線上模式顯示錯人的血量。 */
   const mePlayer = s => (s && s.players.find(p => p.id === G.meId)) || (s && s.players[0]) || null;
+
+  /** 這個事件是不是發生在「我」身上。
+   * 震動、紅光、跳出來的 −N、手機震動都是第一人稱的痛感反饋，只有本人該收到；
+   * 對手被扎照樣有聲音與噴出來的粒子，看得到發生什麼事，畫面不會替別人痛一次。
+   * 觀戰時 G.meId 會借用一號位（見 enterOnlineMatch），但觀戰者並沒有在玩，
+   * 所以一律不算自己 —— 旁觀者的畫面不該被別人的傷害震到。 */
+  const isMine = e => !G.spectating && e.player === G.meId;
   const foePlayer = s => {
     const m = mePlayer(s);
     return (s && s.players.find(p => p !== m)) || null;
@@ -164,8 +171,13 @@
   function show(name) {
     G.screen = name;
     $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
-    els.nav.hidden = !BACK_TO[name];
+    /* 左上角是全站統一的「退出」位置：選單畫面是返回上一層，
+     * 房間與遊戲中則是離開這間房／這一局。原本遊戲畫面完全沒有這顆，
+     * 只能按 Esc，觸控裝置根本沒有 Esc 可以按。 */
+    els.nav.hidden = !BACK_TO[name] && name !== 'game';
     if (BACK_TO[name]) els.back.dataset.go = BACK_TO[name];
+    els.back.textContent = (name === 'game' || name === 'room') ? '← 離開房間' : '← 返回';
+    document.body.classList.toggle('in-game', name === 'game');
     els.pads.classList.toggle('hidden', name !== 'game');
     if (name !== 'game' && els.ovResult) els.ovResult.hidden = true;
     syncPads();
@@ -668,6 +680,7 @@
             sound.play('warn');
             sound.play('spike');
           }
+          if (!isMine(e)) break;
           view.kick(6 + amount * 2.5);
           flashHurt(amount >= 2);
           buzz(20 + amount * 18);
@@ -700,12 +713,14 @@
           break;
         case 'fell':
           sound.play('fell');
+          if (!isMine(e)) break;
           view.kick(12);
           flashHurt(true);
           buzz(80);
           break;
         case 'eliminated':
           sound.play('dead');
+          if (!isMine(e)) break;
           view.kick(10);
           buzz(60);
           break;
@@ -1242,6 +1257,23 @@
     /* 線上模式這顆是「回房間」，不是回首頁（不能順手把房間關掉） */
     if (G.mode === 'online') { backFromOnlineMatch(); return; }
     goto('home');
+  });
+  /* 左上角的「離開」。這顆原本沒有任何 listener —— index.html 上沒有 data-go，
+   * 而 $('[data-go]') 是綁事件時就抓好的快照陣列，屬性是後來才由 show() 補的，
+   * 所以每一個畫面上的返回鈕其實都按不動。 */
+  els.back.addEventListener('click', () => {
+    sound.unlock();
+    sound.play('click');
+    /* 遊戲中不直接跳走：開選單讓玩家確認 —— 線上是「離開房間（算輸）」，
+     * 單機是先暫停再回首頁，誤觸不會直接毀掉正在跑的一局。 */
+    if (G.screen === 'game') { togglePause(true); return; }
+    /* 房間畫面轉呼叫現成的「離開房間」，它會通知伺服器把位子放掉；
+     * 自己另寫一套 goto('lobby') 會留下幽靈佔位。 */
+    if (G.screen === 'room' && els.leaveRoom) { els.leaveRoom.click(); return; }
+    const to = els.back.dataset.go;
+    if (!to) return;
+    if (to === 'home' || to === 'setup') G.mode = 'solo';
+    goto(to);
   });
   els.resume.addEventListener('click', () => togglePause(false));
   els.restart.addEventListener('click', () => { togglePause(false); startMatch(); });

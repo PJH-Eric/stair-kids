@@ -776,6 +776,9 @@ button.soon-item:active { transform: translateY(2px); }
   .pad-right { left: auto; right: calc(16px + var(--safe-r)); bottom: calc(24px + var(--safe-b)); }
   /* 遊戲區與操作區之間畫一條分隔，空白才看得出來是「操作區」不是沒畫完 */
   .stage { border-bottom: 3px solid var(--line); }
+  /* 左上角的「離開房間」是 position: fixed，直向的薄狀態列要讓開左邊，
+   * 不然會蓋掉最重要的深度數字（橫向的資訊欄本來就留了 58px 的上方留白）。 */
+  body.in-game .side { padding-left: calc(104px + var(--safe-l)); }
 }
 
 /* 很窄的手機（≤ 380px）：再讓一步，難度文字收掉只留速度倍率 */

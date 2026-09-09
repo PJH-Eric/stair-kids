@@ -334,12 +334,16 @@
       canvas.width = Math.round(view.w * dpr);
       canvas.height = Math.round(view.h * dpr);
       view.viewH = opts.viewH || 18;
-      /* 垂直方向要放得下「天花板 ＋ 可見高度」 */
+      /* 垂直方向要放得下「天花板 ＋ 可見高度 ＋ 死亡線下面的深淵」 */
       /* 場地寬幾格一律問規則核心（不要在這裡抄一份）。
-       * 高度方向要多留 CEIL_UNITS 給天花板；取兩者的最小值，畫面才不會被裁掉 ——
-       * 「掉出畫面下緣就摔死」那條線一定要看得到，不然規則會變成看不見的陷阱。 */
+       * 高度方向除了天花板的 CEIL_UNITS，還一定要留 VOID_UNITS 給深淵 ——
+       * 只算到可見高度的話，fieldBottom 會剛好落在畫布最底緣，深淵那段
+       * 會被 drawVoid() 的「fieldBottom >= view.h」提早 return 整段吃掉
+       * （桌機橫向必中，等於那片深淵從來沒畫過）。
+       * 「掉出畫面下緣就摔死」那條線一定要看得到下面是什麼，
+       * 不然規則會變成看不見的陷阱、摔死毫無預告。 */
       const fieldW = fieldWidth();
-      view.scale = Math.min(view.w / fieldW, view.h / (view.viewH + CEIL_UNITS));
+      view.scale = Math.min(view.w / fieldW, view.h / (view.viewH + CEIL_UNITS + VOID_UNITS));
       view.offX = (view.w - fieldW * view.scale) / 2;
       view.offY = CEIL_UNITS * view.scale;              /* cameraTop 對到的畫面 y */
       view.fieldBottom = view.offY + view.viewH * view.scale;
