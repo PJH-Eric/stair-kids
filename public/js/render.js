@@ -11,9 +11,12 @@
   /* 角色尺寸一律問規則核心，不在這裡另抄一份（抄了就會漂）。
    * SVG 的本地座標是 100 × 160，剛好是 1 : 1.6，所以只要 PLAYER_H = PLAYER_W × 1.6
    * 就可以用單一縮放，不會把小朋友壓扁。 */
+  const fieldWidth = () => (root.Rules ? root.Rules.C.FIELD_W : 14);
   const playerW = () => (root.Rules ? root.Rules.C.PLAYER_W : 1.25);
   const playerH = () => (root.Rules ? root.Rules.C.PLAYER_H : 2.0);
-  const CEIL_UNITS = 1.25;              /* 畫面最上面留給天花板的高度（格）。
+  const VOID_UNITS = 2.2;               /* 死亡線下面留幾格的深淵：
+                                         * 看得到「掉下去就沒了」，又不會浪費半個螢幕。 */
+  const CEIL_UNITS = 1.1;               /* 畫面最上面留給天花板的高度（格）。
                                          * 天花板的底座本來畫在 cameraTop 以上，也就是畫面外，
                                          * 結果只剩白色的刺露在淺色背景上，等於看不見。
                                          * 留出這段空間之後底座才看得到，刺也才有厚度可以畫。 */
@@ -332,12 +335,25 @@
       canvas.height = Math.round(view.h * dpr);
       view.viewH = opts.viewH || 18;
       /* 垂直方向要放得下「天花板 ＋ 可見高度」 */
-      /* 場地寬固定 12 格；高度方向要多留 CEIL_UNITS 給天花板。
-       * 取兩者的最小值，畫面才不會被裁掉。 */
-      view.scale = Math.min(view.w / 12, view.h / (view.viewH + CEIL_UNITS));
-      view.offX = (view.w - 12 * view.scale) / 2;
+      /* 場地寬幾格一律問規則核心（不要在這裡抄一份）。
+       * 高度方向要多留 CEIL_UNITS 給天花板；取兩者的最小值，畫面才不會被裁掉 ——
+       * 「掉出畫面下緣就摔死」那條線一定要看得到，不然規則會變成看不見的陷阱。 */
+      const fieldW = fieldWidth();
+      view.scale = Math.min(view.w / fieldW, view.h / (view.viewH + CEIL_UNITS));
+      view.offX = (view.w - fieldW * view.scale) / 2;
       view.offY = CEIL_UNITS * view.scale;              /* cameraTop 對到的畫面 y */
       view.fieldBottom = view.offY + view.viewH * view.scale;
+      view.fieldPx = fieldW * view.scale;
+      /* 寬螢幕上高度才是瓶頸：場地寬度已經被視窗高度綁死，舞台再寬也只是多出兩片牆。
+       * 所以回報一個「舞台最多需要多寬」，讓 app.js 把整組面板收到這個寬度，
+       * 牆就會維持一條窄邊，可玩區域佔的比例自然拉高。 */
+      const wall = Math.max(24, Math.min(72, view.scale * 0.5));
+      view.wantStageW = Math.ceil(view.fieldPx + wall * 2);
+      /* 反過來的情況：視窗比可玩區域「高」很多（手機直向就是），
+       * 死亡線以下會露出一大片深淵，等於整個下半螢幕都是死掉的空間。
+       * 所以也回報「舞台最多需要多高」＝天花板 ＋ 可見高度 ＋ 一小段深淵，
+       * 多出來的高度讓 app.js 收掉（直向剛好留給下面的方向鍵）。 */
+      view.wantStageH = Math.ceil((view.viewH + CEIL_UNITS + VOID_UNITS) * view.scale);
       if (actorSvg) actorSvg.setAttribute('viewBox', '0 0 ' + view.w.toFixed(1) + ' ' + view.h.toFixed(1));
     }
 
@@ -418,6 +434,7 @@
     }
 
     function drawBackground(scene, camTop) {
+      const fieldW = fieldWidth();
       const g = ctx.createLinearGradient(0, 0, 0, view.h);
       g.addColorStop(0, scene.sky[0]);
       g.addColorStop(1, scene.sky[1]);
@@ -438,7 +455,9 @@
         const n = base + i;
         const yy = i * span - drift;
         const rx = 54 + Math.abs(wobble(n)) * 46;
-        const cx = px(1.4 + Math.abs(wobble(n + 0.5)) * 9.2);
+        /* 位置用場地寬的比例算，不要寫死格數 —— 場地從 12 格放寬到 16 格之後，
+         * 寫死的座標會讓所有裝飾都擠在左邊，右邊空一大塊（Eric 就是看到這個）。 */
+        const cx = px(fieldW * 0.115 + Math.abs(wobble(n + 0.5)) * fieldW * 0.77);
         ctx.beginPath(); ctx.ellipse(cx, yy, rx, rx * 0.36, 0, 0, Math.PI * 2); ctx.fill();
       }
       ctx.restore();
@@ -453,8 +472,8 @@
       for (let i = -1; i < Math.ceil(view.h / span2) + 2; i++) {
         const n = base2 + i;
         const yy = i * span2 - drift2;
-        drawDeco(scene, px(0.65), yy + 30 + Math.abs(jitter(n)) * 60, 1);
-        drawDeco(scene, px(11.35), yy + 120 + Math.abs(jitter(n + 3)) * 60, -1);
+        drawDeco(scene, px(fieldW * 0.055), yy + 30 + Math.abs(jitter(n)) * 60, 1);
+        drawDeco(scene, px(fieldW * 0.945), yy + 120 + Math.abs(jitter(n + 3)) * 60, -1);
       }
       ctx.restore();
 
@@ -533,10 +552,45 @@
       const from = Math.ceil(camTop / 10) * 10;
       for (let d = from; d < camTop + view.viewH; d += 10) {
         const y = py(d, camTop);
-        ctx.beginPath(); ctx.moveTo(px(0), y); ctx.lineTo(px(12), y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px(0), y); ctx.lineTo(px(fieldWidth()), y); ctx.stroke();
         ctx.fillText(d + 'm', px(0) + 4, y - 3);
       }
       ctx.restore();
+    }
+
+    /**
+     * 一根金屬尖刺。天花板與刺階共用同一套外觀 ——
+     * Eric：「刺階的刺不太明顯，可以跟天花板的一樣」。
+     * 原本刺階畫的是扁平的淺色小三角（一根只有 12px 寬），在淺色背景上幾乎看不見；
+     * 天花板那套是金屬漸層 ＋ 深色描邊 ＋ 一條高光，明顯得多。
+     * @param fromY 根部的 y
+     * @param tipY  尖端的 y（比 fromY 大就是朝下，小就是朝上）
+     */
+    function metalSpike(sx, cw, fromY, tipY) {
+      const cx = sx + cw / 2;
+      const sg = ctx.createLinearGradient(sx, 0, sx + cw, 0);
+      sg.addColorStop(0, '#6E605C');
+      sg.addColorStop(0.3, '#E6DEDA');
+      sg.addColorStop(0.52, '#B9AAA4');
+      sg.addColorStop(0.8, '#8A7A75');
+      sg.addColorStop(1, '#4E4340');
+      ctx.beginPath();
+      ctx.moveTo(sx + 0.5, fromY);
+      ctx.lineTo(cx, tipY);
+      ctx.lineTo(sx + cw - 0.5, fromY);
+      ctx.closePath();
+      ctx.fillStyle = sg;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(48,6,6,.75)';
+      ctx.lineWidth = Math.max(1.5, cw * 0.06);
+      ctx.stroke();
+      /* 沿著左緣的一條亮線，做出金屬感 */
+      ctx.beginPath();
+      ctx.moveTo(sx + cw * 0.3, fromY + (tipY - fromY) * 0.12);
+      ctx.lineTo(cx - cw * 0.04, fromY + (tipY - fromY) * 0.86);
+      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.lineWidth = Math.max(1.5, cw * 0.08);
+      ctx.stroke();
     }
 
     /* ---------- 階梯：五種都用不同形狀＋不同顏色＋不同動態 ---------- */
@@ -555,20 +609,24 @@
       }
 
       if (st.kind === 'spike') {
-        /* 刺階：紅底 ＋ 三角尖刺（形狀最好認） */
+        /* 刺階：暗紅底座 ＋ 朝上的金屬尖刺，跟天花板完全同一套外觀 */
         const g = ctx.createLinearGradient(0, y, 0, y + h);
-        g.addColorStop(0, scene.spike[0]); g.addColorStop(1, scene.spike[1]);
+        g.addColorStop(0, scene.spike[1]);
+        g.addColorStop(1, '#3D0A09');
         roundRect(x0, y, w, h, 4); ctx.fillStyle = g; ctx.fill();
-        ctx.fillStyle = '#FFF3F0';
-        const n = Math.max(3, Math.round(w / 12));
+        /* 底座上緣壓一條暗邊，刺的根部才有厚度（跟天花板一樣的做法） */
+        ctx.fillStyle = 'rgba(0,0,0,.28)';
+        ctx.fillRect(x0, y, w, Math.max(2, h * 0.16));
+
+        /* 每根約 0.75 格寬 —— 跟天花板一樣少而大，才看得出是刺 */
+        const stepW = Math.max(14, view.scale * 0.75);
+        const n = Math.max(2, Math.round(w / stepW));
+        const cw = w / n;
+        const tip = h * 1.05;
+        const wob = opts.reduceMotion ? 0 : Math.sin(time * 3.5) * (tip * 0.06);
         for (let i = 0; i < n; i++) {
-          const cw = w / n;
           const sx = x0 + i * cw;
-          ctx.beginPath();
-          ctx.moveTo(sx + 1, y);
-          ctx.lineTo(sx + cw / 2, y - h * 0.7);
-          ctx.lineTo(sx + cw - 1, y);
-          ctx.closePath(); ctx.fill();
+          metalSpike(sx, cw, y + h * 0.34, y - tip - (i % 2 ? wob : -wob));
         }
         if (assist) { ctx.strokeStyle = '#7A0F0C'; ctx.lineWidth = 3; roundRect(x0, y, w, h, 4); ctx.stroke(); }
         /* 剛剛刺到人：往外擴散的白色衝擊環 ＋ 很淡的一層白，很快淡掉。
@@ -748,31 +806,8 @@
       const wob = opts.reduceMotion ? 0 : Math.sin(time * 3.5) * (tip * 0.05);
       for (let i = 0; i < n; i++) {
         const sx = i * cw;
-        const cx = sx + cw / 2;
         const len = base + tip + (i % 2 ? wob : -wob);
-        const sg = ctx.createLinearGradient(sx, 0, sx + cw, 0);
-        sg.addColorStop(0, '#6E605C');
-        sg.addColorStop(0.3, '#E6DEDA');
-        sg.addColorStop(0.52, '#B9AAA4');
-        sg.addColorStop(0.8, '#8A7A75');
-        sg.addColorStop(1, '#4E4340');
-        ctx.beginPath();
-        ctx.moveTo(sx + 0.5, base * 0.55);
-        ctx.lineTo(cx, len);
-        ctx.lineTo(sx + cw - 0.5, base * 0.55);
-        ctx.closePath();
-        ctx.fillStyle = sg;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(48,6,6,.75)';
-        ctx.lineWidth = Math.max(1.5, cw * 0.06);
-        ctx.stroke();
-        /* 沿著左緣的一條亮線，做出金屬感 */
-        ctx.beginPath();
-        ctx.moveTo(sx + cw * 0.3, base * 0.7);
-        ctx.lineTo(cx - cw * 0.04, base + tip * 0.82);
-        ctx.strokeStyle = 'rgba(255,255,255,.9)';
-        ctx.lineWidth = Math.max(1.5, cw * 0.08);
-        ctx.stroke();
+        metalSpike(sx, cw, base * 0.55, len);
       }
       if (opts.colorAssist) {
         ctx.strokeStyle = '#5A0B0A';

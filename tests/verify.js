@@ -74,26 +74,27 @@ const wide = (depth, x0, x1, extra) => Object.assign({ depth: depth, x0: x0, x1:
 /* ---------------------------------------------------------- */
 group('角色移動與物理');
 {
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0, onStep: 'T0' }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, onStep: 'T0' }] });
   s.players[0].onStep = 'T0';
   run(s, 0.5, () => 1);
   near(s.players[0].x, 6 + 6 * 0.5, 0.05, '水平速度 6.0 格／秒，按住就是等速');
 }
 {
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0, onStep: 'T0' }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, onStep: 'T0' }] });
   s.players[0].onStep = 'T0';
   run(s, 3, () => 1);
-  near(s.players[0].x, 12 - C.PLAYER_W / 2, 0.001, '撞到右牆就停住，不會繞回或穿出去');
+  near(s.players[0].x, Stairs.C.FIELD_W - C.PLAYER_W / 2, 0.001,
+    '撞到右牆就停住，不會繞回或穿出去');
 }
 {
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0, onStep: 'T0' }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, onStep: 'T0' }] });
   s.players[0].onStep = 'T0';
   run(s, 3, () => -1);
   near(s.players[0].x, C.PLAYER_W / 2, 0.001, '撞到左牆也停住');
 }
 {
   /* 從 0 落到 8 格：t = √(2·8/30) ≈ 0.73 秒（再深就會先摔出畫面了） */
-  const s = sandbox({ steps: [wide(8, 0, 12)], at: [{ x: 6, y: 0, vy: 0, onStep: null }] });
+  const s = sandbox({ steps: [wide(8, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, vy: 0, onStep: null }] });
   run(s, 1.2);
   near(s.players[0].y, 8, 0.001, '重力 30 格／秒²，落到階梯上表面就停住');
   eq(s.players[0].onStep, 'T0', '落地後記住站在哪一階');
@@ -108,7 +109,7 @@ group('角色移動與物理');
 }
 {
   /* 掃掠檢查：一步就跨過整階也要踩到 */
-  const s = sandbox({ steps: [wide(0.2, 0, 12)], at: [{ x: 6, y: 0, vy: C.MAX_FALL, onStep: null }] });
+  const s = sandbox({ steps: [wide(0.2, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, vy: C.MAX_FALL, onStep: null }] });
   Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
   near(s.players[0].y, 0.2, 0.001, '高速落下用掃掠檢查，不會漏踩階梯');
 }
@@ -128,7 +129,7 @@ group('角色移動與物理');
 /* ---------------------------------------------------------- */
 group('角色朝向');
 {
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   eq(s.players[0].face, 0, '開局站著不動，面向前方（face 0）');
   run(s, 0.1, () => 1);
@@ -140,7 +141,7 @@ group('角色朝向');
 }
 {
   /* 在空中也要看得出朝向（前端會照 face 轉側臉） */
-  const s = sandbox({ steps: [wide(30, 0, 12)], at: [{ x: 6, y: 0, onStep: null }] });
+  const s = sandbox({ steps: [wide(30, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, onStep: null }] });
   run(s, 0.5, () => -1);
   eq(s.players[0].state, 'fall', '這時候是在下墜');
   eq(s.players[0].face, -1, '下墜中往左也一樣面向左邊');
@@ -150,26 +151,26 @@ group('角色朝向');
 group('五種階梯');
 {
   /* 輸送帶：往右 +1，逆走只剩 6 − 3 = 3 格／秒 */
-  const s = sandbox({ steps: [wide(0, 0, 12, { kind: 'belt', belt: 1 })], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W, { kind: 'belt', belt: 1 })], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   run(s, 0.5, () => -1);
   near(s.players[0].x, 6 - 3 * 0.5, 0.05, '輸送帶可以逆向走，但只剩 3.0 格／秒');
 }
 {
-  const s = sandbox({ steps: [wide(0, 0, 12, { kind: 'belt', belt: 1 })], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W, { kind: 'belt', belt: 1 })], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   run(s, 0.5, () => 0);
   near(s.players[0].x, 6 + 3 * 0.5, 0.05, '站著不動會被輸送帶帶動 3.0 格／秒');
 }
 {
-  const s = sandbox({ steps: [wide(0, 0, 12, { kind: 'belt', belt: 1 })], at: [{ x: 4, y: 0 }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W, { kind: 'belt', belt: 1 })], at: [{ x: 4, y: 0 }] });
   s.players[0].onStep = 'T0';
   run(s, 0.5, () => 1);
   near(s.players[0].x, 4 + 9 * 0.5, 0.05, '順向走是 6 + 3 = 9.0 格／秒');
 }
 {
   /* 彈簧：向上初速 9 格／秒（讓玩家一步就踩到，才好量剛彈起的瞬間） */
-  const s = sandbox({ steps: [wide(0.2, 0, 12, { kind: 'spring' })], at: [{ x: 6, y: 0, vy: 12 }] });
+  const s = sandbox({ steps: [wide(0.2, 0, Stairs.C.FIELD_W, { kind: 'spring' })], at: [{ x: 6, y: 0, vy: 12 }] });
   const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
   ok(r.events.some(e => e.type === 'spring'), '踩到彈簧會發出 spring 事件');
   near(s.players[0].vy, -C.SPRING_VY, 1e-9, '彈簧給向上初速 9 格／秒');
@@ -178,7 +179,7 @@ group('五種階梯');
 }
 {
   /* 彈簧的實際彈起高度 = v²/(2g) = 81/60 = 1.35 格 */
-  const s = sandbox({ steps: [wide(2, 0, 12, { kind: 'spring' })], at: [{ x: 6, y: 1.9, vy: 1 }] });
+  const s = sandbox({ steps: [wide(2, 0, Stairs.C.FIELD_W, { kind: 'spring' })], at: [{ x: 6, y: 1.9, vy: 1 }] });
   let top = 99;
   for (let i = 0; i < 120; i++) {
     Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
@@ -188,7 +189,7 @@ group('五種階梯');
 }
 {
   /* 刺階：扣 1～5 顆（依難度與深度隨機）＋ 0.6 秒無敵，不僵直 */
-  const s = sandbox({ steps: [wide(1, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
+  const s = sandbox({ steps: [wide(1, 0, Stairs.C.FIELD_W, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
   const hp0 = s.players[0].hp;
   run(s, 0.3);
   const range = Rules.spikeDamageRange(Rules.DIFFICULTY.normal, 0);
@@ -204,14 +205,14 @@ group('五種階梯');
   eq(s.players[0].hp, before, '無敵期間不會再被同類（刺）傷害');
 }
 {
-  const s = sandbox({ steps: [wide(1, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
+  const s = sandbox({ steps: [wide(1, 0, Stairs.C.FIELD_W, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
   run(s, 0.3);
   near(s.players[0].y, 1, 0.001, '踩刺之後照樣站在刺階上（不僵直、不彈開）');
   ok(s.players[0].state !== 'spike', '踩刺不改角色姿勢（受傷反饋只做畫面，不動角色）');
 }
 {
   /* 踩刺的畫面反饋：刺階閃白光 ＋ 記下傷害來源給前端播特效 */
-  const s = sandbox({ steps: [wide(1, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
+  const s = sandbox({ steps: [wide(1, 0, Stairs.C.FIELD_W, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 0 }] });
   const ev = run(s, 0.3);
   ok(ev.some(e => e.type === 'spike'), '踩到刺會發出 spike 事件（前端播音效與白光）');
   ok(s.steps[0].flash > 0, '被踩到的刺階會被標記要閃白光');
@@ -227,7 +228,7 @@ group('五種階梯');
 }
 {
   /* 假階：踩到 0.25 秒後崩解，只能當短暫落腳點 */
-  const s = sandbox({ steps: [wide(0.2, 0, 12, { kind: 'fake' })], at: [{ x: 6, y: 0, vy: 12 }] });
+  const s = sandbox({ steps: [wide(0.2, 0, Stairs.C.FIELD_W, { kind: 'fake' })], at: [{ x: 6, y: 0, vy: 12 }] });
   const ev1 = run(s, 0.2);
   ok(ev1.some(e => e.type === 'fakeCrack'), '踩到假階會先裂開（發出 fakeCrack）');
   eq(s.players[0].onStep, 'T0', '假階踩上去先撐住 0.25 秒');
@@ -239,7 +240,7 @@ group('五種階梯');
   eq(s.players[0].stats.fakes, 1, '踩破假階次數有記到「這局統計」');
 }
 {
-  const s = sandbox({ steps: [wide(1, 0, 12, { kind: 'normal' })], at: [{ x: 6, y: 0, vy: 0 }] });
+  const s = sandbox({ steps: [wide(1, 0, Stairs.C.FIELD_W, { kind: 'normal' })], at: [{ x: 6, y: 0, vy: 0 }] });
   const hp0 = s.players[0].hp;
   run(s, 1);
   eq(s.players[0].hp, hp0, '普通階完全沒有效果');
@@ -252,7 +253,7 @@ group('回血（踩到非刺的地方）');
   const kinds = ['normal', 'belt', 'spring', 'fake'];
   for (const kind of kinds) {
     const extra = kind === 'belt' ? { kind: kind, belt: 1 } : { kind: kind };
-    const s = sandbox({ steps: [wide(0.2, 0, 12, extra)], at: [{ x: 6, y: 0, vy: 12 }] });
+    const s = sandbox({ steps: [wide(0.2, 0, Stairs.C.FIELD_W, extra)], at: [{ x: 6, y: 0, vy: 12 }] });
     s.players[0].hp = 5;
     const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
     eq(s.players[0].hp, 6, '踩到' + kind + '回復 1 顆愛心');
@@ -260,21 +261,21 @@ group('回血（踩到非刺的地方）');
   }
 }
 {
-  const s = sandbox({ steps: [wide(0.2, 0, 12, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 12 }] });
+  const s = sandbox({ steps: [wide(0.2, 0, Stairs.C.FIELD_W, { kind: 'spike' })], at: [{ x: 6, y: 0, vy: 12 }] });
   s.players[0].hp = 9;
   const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
   ok(s.players[0].hp < 9, '踩到刺階會扣血');
   ok(!r.events.some(e => e.type === 'heal'), '踩到刺階只扣血，不會回血');
 }
 {
-  const s = sandbox({ steps: [wide(0.2, 0, 12)], at: [{ x: 6, y: 0, vy: 12 }] });
+  const s = sandbox({ steps: [wide(0.2, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, vy: 12 }] });
   const full = s.players[0].hp;
   const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
   eq(s.players[0].hp, full, '滿血時踩到階梯不會超過上限');
   ok(!r.events.some(e => e.type === 'heal'), '滿血就不發 heal 事件');
 }
 {
-  const s = sandbox({ steps: [wide(0.2, 0, 12)], at: [{ x: 6, y: 0, vy: 12 }] });
+  const s = sandbox({ steps: [wide(0.2, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, vy: 12 }] });
   s.players[0].hp = 3;
   run(s, 2);
   eq(s.players[0].hp, 4, '一直站在同一階上只回一次（回血是「踩到」的當下，不是站著就回）');
@@ -284,15 +285,15 @@ group('回血（踩到非刺的地方）');
 /* ---------------------------------------------------------- */
 group('鏡頭與保底下捲');
 {
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
-  near(s.cameraTop, -C.CAMERA_LEAD, 1e-9, '開局鏡頭在「最深存活者 − 12 格」');
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
+  near(s.cameraTop, -C.CAMERA_LEAD, 1e-9, '開局鏡頭在「最深存活者 − ' + C.CAMERA_LEAD + ' 格」');
   const before = s.cameraTop;
   run(s, 1);
   ok(s.cameraTop > before, '鏡頭會隨時間往下捲');
   near(s.cameraTop - before, Rules.DIFFICULTY.normal.scrollBase, 0.05, '普通難度的保底下捲是 2.8 格／秒');
 }
 {
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
   const top0 = s.cameraTop;
   s.players[0].vy = -30;                       /* 硬讓玩家往上衝 */
   run(s, 0.2);
@@ -314,7 +315,7 @@ group('鏡頭與保底下捲');
   /* 鏡頭跟最深的存活者（但追隨有速度上限，不會瞬間跳過去） */
   const s = sandbox({
     players: [{ id: 'p1', name: 'A', kind: 'human' }, { id: 'p2', name: 'B', kind: 'human' }],
-    steps: [wide(0, 0, 4), wide(6, 8, 12)],
+    steps: [wide(0, 0, 4), wide(6, Stairs.C.FIELD_W - 4, Stairs.C.FIELD_W)],
     at: [{ x: 2, y: 0, onStep: 'T0' }, { x: 10, y: 6, onStep: 'T1' }]
   });
   s.players[0].onStep = 'T0'; s.players[1].onStep = 'T1';
@@ -381,7 +382,7 @@ group('天花板');
 }
 {
   /* 在真的一局裡：碰到天花板那一下就要扣血（接觸是斷斷續續的，不能等累計） */
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   s.cameraTop = -C.PLAYER_H + 0.5;
   const hp0 = s.players[0].hp;
@@ -395,7 +396,7 @@ group('天花板');
 }
 {
   /* 被頂到會被推穿腳下的階梯往下掉（推力大於階梯） */
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   s.cameraTop = -C.PLAYER_H + 0.5;
   const r = Rules.stepMatch(s, { p1: { dir: 0 } }, Rules.STEP_MS);
@@ -455,7 +456,7 @@ group('天花板');
 }
 {
   /* 幼幼班同樣情境：不扣血、不會死 */
-  const s = sandbox({ difficulty: 'baby', steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ difficulty: 'baby', steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   s.cameraTop = -C.PLAYER_H + 0.5;
   const hp0 = s.players[0].hp;
@@ -512,7 +513,7 @@ group('推擠（對戰唯一的互動）');
 {
   const s = sandbox({
     players: [{ id: 'p1', kind: 'human' }, { id: 'p2', kind: 'human' }],
-    steps: [wide(0, 0, 12)],
+    steps: [wide(0, 0, Stairs.C.FIELD_W)],
     at: [{ x: 6, y: 0 }, { x: 6.5, y: 0 }]
   });
   s.players.forEach(p => { p.onStep = 'T0'; });
@@ -525,7 +526,7 @@ group('推擠（對戰唯一的互動）');
 /* ---------------------------------------------------------- */
 group('深度、里程碑與世界');
 {
-  const s = sandbox({ steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   s.players[0].y = 100.5;
   s.players[0].best = 100.5;
@@ -546,7 +547,7 @@ group('深度、里程碑與世界');
   eq(Rules.worldIsNight(6), true, '第 7 層開始是夜間變體');
 }
 {
-  const s = sandbox({ steps: [wide(8, 0, 12)], at: [{ x: 6, y: 0, onStep: null }] });
+  const s = sandbox({ steps: [wide(8, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0, onStep: null }] });
   run(s, 1.2);
   near(s.players[0].best, 8, 0.001, '分數就是最深深度（1 格 = 1 公尺）');
   s.players[0].y = 3;
@@ -585,7 +586,7 @@ group('勝負判定（規劃書 §1.6）');
 {
   /* 一人挑戰：血歸零就結束（連續踩刺把血耗完） */
   const steps = [];
-  for (let i = 0; i < 40; i++) steps.push(wide(i * 2.2, 0, 12, { kind: i % 2 ? 'spike' : 'normal' }));
+  for (let i = 0; i < 40; i++) steps.push(wide(i * 2.2, 0, Stairs.C.FIELD_W, { kind: i % 2 ? 'spike' : 'normal' }));
   const s = sandbox({ steps: steps, at: [{ x: 6, y: 0, onStep: 'T0' }] });
   s.players[0].onStep = 'T0';
   run(s, 30, () => 1);
@@ -619,7 +620,7 @@ group('勝負判定（規劃書 §1.6）');
 }
 {
   /* 幼幼班：手動結束這局 */
-  const s = sandbox({ difficulty: 'baby', steps: [wide(0, 0, 12)], at: [{ x: 6, y: 0 }] });
+  const s = sandbox({ difficulty: 'baby', steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 6, y: 0 }] });
   s.players[0].onStep = 'T0';
   run(s, 6);
   eq(s.phase, 'playing', '幼幼班沒有終點，不會自己結束');
@@ -633,7 +634,7 @@ group('勝負判定（規劃書 §1.6）');
   const s = sandbox({
     mode: 'versus',
     players: [{ id: 'p1', kind: 'human' }, { id: 'ai1', kind: 'ai', aiLevel: 'normal' }],
-    steps: [wide(0, 0, 12)],
+    steps: [wide(0, 0, Stairs.C.FIELD_W)],
     at: [{ x: 3, y: 0 }, { x: 9, y: 0 }]
   });
   s.players.forEach(p => { p.onStep = 'T0'; });
@@ -650,7 +651,7 @@ group('勝負判定（規劃書 §1.6）');
   const s = sandbox({
     mode: 'versus',
     players: [{ id: 'p1', kind: 'human' }, { id: 'p2', kind: 'human' }],
-    steps: [wide(0, 0, 12)],
+    steps: [wide(0, 0, Stairs.C.FIELD_W)],
     at: [{ x: 3, y: 0 }, { x: 9, y: 0 }]
   });
   s.players.forEach(p => { p.onStep = 'T0'; });
@@ -671,7 +672,7 @@ group('勝負判定（規劃書 §1.6）');
     const s = sandbox({
       mode: 'versus',
       players: [{ id: 'p1', kind: 'human' }, { id: 'p2', kind: 'human' }],
-      steps: [wide(0, 0, 12)], at: [{ x: 3, y: 0 }, { x: 9, y: 0 }]
+      steps: [wide(0, 0, Stairs.C.FIELD_W)], at: [{ x: 3, y: 0 }, { x: 9, y: 0 }]
     });
     s.players[0].best = bestA; s.players[1].best = bestB;
     s.players[0].aliveTime = tA; s.players[1].aliveTime = tB;
@@ -713,7 +714,7 @@ group('樓梯生成（規劃書 §3）');
   eq(first.spawn, true, '第 0 層是出生平台');
   near(first.x1 - first.x0, Stairs.C.SPAWN_WIDTH, 1e-9,
     '出生平台寬 ' + Stairs.C.SPAWN_WIDTH + ' 格（唯一的例外層，兩側各留得下一條過得去的縫）');
-  near((first.x0 + first.x1) / 2, 6, 1e-9, '出生平台在場地正中間');
+  near((first.x0 + first.x1) / 2, Stairs.C.FIELD_W / 2, 1e-9, '出生平台在場地正中間');
 }
 {
   const s = Stairs.makeStairs('babyseed', 'baby', 0, 2000);
@@ -746,7 +747,7 @@ group('樓梯生成（規劃書 §3）');
     const w = st.x1 - st.x0;
     if (!st.spawn && !st.wide && (w < Stairs.C.WIDTH_MIN - 1e-9 || w > Stairs.C.WIDTH_MAX + 1e-9)) spanOk = false;
   }
-  ok(inField, '階梯不會超出場地寬 12 格');
+  ok(inField, '階梯不會超出場地寬 ' + Stairs.C.FIELD_W + ' 格');
   ok(spanOk, '一般階梯寬度落在 2.5～4.0 格');
   let gapOk = true;
   for (let i = 1; i < layers.length; i++) {

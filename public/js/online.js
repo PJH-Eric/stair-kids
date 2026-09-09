@@ -277,7 +277,11 @@
         const playing = r.phase !== 'lobby';
         const label = playing ? '對局中' : full ? '席位已滿' : '等人';
         const act = playing || full ? '觀戰' : '加入';
-        return '<li class="room-item">' +
+        /* 整張卡都可以點（手指按整張卡比按右邊那顆小按鈕容易得多）。
+         * 裡面那顆按鈕留著當視覺提示，也留給鍵盤操作 —— 點按鈕時
+         * closest('[data-join]') 會先命中按鈕，行為一樣。 */
+        return '<li class="room-item" data-join="' + esc(r.id) + '" ' +
+          'data-role="' + (playing || full ? 'spectator' : 'player') + '">' +
           '<div class="room-item-main">' +
             '<b>' + esc(r.name) + '</b>' +
             '<span class="room-meta">' + esc(r.difficultyName) + '　' +
@@ -364,11 +368,9 @@
       if (els.btnSeat) els.btnSeat.hidden = !room.canTakeSeat;
       if (els.btnInvite) els.btnInvite.hidden = !iAmHost;
       if (els.inviteBox) {
-        /* 連結本身房裡的人都看得到（誰都可以幫忙揪人），但只有房主能撤銷 */
         els.inviteBox.hidden = !room.invite;
         if (room.invite && els.inviteLink) els.inviteLink.value = inviteHref(room.invite);
       }
-      if (els.btnInviteRevoke) els.btnInviteRevoke.hidden = !iAmHost;
       if (els.roomHint) {
         els.roomHint.textContent =
           room.phase === 'playing' ? '對局進行中'

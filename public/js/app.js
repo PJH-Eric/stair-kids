@@ -18,6 +18,8 @@
     sideFoe: $('#side-foe'), hudFoeName: $('#hud-foe-name'), hudFoeLabel: $('#hud-foe-label'),
     hudFoeDepth: $('#hud-foe-depth'), hudFoeHp: $('#hud-foe-hp'),
     canvas: $('#canvas'), actors: $('#actors'), stage: $('#stage'),
+    wrap: document.querySelector('.game-wrap'), side: $('#side'),
+    wrap: $('.game-wrap'), side: $('#side'),
     hudDepth: $('#hud-depth'), hudHp: $('#hud-hp'), hudHpRow: $('#hud-hp-row'),
     hudDiff: $('#hud-diff'), hudSpeed: $('#hud-speed'),
     hudWorld: $('#hud-world'), hudNext: $('#hud-next'),
@@ -28,6 +30,7 @@
     hurtFlash: $('#overlay-hurt'),
     dmgPop: $('#dmg-pop'),
     countdown: $('#overlay-countdown'), countdownNum: $('#countdown-num'),
+    countdownTip: $('#countdown-tip'),
     milestone: $('#overlay-milestone'), milestoneText: $('#milestone-text'),
     rotateTip: $('#rotate-tip'), rotateClose: $('#rotate-close'),
     pads: $('#pads'), padLeft: $('#pad-left'), padRight: $('#pad-right'),
@@ -44,6 +47,8 @@
     setVibrate: $('#set-vibrate'), setMotion: $('#set-motion'),
     setColor: $('#set-color'), setGuide: $('#set-guide'),
     setClear: $('#set-clear'), setReset: $('#set-reset'),
+    setBgmNum: $('#set-bgm-num'), setSfxNum: $('#set-sfx-num'),
+    homeOnline: $('#home-online'),
     helpSteps: $('#help-steps'), helpCeiling: $('#help-ceiling'), helpDiff: $('#help-diff')
   };
 
@@ -151,6 +156,11 @@
 
   const BACK_TO = { setup: 'home', online: 'home', help: 'home', lobby: 'online', room: 'lobby' };
 
+  /** 右上角的「結束這局」有沒有出現：直向的狀態列要靠這個讓開右邊 */
+  function markFinishBtn() {
+    document.body.classList.toggle('has-finish', !els.finishBtn.hidden);
+  }
+
   function show(name) {
     G.screen = name;
     $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
@@ -160,9 +170,11 @@
     if (name !== 'game' && els.ovResult) els.ovResult.hidden = true;
     syncPads();
     els.finishBtn.hidden = true;
-    if (name === 'home') renderHomeRecords();
+    markFinishBtn();
+    if (name === 'home') { renderHomeRecords(); refreshPresence(); }
     if (name === 'setup') renderSetup();
-    if (name === 'game') { view.resize(); updateRotateTip(); }
+    /* 進遊戲畫面才量得到真正的尺寸（隱藏中的 section 量出來是 0），所以在這裡重新收邊 */
+    if (name === 'game') { applyRenderOptions(); updateRotateTip(); }
     if (name === 'lobby') {
       online.syncMe((store.nickname || '').trim(), G.char);
       online.connect();
@@ -192,6 +204,30 @@
   const currentName = () =>
     (els.nickname.value || '').trim() || store.nickname || els.nickname.placeholder || '小玩家';
 
+  /**
+   * 首頁「跟別人玩」上的線上人數。
+   * 只是加分資訊，所以失敗一律安靜收掉（沒設 server、伺服器在睡、離線都算正常）。
+   */
+  function refreshPresence() {
+    const badge = els.homeOnline;
+    if (!badge) return;
+    const base = (self.Config && Config.serverUrl) || '';
+    if (!base) { badge.hidden = true; return; }
+    let done = false;
+    const give = () => { if (!done) { done = true; badge.hidden = true; } };
+    setTimeout(give, 4000);                      /* 伺服器在睡就不要一直等 */
+    fetch(base + '/api/presence', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (done) return;
+        done = true;
+        const n = d && Number(d.online) || 0;
+        badge.hidden = n <= 0;
+        badge.textContent = '線上 ' + n + ' 人';
+      })
+      .catch(give);
+  }
+
   /* ================= 首頁 ================= */
 
   function renderHomeArt() {
@@ -202,30 +238,63 @@
   }
 
   function renderHomeRecords() {
-    const lines = [];
+    const chips = [];
     for (const id of Rules.DIFFICULTY_LIST) {
       const r = store.records[id];
       if (r && r.depth > 0) {
-        lines.push('<span class="rec-line">' + Rules.DIFFICULTY[id].name + ' <b>' + r.depth + ' m</b></span>');
+        chips.push('<span class="rec-chip">' + Rules.DIFFICULTY[id].name +
+          '<b>' + r.depth + ' m</b></span>');
       }
     }
+    if (store.bestWorld > 0) {
+      chips.push('<span class="rec-chip soft">去過<b>' + Scenes.sceneFor(store.bestWorld).name + '</b></span>');
+    }
     const fav = Store.favoriteChar(store);
-    const extra = [];
-    if (store.bestWorld > 0) extra.push('去過 ' + Scenes.sceneFor(store.bestWorld).name);
-    if (fav) extra.push('常用 ' + charOf(fav).name);
-    els.homeRecords.innerHTML = lines.length
-      ? '<div>最深紀錄：' + lines.join('') + '</div>' + (extra.length ? '<div>' + extra.join('・') + '</div>' : '')
-      : '<div>還沒有紀錄，挑一個難度開始跑吧。</div>';
+    if (fav) chips.push('<span class="rec-chip soft">常用<b>' + charOf(fav).name + '</b></span>');
+    const vs = store.versus || {};
+    const on = vs.online || { win: 0, lose: 0 };
+    if (on.win + on.lose > 0) {
+      chips.push('<span class="rec-chip soft">線上<b>' + on.win + ' 勝 ' + on.lose + ' 敗</b></span>');
+    }
+    els.homeRecords.innerHTML = chips.length
+      ? chips.join('')
+      : '<span class="rec-chip soft">還沒有紀錄，挑一個難度開始跑吧</span>';
   }
 
   /* ================= 一個人玩：選角色與難度 ================= */
 
-  const DIFF_NOTE = {
-    baby: '很慢、不會出刺階與假階，被雲朵頂到也不扣血，20 顆愛心，想結束就按右上角「結束這局」。',
-    easy: '慢慢加速，刺階與假階都比較少，12 顆愛心。',
-    normal: '標準速度與比例，10 顆愛心。',
-    hard: '一開始就很快，刺階與假階都多，只有 8 顆愛心。'
-  };
+  /** 難度說明一律從規則核心算出來 —— 寫死的數字改了規則就會騙人（之前真的騙了） */
+  function diffNote(id) {
+    const d = Rules.DIFFICULTY[id];
+    if (!d) return '';
+    if (d.ceilInterval == null) {
+      return '很慢、不會出刺階與假階，被雲朵頂到也不扣血，' + d.hp +
+        ' 顆愛心，想結束就按右上角「結束這局」。';
+    }
+    const near = Rules.spikeDamageRange(d, 0);
+    const far = Rules.spikeDamageRange(d, Rules.C.SPIKE_DEEP_WORLDS);
+    const deep = Rules.C.SPIKE_DEEP_WORLDS * Rules.C.MILESTONE;
+    return d.hp + ' 顆愛心；被刺到一次扣 ' + near[0] + '～' + near[1] + ' 顆，' +
+      deep + ' m 之後變成 ' + far[0] + '～' + far[1] + ' 顆。' +
+      '下捲每秒 ' + d.scrollBase + ' 格，每 ' + d.accelEvery + ' 秒加快 ' +
+      Math.round(d.accelRate * 100) + '%（最多 ' + d.scrollCap + ' 倍）。' +
+      '刺階 ' + Math.round(d.spikeRate * 100) + '%、假階 ' + Math.round(d.fakeRate * 100) + '%。';
+  }
+
+  /** 難度卡上的兩行數字：三段的差別要用眼睛就看得出來 */
+  function diffCardLines(id) {
+    const d = Rules.DIFFICULTY[id];
+    if (d.ceilInterval == null) {
+      return ['<small>' + d.hp + ' 顆愛心</small>',
+        '<small>速度 ' + d.scrollBase + ' 格/秒</small>',
+        '<small class="diff-hurt">不會死，沒有刺</small>'];
+    }
+    const near = Rules.spikeDamageRange(d, 0);
+    /* 一行放一件事，卡片才不會在窄一點的螢幕上把「格/秒」折成兩行 */
+    return ['<small>' + d.hp + ' 顆愛心</small>',
+      '<small>速度 ' + d.scrollBase + ' 格/秒</small>',
+      '<small class="diff-hurt">刺一次 −' + (near[0] === near[1] ? near[0] : near[0] + '～' + near[1]) + ' 顆</small>'];
+  }
 
   /** 對戰不開放幼幼班：不會死就分不出勝負（規劃書 §0.2） */
   function diffChoices() {
@@ -256,11 +325,11 @@
       const d = Rules.DIFFICULTY[id];
       const r = store.records[id];
       return '<button class="diff-opt" type="button" role="radio" data-diff="' + id + '" aria-checked="' +
-        (id === G.difficulty) + '"><strong>' + d.name + '</strong><small>' +
-        (d.ceilInterval == null ? '不會死' : d.hp + ' 顆愛心') +
-        (r && r.depth ? '・最深 ' + r.depth + ' m' : '') + '</small></button>';
+        (id === G.difficulty) + '"><strong>' + d.name + '</strong>' +
+        diffCardLines(id).join('') +
+        '<em>' + (r && r.depth ? '你最深 ' + r.depth + ' m' : '還沒玩過') + '</em></button>';
     }).join('');
-    els.diffNote.textContent = DIFF_NOTE[G.difficulty] || '';
+    els.diffNote.textContent = diffNote(G.difficulty);
   }
 
   els.charPicker.addEventListener('click', e => {
@@ -283,6 +352,19 @@
   });
 
   /* ================= 開始一局 ================= */
+
+  /** 第一次玩才在倒數時提示操作方式（玩過一次就記住，不再出現） */
+  function armFirstTimeTip() {
+    if (!els.countdownTip) return;
+    const first = !store.seenHelp;
+    els.countdownTip.hidden = !first;
+    if (!first) return;
+    els.countdownTip.textContent = wantsPads()
+      ? '用下面兩顆按鍵左右移動，沒有跳'
+      : '用 ← → 左右移動，沒有跳';
+    store.seenHelp = true;
+    Store.save(store);
+  }
 
   function startMatch() {
     const name = (els.nickname.value || '').trim() || els.nickname.placeholder || '小玩家';
@@ -330,8 +412,10 @@
     sound.setTempo(1);
     els.milestone.hidden = true;
     if (els.ovResult) els.ovResult.hidden = true;
+    armFirstTimeTip();
     show('game');
     els.finishBtn.hidden = !G.match.diff.endless;
+    markFinishBtn();
     updateHud(true);
     input.clear();
     loop(0);
@@ -362,8 +446,10 @@
     sound.setTempo(1);
     els.milestone.hidden = true;
     if (els.ovResult) els.ovResult.hidden = true;
+    armFirstTimeTip();
     show('game');
     els.finishBtn.hidden = true;
+    markFinishBtn();
     if (els.spectateTag) els.spectateTag.hidden = !G.spectating;
     if (els.sideChat) els.sideChat.hidden = false;
     /* 觀戰不給方向鍵（也不會送輸入意圖） */
@@ -820,7 +906,16 @@
         '・最深到 ' + Scenes.sceneFor(me.world).name + '</div>';
     }
     els.resultNew.hidden = !saved.record;
-    if (saved.record || win) { sound.play('win'); view.burst('milestone', 6, 0, 0); }
+    if (!saved.record && !watching && saved.best && saved.best.depth > me.meters) {
+      /* 沒破紀錄就講差多少 —— 比只說「沒破」有動力得多 */
+      els.resultNew.hidden = false;
+      els.resultNew.textContent = '離你的紀錄還差 ' + (saved.best.depth - me.meters) + ' m';
+      els.resultNew.classList.add('near');
+    } else {
+      els.resultNew.textContent = '破紀錄了！';
+      els.resultNew.classList.remove('near');
+    }
+    if (saved.record || win) { sound.play('win'); view.burst('milestone', Rules.C.FIELD_W / 2, 0, 0); }
     else if (foe) sound.play('dead');
 
     /* 線上模式沒有「再玩一次」與「換難度」—— 回房間讓房主開下一局 */
@@ -850,6 +945,12 @@
       '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('');
 
     els.finishBtn.hidden = true;
+    markFinishBtn();
+    /* 側欄的「本機最深」要跟著更新，不然會停在這局開始前的值 */
+    if (els.hudBest) {
+      const rec = store.records[result.difficulty];
+      els.hudBest.textContent = rec && rec.depth ? '本機最深 ' + rec.depth + ' m' : '還沒有紀錄';
+    }
     /* 不換路由：樓梯定格留在後面，結算蓋在上面（跟打地鼠一樣） */
     els.ovResult.hidden = false;
     els.pads.classList.add('hidden');
@@ -886,6 +987,49 @@
 
   /* ================= 設定彈窗 ================= */
 
+  /**
+   * 寬螢幕上把整組面板收到「場地 ＋ 兩條窄牆」的寬度。
+   *
+   * 為什麼要這樣做：場地的像素寬度是被視窗高度綁死的（要放得下可見高度 ＋ 天花板），
+   * 舞台再寬也只是把多出來的空間畫成牆。收邊之後可玩區域佔面板的比例才拉得上來。
+   * 不會來回震盪：收到的寬度一定 ≥ 場地寬度，所以 scale 仍然由高度決定。
+   */
+  const sideWidth = () => (els.side ? els.side.getBoundingClientRect().width : 0);
+
+  function fitStage() {
+    if (!els.wrap) return;
+    const st = view.view;
+    const box = els.canvas.getBoundingClientRect();
+    /* 直向與窄螢幕不收（那些情況是寬度吃緊，場地本來就已經佔滿）；
+     * 遊戲畫面還沒顯示的時候量不到尺寸，這時候一定要把上限清掉 ——
+     * 否則會用「隱藏時量到的 0」算出一個超窄的上限，等畫面顯示出來就塌掉。 */
+    const measurable = st && st.wantStageW && box.width >= 240 && box.height >= 240;
+    if (!measurable) {
+      els.wrap.style.maxWidth = '';
+      els.stage.style.maxHeight = '';
+      return;
+    }
+    /* 橫向寬螢幕：收掉多出來的寬度（那些只會變成兩片牆） */
+    const wide = window.innerWidth >= 1100 && window.innerWidth > window.innerHeight * 0.9;
+    if (wide) {
+      els.wrap.style.maxWidth = Math.round(sideWidth() + st.wantStageW) + 'px';
+    } else {
+      els.wrap.style.maxWidth = '';
+    }
+    /* 橫向的方向鍵要避開左邊的資訊欄（不然會蓋在「本機最深」那些字上面）。
+     * 資訊欄的寬度會隨斷點變，所以量出來丟給 CSS 用，不要在 CSS 裡抄一份。 */
+    document.documentElement.style.setProperty('--side-w', Math.round(sideWidth()) + 'px');
+    /* 視窗比可玩區域高很多（直向）：收掉多出來的高度，
+     * 不然死亡線以下會露出一大片深淵，等於半個螢幕是死的。空出來的地方剛好放方向鍵。
+     * 只在有觸控按鍵的裝置上收 —— 桌機沒有按鍵可以放，收掉只會在下面留一條空白，
+     * 那還不如讓深淵把畫面填滿（深淵本來就是「掉下去就沒了」的視覺提示）。 */
+    if (wantsPads() && box.height > st.wantStageH + 8) {
+      els.stage.style.maxHeight = st.wantStageH + 'px';
+    } else {
+      els.stage.style.maxHeight = '';
+    }
+  }
+
   function applyRenderOptions() {
     view.setOptions({
       reduceMotion: store.reduceMotion,
@@ -895,6 +1039,11 @@
        * 看不到判定線就會死得莫名其妙，所以這裡不縮。 */
       viewH: Rules.C.VIEW_H
     });
+    /* 先量一次拿到「場地要多寬」，收邊，再量一次（收邊之後舞台變窄了）。
+     * 兩次就會收斂：收到的寬度一定 ≥ 場地寬度，所以 scale 仍然由高度決定。 */
+    view.resize();
+    fitStage();
+    view.resize();
   }
 
   /** 手機橫向：高度不足 → 縮短可見高度到 14 格並放大角色 */
@@ -911,6 +1060,8 @@
     els.setMotion.checked = store.reduceMotion;
     els.setColor.checked = store.colorAssist;
     els.setGuide.checked = store.depthGuide;
+    syncVolNums();
+    disarmClear();
   }
 
   function pushSettings() {
@@ -923,10 +1074,27 @@
     applyRenderOptions();
   }
 
+  let clearArmed = false;
+  let clearTimer = 0;
+  function disarmClear() {
+    clearArmed = false;
+    clearTimeout(clearTimer);
+    if (!els.setClear) return;
+    els.setClear.textContent = '清除本機紀錄';
+    els.setClear.classList.remove('danger-armed');
+  }
+
+  /** 音量的百分比要看得到，不然拉了不知道拉到哪 */
+  function syncVolNums() {
+    if (els.setBgmNum) els.setBgmNum.textContent = Math.round((store.bgmVol || 0) * 100) + '%';
+    if (els.setSfxNum) els.setSfxNum.textContent = Math.round((store.sfxVol || 0) * 100) + '%';
+  }
+
   function bindSetting(el, key, isRange) {
     el.addEventListener('input', () => {
       store[key] = isRange ? Number(el.value) / 100 : el.checked;
       pushSettings();
+      syncVolNums();
       els.setMsg.textContent = '';
     });
   }
@@ -948,6 +1116,17 @@
   els.modalClose.addEventListener('click', () => settingsModal.close());
   els.modal.addEventListener('click', e => { if (e.target === els.modal) settingsModal.close(); });
   els.setClear.addEventListener('click', () => {
+    /* 清紀錄是不可逆的，所以第一下只是「舉手」，要再按一次才真的清 */
+    if (!clearArmed) {
+      clearArmed = true;
+      els.setClear.textContent = '再按一次就真的清除';
+      els.setClear.classList.add('danger-armed');
+      els.setMsg.textContent = '紀錄清掉就回不來了，確定的話再按一次。';
+      clearTimeout(clearTimer);
+      clearTimer = setTimeout(disarmClear, 5000);
+      return;
+    }
+    disarmClear();
     store = Store.clearRecords(store);
     els.setMsg.textContent = '本機紀錄已清除。';
     renderHomeRecords();
@@ -995,20 +1174,37 @@
 
   /* ================= 觸控能力 ================= */
 
-  /** 有觸控就顯示左右兩顆大按鍵；純滑鼠桌機不顯示（只用鍵盤） */
-  function hasTouch() {
+  /**
+   * 要不要顯示左右兩顆大按鍵。
+   *
+   * 判斷依據是「主要指向裝置是不是滑鼠」，不是「這台機器支不支援觸控」——
+   * 觸控筆電、觸控螢幕的桌機 maxTouchPoints 都 > 0，但那些人是用鍵盤玩的，
+   * 跳出兩顆大按鍵只是擋住畫面（Eric：「桌機不需要方向鍵」）。
+   * 真的用手指點下去的時候（下面那個 pointerdown）才把按鍵放出來。
+   */
+  let padsForced = false;
+  function wantsPads() {
+    if (padsForced) return true;
     try {
+      /* any-hover: hover ＝這台機器上有一個「可以停留」的指標，也就是有滑鼠或觸控板。
+       * 桌機、觸控筆電都會命中；平板與手機不會。這是判斷「有沒有滑鼠」最直接的問法，
+       * 比 pointer: fine 可靠（觸控筆電的主要指標有時候會回報成 coarse）。 */
+      if (window.matchMedia('(any-hover: hover)').matches) return false;
+      if (window.matchMedia('(pointer: fine)').matches) return false;
       if (navigator.maxTouchPoints > 0) return true;
       if (window.matchMedia('(pointer: coarse)').matches) return true;
     } catch (e) { /* 忽略 */ }
     return 'ontouchstart' in window;
   }
   function syncPads() {
-    els.pads.classList.toggle('no-touch', !hasTouch());
+    els.pads.classList.toggle('no-touch', !wantsPads());
   }
-  /* 有些裝置一開始回報得不準，真的碰到螢幕就立刻把按鍵放出來 */
+  /* 真的用手指碰螢幕了：把按鍵放出來，並重新排版（空間要讓給按鍵） */
   window.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'touch') els.pads.classList.remove('no-touch');
+    if (e.pointerType !== 'touch' || padsForced) return;
+    padsForced = true;
+    els.pads.classList.remove('no-touch');
+    applyRenderOptions();
   }, true);
 
   /* ================= 手機橫向提示 ================= */
@@ -1058,6 +1254,17 @@
   els.finishBtn.addEventListener('click', () => {
     if (!G.match || G.match.phase === 'over') return;
     finish(Rules.endMatch(G.match, 'manual'));
+  });
+
+  /* 結算畫面上 Enter／空白鍵＝主要按鈕（桌機想連玩的時候不用去找滑鼠）。
+   * 只在結算開著、而且焦點不在輸入框裡的時候才接手。 */
+  window.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (!els.ovResult || els.ovResult.hidden) return;
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
+    e.preventDefault();
+    (G.mode === 'online' ? els.resultHome : els.again).click();
   });
 
   input.attach({ left: els.padLeft, right: els.padRight, pad: els.pads });

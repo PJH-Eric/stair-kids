@@ -58,13 +58,31 @@ b { font-weight: 700; }
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* 用 flex-start ＋ 子元素 margin:auto 來置中：justify-content:center 遇到
+   * 比容器高的內容會把上面裁掉（而且捲不回去），auto margin 不會。 */
+  justify-content: flex-start;
   padding: calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b));
   overflow: auto;
   overscroll-behavior: contain;
 }
+/* auto margin 只給第一個與最後一個小孩：這樣是「整組置中」，
+ * 不會像每個小孩都給 auto 那樣把標題、按鈕、紀錄整組拉開。 */
+.screen.active > *:first-child:not(.game-wrap):not(.pads) { margin-top: auto; }
+.screen.active > *:last-child:not(.game-wrap):not(.pads) { margin-bottom: auto; }
 .screen.active { display: flex; }
 .screen.game { padding: 0; }
+
+/* 窄螢幕上面板會做到滿寬，左上角的「返回」就會壓到標題 —— 留出它的高度 */
+@media (max-width: 760px) {
+  .screen:not(.game) { padding-top: calc(58px + var(--safe-t)); }
+}
+
+/* 鍵盤操作看得到焦點在哪（原本完全沒有樣式） */
+:focus-visible {
+  outline: 3px solid var(--brand-dark);
+  outline-offset: 2px;
+}
+.pad:focus-visible { outline-offset: -4px; }
 
 .screen-nav {
   position: fixed;
@@ -157,12 +175,20 @@ b { font-weight: 700; }
   font-size: 13px;
   border: 0;
   border-radius: 999px;
+  /* 滑鼠很準，桌機維持緊湊，但 25px 連滑鼠都嫌小，所以給一個 34px 的下限。
+   * 觸控裝置在檔案最後的 @media (pointer: coarse) 裡拉到 44px。 */
+  min-height: 34px;
   padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: #fff;
   color: var(--ink-soft);
   cursor: pointer;
   box-shadow: 0 2px 0 rgba(0, 0, 0, .08);
 }
+.mini-btn.phrase { min-height: 30px; }
+.mini-btn.danger.tiny { min-height: 26px; }
 
 /* ---------- 首頁 ---------- */
 
@@ -217,7 +243,8 @@ b { font-weight: 700; }
 }
 
 /* 選角色 */
-.char-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+/* 一排四個：8 隻角色剛好兩排，不會出現落單的第三排 */
+.char-picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .char-opt {
   border: 2px solid var(--line);
   background: #fff;
@@ -240,7 +267,7 @@ b { font-weight: 700; }
 }
 
 /* 選難度 */
-.diff-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.diff-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 8px; }
 .diff-opt {
   border: 2px solid var(--line);
   background: #fff;
@@ -479,6 +506,15 @@ button.soon-item:active { transform: translateY(2px); }
   pointer-events: none;
 }
 .overlay[hidden] { display: none; }
+/* 倒數：數字與提示要排成一欄且靠在一起（grid 的 place-items:center 會把兩個
+ * 子元素分別置中，數字被 pop 動畫放大之後提示就掉到很下面去） */
+.overlay.countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
 .overlay.countdown span {
   font-size: clamp(64px, 18vw, 150px);
   font-weight: 900;
@@ -525,30 +561,37 @@ button.soon-item:active { transform: translateY(2px); }
 /* ---------- 觸控方向鍵 ---------- */
 
 .pads { position: absolute; inset: 0; pointer-events: none; z-index: 35; }
+/* 方向鍵：拇指是橫著滑的，所以按鍵做成「寬 ＞ 高」，比正方形好按。
+ * --pad-w／--pad-h 由各斷點決定，這裡只管長相。 */
 .pad {
   position: absolute;
   pointer-events: auto;
-  width: var(--pad-size);
-  height: var(--pad-size);
+  width: var(--pad-w, var(--pad-size));
+  height: var(--pad-h, var(--pad-size));
   border-radius: 26px;
-  border: 0;
+  border: 2px solid rgba(150, 95, 40, .22);
   color: #fff;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .95) 0%, rgba(255, 205, 150, .92) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .96) 0%, rgba(255, 205, 150, .94) 100%);
   box-shadow: inset 0 3px 0 rgba(255, 255, 255, .9), 0 6px 0 rgba(150, 95, 40, .35), 0 10px 20px rgba(0, 0, 0, .2);
   display: grid;
   place-items: center;
   transition: transform .05s, box-shadow .05s;
   touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
-.pad svg { width: 54%; height: 54%; color: var(--brand-dark); }
+/* 箭頭放大：原本 54% 在大按鍵上看起來像一顆空白的糖 */
+.pad svg { width: 46%; height: 62%; color: var(--brand-dark); }
 .pad.pressed, .pad:active {
   transform: translateY(5px);
   box-shadow: inset 0 3px 0 rgba(255, 255, 255, .8), 0 1px 0 rgba(150, 95, 40, .35);
   background: linear-gradient(180deg, #FFE0B8 0%, #FFC98E 100%);
 }
-/* 橫向：兩顆都在左下（左手拇指操作，右手扶著裝置），中間留間距避免誤觸 */
-.pad-left { left: calc(14px + var(--safe-l)); bottom: calc(16px + var(--safe-b)); }
-.pad-right { left: calc(14px + var(--safe-l) + var(--pad-size) + 18px); bottom: calc(16px + var(--safe-b)); }
+/* 橫向：兩顆都在左下（左手拇指操作，右手扶著裝置），中間留間距避免誤觸（規劃書 §7.1）。
+ * --side-w 由 app.js 量出來（資訊欄寬度會隨斷點變）：方向鍵要落在樓梯畫面上，
+ * 不能蓋在左邊的資訊欄上 —— 平板橫向實測就是蓋在「本機最深」那幾行字上面。 */
+.pad-left { left: calc(var(--side-w, 0px) + 18px + var(--safe-l)); bottom: calc(18px + var(--safe-b)); }
+.pad-right { left: calc(var(--side-w, 0px) + 18px + var(--safe-l) + var(--pad-w, var(--pad-size)) + 16px); bottom: calc(18px + var(--safe-b)); }
 .pads.hidden { display: none; }
 
 /* ---------- 暫停與結算 ---------- */
@@ -576,12 +619,17 @@ button.soon-item:active { transform: translateY(2px); }
 .pause-card h2 { color: var(--brand-dark); }
 
 /* 結算浮層：蓋在樓梯畫面上，樓梯定格留在後面（沿用打地鼠「不另外換路由」的做法） */
+/* 結算浮層。
+ * 用 fixed 而不是 absolute：直向的舞台高度被收過（見 app.js 的 fitStage），
+ * 結算卡比舞台高的時候，absolute ＋ align-items:center 會把卡片的上緣裁掉
+ * （標題與大頭貼整個看不到，實測手機直向就是這樣）。
+ * 桌機的 .game-wrap 有 transform，fixed 會以面板為基準置中，剛好也是我們想要的。 */
 .stage-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 40;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 14px;
   overflow-y: auto;
@@ -593,6 +641,8 @@ button.soon-item:active { transform: translateY(2px); }
 @keyframes ov-in { from { opacity: 0; } to { opacity: 1; } }
 .ov-card {
   width: min(100%, 420px);
+  /* auto margin 才是「放得下就置中、放不下就從頂端開始」，不會裁掉上緣 */
+  margin: auto;
   max-height: 100%;
   overflow-y: auto;
   background: var(--cream);
@@ -704,41 +754,59 @@ button.soon-item:active { transform: translateY(2px); }
   .side-block { flex-direction: row; align-items: center; }
   .side-depth strong { font-size: 21px; }
   .side-depth .unit { font-size: 12px; }
-  /* 愛心縮小並禁止換行，10～12 顆才擠得進窄螢幕又不會把狀態列撐成兩層 */
-  #hud-hp-row { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+  /* 狀態列的優先序：深度 ＞ 血量 ＞ 速度倍率 ＞ 世界 ＞ 難度。
+   * 血量以前是可壓縮的（flex: 0 1 auto ＋ overflow:hidden），右邊一擠就整排消失，
+   * 玩到一半看不到血量比看不到世界名稱嚴重得多，所以改成不准壓縮，
+   * 要讓的是難度文字（選單裡就選過了）與世界名稱（可以省略號）。 */
+  #hud-hp-row { flex: 0 0 auto; min-width: 0; }
   .hearts { flex-wrap: nowrap; }
   .hearts .heart { width: 13px; height: 13px; flex: 0 0 auto; }
-  #hud-world { max-width: 26vw; overflow: hidden; text-overflow: ellipsis; }
-  /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊） */
-  .pad-left { left: calc(14px + var(--safe-l)); }
-  .pad-right { left: auto; right: calc(14px + var(--safe-r)); }
+  #hud-diff { display: none; }
+  #hud-world { max-width: 22vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 直向的方向鍵：場地下面本來就空出一塊（見 app.js 的 fitStage），
+   * 所以按鍵可以做大 —— 寬一點好按，兩邊各一顆用兩手拇指。 */
+  :root { --pad-w: 136px; --pad-h: 112px; }
+  /* 右上角有設定（幼幼班還多一顆「結束這局」），狀態列要讓開，不然世界名稱會被蓋掉 */
+  .side { padding-right: 96px; }
+  body.has-finish .side { padding-right: 190px; }
+  /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊）。
+   * 場地的長寬比接近正方形，直向的視窗一定比它高，多出來的高度被 app.js 的
+   * fitStage() 收掉之後就是這一塊空白 —— 剛好給方向鍵，所以直向的按鍵可以放大。 */
+  .pad-left { left: calc(16px + var(--safe-l)); bottom: calc(24px + var(--safe-b)); }
+  .pad-right { left: auto; right: calc(16px + var(--safe-r)); bottom: calc(24px + var(--safe-b)); }
+  /* 遊戲區與操作區之間畫一條分隔，空白才看得出來是「操作區」不是沒畫完 */
+  .stage { border-bottom: 3px solid var(--line); }
 }
 
 /* 很窄的手機（≤ 380px）：再讓一步，難度文字收掉只留速度倍率 */
 @media (orientation: portrait) and (max-width: 380px) {
-  .side { padding-right: 92px; gap: 6px; }
-  #hud-diff { display: none; }
+  :root { --pad-w: 118px; --pad-h: 98px; }
+  .side { gap: 6px; }
   .hearts .heart { width: 11px; height: 11px; }
+  #hud-world { display: none; }          /* 真的很窄：世界名稱讓給血量 */
 }
 
 /* 手機橫向：高度不足 → 按鍵縮小、資訊欄再收窄 */
 @media (orientation: landscape) and (max-height: 480px) {
-  :root { --pad-size: 72px; }
+  :root { --pad-w: 84px; --pad-h: 68px; }
   .side { flex: 0 0 200px; font-size: 13px; padding-top: calc(52px + var(--safe-t)); }
   .side-depth strong { font-size: 24px; }
   .side-row.small { display: none; }
 }
 
-/* 桌機寬版：整組置中並限寬，不要讓樓梯畫面在一片空曠中變成一條細柱。
- * 限寬從 1180 放到 1320、資訊欄從 300 收到 276，可操作的場地就多拿到 164px。 */
+/* 桌機寬版：整組置中，寬度由 app.js 的 fitStage() 動態收到「場地 ＋ 兩條窄牆」。
+ *
+ * 資訊欄的寬度在寬螢幕上是「免費的」：場地的像素寬度由視窗高度決定
+ * （要放得下可見高度 ＋ 天花板），資訊欄寬一點不會把場地擠小，
+ * 所以這裡給得夠讓一整排愛心排得下（實測 258px 會換行）。 */
 @media (min-width: 1100px) {
-  .side { flex: 0 0 276px; }
+  .side { flex: 0 0 284px; }
   .game-wrap {
     /* 一定要給 width，只給 max-width 的話 absolute + inset 會讓 flex 容器塌成 0 */
     left: 50%;
     right: auto;
     width: 100%;
-    max-width: 1320px;
+    max-width: 1440px;
     transform: translateX(-50%);
     box-shadow: 0 0 0 2px var(--line), 0 18px 50px rgba(120, 80, 40, .18);
   }
@@ -858,7 +926,11 @@ button.soon-item:active { transform: translateY(2px); }
   border: 2px solid var(--line);
   border-radius: 14px;
   padding: 8px 10px;
+  cursor: pointer;                       /* 整張卡都可以點 */
+  transition: border-color .12s, background .12s;
 }
+.room-item:hover { border-color: var(--brand); background: #fff; }
+.room-item:active { transform: translateY(1px); }
 .room-item-main { flex: 1 1 auto; min-width: 0; }
 .room-item-main b { display: block; font-size: 15px; }
 .room-meta { font-size: 12px; color: var(--ink-soft); }
@@ -1047,3 +1119,189 @@ button.soon-item:active { transform: translateY(2px); }
 }
 .toast.bad { background: #A3364A; }
 .toast[hidden] { display: none !important; }
+
+/* ================= UI／UX 收尾 ================= */
+
+/* 首頁：操作提示（第一次玩的人最需要知道「沒有跳」） */
+.home-keys {
+  margin: -2px 0 14px;
+  font-size: 14px;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.home-keys .kbd { margin: 0; }
+
+/* 按鈕上的小徽章（線上現在有幾個人） */
+.btn-badge {
+  display: inline-block;
+  margin-left: 8px;
+  vertical-align: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2F7A44;
+  background: #DFF3E0;
+  border: 2px solid #8CC79A;
+  border-radius: 999px;
+  padding: 0 8px;
+}
+.btn-badge[hidden] { display: none !important; }
+
+/* 首頁紀錄：一行字改成一顆一顆的小標籤 */
+.home-records { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 460px; }
+.rec-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .75);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 11px;
+}
+.rec-chip b { font-size: 15px; color: var(--brand-dark); }
+.rec-chip.soft { border-style: dashed; }
+
+/* 難度卡：名稱 ＋ 兩行數字 ＋ 紀錄，一眼看得出三段差在哪 */
+.diff-opt { display: flex; flex-direction: column; gap: 2px; align-items: stretch; text-align: center; }
+.diff-opt small { font-size: 12px; line-height: 1.45; }
+.diff-opt .diff-hurt { color: #A3364A; font-weight: 700; }
+.diff-opt.on .diff-hurt { color: #C0392B; }
+.diff-opt em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-soft);
+  border-top: 1px dashed var(--line);
+  margin-top: 4px;
+  padding-top: 3px;
+}
+
+/* 空狀態：做成一張虛線卡，才看得出來是「還沒有東西」而不是壞掉 */
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border: 3px dashed var(--line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 13px;
+  background: rgba(255, 255, 255, .45);
+}
+.empty-card b { font-size: 15px; color: var(--ink); }
+.empty-card[hidden] { display: none !important; }
+
+/* 設定：音量看得到數字 */
+.vol-num { font-size: 13px; color: var(--ink-soft); min-width: 42px; text-align: right; }
+
+/* 「清除本機紀錄」是不可逆的，做成兩段式確認 */
+.mini-btn.danger-armed, .big-btn.danger-armed {
+  background: #FBE1E4;
+  border-color: #E39AA6;
+  color: #A3364A;
+}
+
+/* 倒數時的第一次提示 */
+.countdown-tip {
+  /* 提示是要看得懂的字，不是裝飾 —— 給它底色，不然壓在淺色背景上根本讀不到 */
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(60, 40, 20, .82);
+  border-radius: 999px;
+  padding: 5px 16px;
+  white-space: nowrap;
+}
+.countdown-tip[hidden] { display: none !important; }
+
+/* 沒破紀錄時的「還差幾公尺」：語氣要跟「破紀錄了！」分得開 */
+.result-new.near { color: var(--ink-soft); font-weight: 700; }
+
+/* 平板直向：下面空得更多，方向鍵再放大（手比較大、離螢幕比較遠） */
+@media (orientation: portrait) and (min-width: 700px) {
+  :root { --pad-w: 190px; --pad-h: 150px; }
+  .pad { border-radius: 34px; }
+  .pad-left { left: calc(28px + var(--safe-l)); bottom: calc(34px + var(--safe-b)); }
+  .pad-right { right: calc(28px + var(--safe-r)); bottom: calc(34px + var(--safe-b)); }
+}
+
+/* ================= 平板優先（規劃書 §7：平板 ＞ 桌機 ＞ 手機） ================= */
+
+/* 平板橫向：方向鍵原本沿用桌機的 88px 正方形，在平板上又小又是正方形。
+ * 高度夠（≥600px）就放大成寬扁形，並且改成「遊戲畫面底部的兩側」——
+ * 平板是兩手捧著玩，兩顆擠在左下角要用同一根拇指來回撥，很難按
+ * （Eric 指定；規劃書 §7.1 原本寫的「橫向兩顆都在左下」只留給手機橫向，
+ * 那個尺寸右手要扶著裝置）。 */
+@media (orientation: landscape) and (min-height: 600px) {
+  :root { --pad-w: 132px; --pad-h: 106px; }
+  .pad { border-radius: 30px; }
+  .pad-left { left: calc(var(--side-w, 0px) + 20px + var(--safe-l)); bottom: calc(22px + var(--safe-b)); }
+  .pad-right { left: auto; right: calc(20px + var(--safe-r)); bottom: calc(22px + var(--safe-b)); }
+}
+
+/* 平板直向：狀態列有 800 多 px，該顯示的就顯示、該放大的就放大 */
+@media (orientation: portrait) and (min-width: 700px) {
+  .side { font-size: 16px; }
+  #hud-diff { display: inline; }             /* 手機藏起來的難度，平板放得下 */
+  .side-label { display: inline; }           /* 標籤也放得回來，讀起來比較清楚 */
+  .side-depth strong { font-size: 28px; }
+  .hearts .heart { width: 17px; height: 17px; }
+  #hud-world { max-width: none; }
+}
+
+/* 平板（不分方向）：可觸控又夠大 —— 面板與按鈕都放大一級，手指才好按 */
+@media (min-width: 700px) and (pointer: coarse) {
+  .panel { font-size: 16px; }
+  .big-btn { font-size: 19px; padding: 15px 22px; }
+  .mini-btn { font-size: 15px; padding: 7px 14px; }
+  .char-opt { padding: 10px 4px 8px; }
+  .diff-opt { padding: 12px 10px; }
+  .chat-list { height: 190px; }
+  .chat-form input { padding: 10px 14px; }
+  .seat { min-height: 88px; }
+}
+
+/* ================= 觸控裝置的點擊目標大小 =================
+ *
+ * 實測（掃過所有畫面量出來的）：快速短語只有 25px 高、房間的難度按鈕 32px、
+ * 「重新整理」與「產生邀請連結」30px。手指按不到那麼準，小朋友更按不到 ——
+ * 平板是這個遊戲的第一優先裝置，這件事比什麼都重要。
+ *
+ * 只在 pointer: coarse（真的用手指）放大；桌機用滑鼠很準，維持原本的緊湊排版。
+ * 44px 是 Apple 的建議值，Android 是 48dp，取 44 已經夠。
+ */
+@media (pointer: coarse) {
+  .mini-btn,
+  .diff-btn,
+  .nav-btn,
+  .icon-btn.plain {
+    min-height: 44px;
+    padding-top: 0;
+    padding-bottom: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mini-btn.phrase {
+    min-height: 44px;
+    font-size: 14px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .chat-phrases { gap: 8px; }
+  .chat-phrases.mini { gap: 6px; }
+  .chat-phrases.mini .mini-btn.phrase { min-height: 38px; font-size: 12px; }
+  /* 開關整列都可以點（label 包住了輸入框與文字），把整列撐到好按的高度 */
+  .switch { min-height: 44px; display: flex; align-items: center; gap: 8px; }
+  .switch input { width: 22px; height: 22px; }
+  .invite-box input, .chat-form input { min-height: 44px; }
+  /* 觀戰名單的小頭像列也要好按（有「請他離開」按鈕） */
+  .spec { min-height: 40px; }
+  .mini-btn.danger.tiny { min-height: 38px; }
+}

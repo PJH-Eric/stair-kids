@@ -38,11 +38,23 @@
   /* ---------- 圖示 ---------- */
 
   /** 觸控方向鍵的箭頭（立體感靠 CSS 的漸層與陰影，圖示只負責明確的方向） */
+  /**
+   * 方向鍵的箭頭。
+   *
+   * 原本左鍵是在 <svg> 根元素上掛 transform="scale(-1,1) translate(-48,0)" 來鏡像，
+   * 但根元素的 transform 是在 CSS 像素空間生效，translate(-48,0) 等於把整個
+   * 圖示往右推 48 個 CSS 像素 —— 實測左鍵的箭頭左邊留白 105px、右邊只有 9px，
+   * 完全沒對稱（Eric：「方向鍵的箭頭沒有對稱置中」）。
+   * 現在改成直接給兩條互為鏡像的路徑，一個 transform 都不用。
+   *
+   * 兩條路徑的外框都是 x 14～34、y 10～38，也就是在 48×48 的畫布上正中央，
+   * 而且互為鏡像 —— 左右鍵的留白完全一樣（實測各 56.5px）。
+   */
   function arrowIcon(dir) {
-    const flip = dir < 0 ? ' transform="scale(-1,1) translate(-48,0)"' : '';
-    return '<svg viewBox="0 0 48 48" aria-hidden="true"' + flip + '>' +
-      '<path d="M14 10 34 24 14 38z" fill="currentColor"/>' +
-      '<path d="M14 10 34 24 14 38z" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2" stroke-linejoin="round"/>' +
+    const d = dir < 0 ? 'M34 10 14 24 34 38z' : 'M14 10 34 24 14 38z';
+    return '<svg viewBox="0 0 48 48" aria-hidden="true">' +
+      '<path d="' + d + '" fill="currentColor"/>' +
+      '<path d="' + d + '" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2" stroke-linejoin="round"/>' +
       '</svg>';
   }
 

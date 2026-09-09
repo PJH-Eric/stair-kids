@@ -25,9 +25,12 @@
   <div class="home-art" id="home-art"></div>
   <h1 class="title">小朋友下樓梯</h1>
   <p class="subtitle">一直往下跑，別被上面的天花板追到</p>
+  <p class="home-keys">只有 <span class="kbd">←</span> <span class="kbd">→</span> 兩個方向（或 <span class="kbd">A</span> <span class="kbd">D</span>），沒有跳</p>
   <div class="home-buttons">
     <button class="big-btn primary" type="button" data-go="setup">一個人玩</button>
-    <button class="big-btn" type="button" data-go="online">跟別人玩</button>
+    <button class="big-btn" type="button" data-go="online">
+      跟別人玩<span class="btn-badge" id="home-online" hidden></span>
+    </button>
     <button class="big-btn ghost" type="button" data-go="help">怎麼玩</button>
   </div>
   <div class="home-records" id="home-records"></div>
@@ -112,7 +115,10 @@
     <div class="field">
       <span>房間列表</span>
       <ul class="room-list" id="lobby-list"></ul>
-      <p class="hint" id="lobby-empty" hidden>現在沒有房間，按「開一間新房」就有了。</p>
+      <div class="empty-card" id="lobby-empty" hidden>
+        <b>現在沒有人開房</b>
+        <span>按上面的「開一間新房」自己開一間等人，或用邀請連結叫朋友進來。</span>
+      </div>
     </div>
 
     <div class="panel-actions">
@@ -182,7 +188,7 @@
       <div class="help-keys">
         <div><span class="kbd">←</span><span class="kbd">→</span> 或 <span class="kbd">A</span><span class="kbd">D</span> 左右移動</div>
         <div><span class="kbd">Esc</span> 暫停選單（繼續／重新開始／回首頁）</div>
-        <div>手機平板：<b>橫向</b>左下兩顆大按鍵；<b>直向</b>左鍵在左下、右鍵在右下。</div>
+        <div>手機平板：<b>直向</b>遊戲畫面下面兩顆大按鍵（左鍵在左、右鍵在右）；<b>橫向</b>兩顆都在左下。</div>
       </div>
     </section>
 
@@ -304,7 +310,11 @@
       <!-- 這一下扣了幾顆愛心（傷害是 1～5 隨機，要讓玩家看得到數字） -->
       <div class="dmg-pop" id="dmg-pop" hidden aria-hidden="true"></div>
       <div class="spectate-tag" id="spectate-tag" hidden>觀戰中</div>
-      <div class="overlay countdown" id="overlay-countdown" hidden><span id="countdown-num">3</span></div>
+      <div class="overlay countdown" id="overlay-countdown" hidden>
+        <span id="countdown-num">3</span>
+        <!-- 第一次玩才出現：小朋友最需要知道「只有左右、沒有跳」 -->
+        <b class="countdown-tip" id="countdown-tip" hidden></b>
+      </div>
       <div class="overlay milestone" id="overlay-milestone" hidden><span id="milestone-text"></span></div>
       <div class="rotate-tip" id="rotate-tip" hidden>
         <span>轉成直向比較好玩</span>
@@ -362,10 +372,12 @@
     <div class="set-row">
       <label class="switch"><input type="checkbox" id="set-bgm"><span>背景音樂</span></label>
       <input type="range" id="set-bgm-vol" min="0" max="100" step="5" aria-label="背景音樂音量">
+      <b class="vol-num" id="set-bgm-num">35%</b>
     </div>
     <div class="set-row">
       <label class="switch"><input type="checkbox" id="set-sfx"><span>音效</span></label>
       <input type="range" id="set-sfx-vol" min="0" max="100" step="5" aria-label="音效音量">
+      <b class="vol-num" id="set-sfx-num">60%</b>
     </div>
     <div class="set-row">
       <label class="switch"><input type="checkbox" id="set-vibrate"><span>震動（觸控裝置）</span></label>

@@ -85,12 +85,16 @@ const group = t => console.log('\n' + t);
   ok(await A.$eval('#room-seats .seat', el => !!el), '席位卡畫出來了');
 
   group('大廳列表與加入');
+  /* 整張房間卡都要可以點（手指按整張卡比按右邊那顆小按鈕容易），
+   * 而且觸控裝置上每個可點的東西都要 ≥44px —— 平板是第一優先裝置。 */
   const B = await open('乙');
   await toLobby(B);
   const rooms = await B.$$eval('#lobby-list .room-item b', ns => ns.map(n => n.textContent));
   ok(rooms.length === 1, '第二個人在大廳看得到這間房', JSON.stringify(rooms));
-  await tap(B, '#lobby-list [data-join]'); await wait(900);
-  ok(await screen(B) === 'screen-room', '加入之後進到房間畫面');
+  ok(await B.$eval('#lobby-list .room-item', el => el.hasAttribute('data-join')),
+    '整張房間卡都可以點，不只右邊那顆按鈕');
+  await tap(B, '#lobby-list .room-item'); await wait(900);
+  ok(await screen(B) === 'screen-room', '點整張卡就能加入，並進到房間畫面');
   ok((await A.$$eval('#room-seats .seat', ns => ns.length)) === 2, '房主也看到變成兩個人');
 
   group('席位滿了自動觀戰（§0.3）');
@@ -135,8 +139,12 @@ const group = t => console.log('\n' + t);
     await A.keyboard.down('ArrowLeft'); await B.keyboard.down('ArrowRight'); await wait(320);
     await A.keyboard.up('ArrowLeft'); await B.keyboard.up('ArrowRight');
   }
-  const depthA = Number(await A.textContent('#hud-depth'));
-  ok(depthA > 5, '真的在往下跑', depthA + ' m');
+  /* 驗的是「這局真的在跑」，不是特定深度 —— 所以看兩次取樣有沒有變深，
+   * 固定門檻會被機器負載與鏡頭追人的時機影響（實測會抖到 3 m）。 */
+  const depth1 = Number(await A.textContent('#hud-depth'));
+  await wait(2500);
+  const depth2 = Number(await A.textContent('#hud-depth'));
+  ok(depth2 > depth1 && depth2 > 2, '真的在往下跑（深度持續增加）', depth1 + ' m → ' + depth2 + ' m');
   ok((await A.textContent('#hud-net')).indexOf('線上對戰') >= 0, '側欄標明是線上對戰並顯示延遲',
     (await A.textContent('#hud-net')).trim());
   await tap(A, '#game-chat-phrases [data-say]'); await wait(800);
@@ -179,6 +187,36 @@ const group = t => console.log('\n' + t);
     '搶到的人變成玩家');
   await tap(A, '#room-seats [data-kick]'); await wait(900);
   ok(await screen(C) === 'screen-lobby', '被房主請出去的人回到大廳');
+
+  group('觸控裝置的點擊目標（平板優先）');
+  {
+    /* 開一個模擬觸控的分頁，量房間畫面上每一個可點的東西 */
+    const T = await browser.newContext({ viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true });
+    const tp = await T.newPage();
+    await tp.goto(PAGE); await wait(300);
+    await tp.evaluate(() => document.querySelector('[data-go="online"]').click()); await wait(200);
+    await tp.evaluate(() => document.querySelector('[data-go="lobby"]').click()); await wait(900);
+    await tp.evaluate(() => {
+      const el = document.querySelector('#lobby-list [data-join]');
+      if (el) el.click();
+    });
+    await wait(900);
+    const small = await tp.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('.screen.active button, .screen.active [role="radio"]')) {
+        if (el.hidden || !el.offsetParent) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.height < 44 || r.width < 44)) {
+          out.push((el.id || (el.textContent || '').trim().slice(0, 8)) +
+            ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
+        }
+      }
+      return out;
+    });
+    ok(small.length === 0, '平板上房間畫面的每個按鍵都 ≥44px（手指按得到）',
+      small.length ? small.join('｜') : '全部達標');
+    await tp.close();
+  }
 
   group('手機直向與平板');
   const P = await open('手機', { width: 390, height: 844 });

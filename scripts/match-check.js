@@ -29,7 +29,14 @@ const fmt = n => (Math.round(n * 10) / 10).toFixed(1);
  */
 function botDir(s, p) {
   const EDGE = 0.2;               /* 落點至少留這麼多重疊，別站在最邊邊 */
-  const OUT = 0.55;               /* 走出目前這一階要多出去這麼多才會掉下去 */
+  /* 走出目前這一階要多出去這麼多才會真的掉下去。
+   * rules.js 的支撐判定是「腳掌還跟階梯有重疊就站得住」（overlapsX），
+   * 也就是 x - 人物半寬 < 階梯右緣 時還踩得到；所以想走出右緣，
+   * 至少要走到 x1 + 人物半寬 才會落下。人物放大成 1.25 格之後半寬是 0.625，
+   * 舊的固定值 0.55 已經追不上，機器人會在 x1+0.55 附近左右抖一整秒
+   * 走不出去，被天花板追上活活夾死（困難每秒下捲 3.6 格，一秒就是三層）。
+   * 所以這個值改成從人物寬度算出來，再多留 0.1 格當餘裕。 */
+  const OUT = Rules.C.PLAYER_W / 2 + 0.1;
   const cur = p.onStep ? Rules.stepById(s, p.onStep) : null;
   const half = Rules.C.PLAYER_W / 2;
   let best = null;
@@ -53,7 +60,14 @@ function botDir(s, p) {
     }
     if (target < half || target > Rules.C.FIELD_W - half) continue;
     const safe = st.kind !== Stairs.KIND.SPIKE && st.kind !== Stairs.KIND.FAKE;
-    const score = st.depth + (safe ? 0 : 4) + Math.abs(target - p.x) * 0.05;
+    /* 橫向距離的成本＝「走過去的這段時間，天花板會追下來幾格」。
+     *
+     * 原本是固定權重 0.05，那是場地只有 12 格時湊出來的；放寬到 16 格之後
+     * 0.05 幾乎等於「不管多遠都去躲刺」，機器人會為了躲一個刺橫跨整個場地，
+     * 這段時間天花板已經追下來三層了（困難每秒下捲 3.6 格）——實測掉到 8 m 就摔死。
+     * 改成跟下捲速度掛在一起之後，機器人在時間壓力下會像真人一樣選近的落點。 */
+    const walkCost = (Math.abs(target - p.x) / Rules.C.MOVE_SPEED) * (s.scrollSpeed || 1);
+    const score = st.depth + (safe ? 0 : 4) + walkCost;
     if (!best || score < best.score) best = { score: score, target: target };
   }
 
@@ -140,13 +154,19 @@ console.log('\n【幼幼班】');
   ok(me.meters > 40, '幼幼班：慢慢也下得去（' + me.meters + ' m）');
 }
 
+/* 這一段的時間上限要開得夠大。
+ * 原本是 90 秒，但簡單有 4／5 局撐到上限被截斷，平均值就被壓在 90 以下，
+ * 跟普通的 80.8 秒幾乎一樣 —— 那不是難度沒差異，是尺量到底了。
+ * 開到 300 秒之後普通、困難都是自然死亡的真實秒數，簡單雖然還是有局撐到上限
+ * （所以它的平均值是「至少這麼久」的下界），但已經遠遠拉開，比較才有意義。 */
+const DIFF_CAP = 300;
 console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單一 seed 的運氣）');
 {
   const avg = {};
   for (const difficulty of ['easy', 'normal', 'hard']) {
     let secs = 0, meters = 0, survived = 0;
     for (let i = 0; i < 5; i++) {
-      const r = play(difficulty, 'diff-' + difficulty + '-' + i, 90);
+      const r = play(difficulty, 'diff-' + difficulty + '-' + i, DIFF_CAP);
       secs += r.seconds;
       meters += r.state.result.players[0].meters;
       if (r.timedOut) survived++;
@@ -154,7 +174,7 @@ console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單�
     avg[difficulty] = { secs: secs / 5, meters: meters / 5, speed: meters / secs, survived: survived };
     console.log('    ' + Rules.DIFFICULTY[difficulty].name + '：平均 ' + fmt(avg[difficulty].secs) +
       ' 秒、下到 ' + fmt(avg[difficulty].meters) + ' m、' + fmt(avg[difficulty].speed) + ' m／秒' +
-      '（5 局裡有 ' + survived + ' 局撐到 90 秒上限）');
+      '（5 局裡有 ' + survived + ' 局撐到 ' + DIFF_CAP + ' 秒上限）');
   }
   /* 注意：這隻貪心機器人只是驗收用的假手，撐多久很吃它自己的爛決策，
    * 所以這裡只驗「下降速度跟著難度變快」這個規則層面的結果。
@@ -173,6 +193,10 @@ console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單�
   ok(avg.easy.secs > avg.normal.secs && avg.normal.secs > avg.hard.secs,
     '越難撐得越短，三段也是單調的（' + fmt(avg.easy.secs) + ' → ' + fmt(avg.normal.secs) +
     ' → ' + fmt(avg.hard.secs) + ' 秒）');
+  ok(avg.easy.survived >= avg.normal.survived && avg.normal.survived >= avg.hard.survived &&
+    avg.easy.survived > avg.hard.survived,
+    '越難越少局能撐到上限（' + avg.easy.survived + ' → ' + avg.normal.survived +
+    ' → ' + avg.hard.survived + ' 局／5 局）');
   const camSpeed = id => Rules.DIFFICULTY[id].scrollBase;
   ok(camSpeed('easy') < camSpeed('normal') && camSpeed('normal') < camSpeed('hard'),
     '難度的保底下捲速度本身是單調遞增的（2.0 < 2.8 < 3.6）');
