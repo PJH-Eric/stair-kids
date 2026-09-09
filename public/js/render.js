@@ -958,6 +958,8 @@
       if (!actorSvg) return;
       const seen = new Set();
       state.players.forEach((p, i) => {
+        /* 死亡玩家仍要留在邏輯狀態供結算使用，但畫面上的角色要立刻消失。 */
+        if (!p.alive) return;
         seen.add(p.id);
         if (actors.has(p.id)) return;
         const g = document.createElementNS(NS, 'g');

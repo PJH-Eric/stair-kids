@@ -10,12 +10,13 @@
     "test:stairs": "node scripts/stairs-check.js",
     "test:match": "node scripts/match-check.js",
     "test:ai": "node scripts/ai-check.js",
-    "verify": "node tests/verify.js && node scripts/stairs-check.js && node scripts/match-check.js && node scripts/ai-check.js && node scripts/online-check.js && node scripts/online-ui-check.js && node scripts/netcode-check.js && node scripts/result-check.js",
+    "verify": "node tests/verify.js && node scripts/stairs-check.js && node scripts/match-check.js && node scripts/ai-check.js && node scripts/online-check.js && node scripts/online-ui-check.js && node scripts/netcode-check.js && node scripts/result-check.js && node scripts/render-check.js",
     "inject": "node scripts/inject-server-url.js",
     "test:online": "node scripts/online-check.js",
     "test:online-ui": "node scripts/online-ui-check.js",
     "test:netcode": "node scripts/netcode-check.js",
     "test:result": "node scripts/result-check.js",
+    "test:render": "node scripts/render-check.js",
     "test:e2e": "node scripts/e2e-online.js"
   },
   "engines": {
