@@ -5,6 +5,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      game_server_url:
+        description: '遊戲伺服器網址（留空就用下面的 DEFAULT_GAME_SERVER_URL）'
+        required: false
+        type: string
+
+env:
+  # 遊戲伺服器網址就設在這裡，改這一行即可，不需要去 repo 的 Variables 設定。
+  # 實際採用的優先序：手動執行時填的 inputs → repo Variable → 這個預設值。
+  DEFAULT_GAME_SERVER_URL: https://stair-kids.onrender.com
 
 permissions:
   contents: read
@@ -30,7 +40,7 @@ jobs:
 
       - name: 注入伺服器網址
         env:
-          GAME_SERVER_URL: ${{ vars.GAME_SERVER_URL }}
+          GAME_SERVER_URL: ${{ inputs.game_server_url || vars.GAME_SERVER_URL || env.DEFAULT_GAME_SERVER_URL }}
         run: node scripts/inject-server-url.js
 
       - uses: actions/configure-pages@v5
