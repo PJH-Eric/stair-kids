@@ -383,12 +383,15 @@ for (const lag of lags) {
   /* 血量會因為本地預測而暫時領先幾十毫秒（自己踩到刺馬上就扣，手感才對），
    * 所以不能要求每一格都相同。真正要驗的是「客戶端說了不算」：
    * 前端亂改血量，下一份快照就會把它蓋回伺服器的值。 */
-  const realHp = ss.players[0].hp;
   cs.players[0].hp = 99;
   m.w.advance(300);
-  ok(cs.players[0].hp === m.room.match.players[0].hp && cs.players[0].hp !== 99,
+  const nowHp = cs.players[0].hp;
+  const srvHp = m.room.match.players[0].hp;
+  /* 收到下一份快照就會被蓋回去。之後本地預測可能又先扣了一下（超前 100ms 左右），
+   * 所以只能要求「亂改的值不見了、而且跟伺服器只差在預測的那一點」。 */
+  ok(nowHp !== 99 && Math.abs(nowHp - srvHp) <= 2,
     '前端亂改血量會被下一份快照蓋回去（血量不由客戶端決定）',
-    '99 → ' + cs.players[0].hp + '（伺服器 ' + m.room.match.players[0].hp + '）');
+    '99 → ' + nowHp + '（伺服器 ' + srvHp + '）');
   ok(cs.world === ss.world, '世界主題一致');
 }
 
@@ -778,6 +781,105 @@ group('左右移動與推擠：按著一邊不能被往回拉（實測會抖）'
     ok(r.errAvg < 0.04, label + '：預測平均誤差很小（修好前 hold 是 0.055 格）', detail);
     ok(r.errMax < 1.2, label + '：x 的預測誤差有上限（修好前是 1.55 格）', detail);
   }
+}
+
+/* ---------------------------------------------------------- */
+group('自己被刺到的反饋要即時（不等伺服器）');
+{
+  /* 曾經發生的事：線上對戰被刺到，閃光、震動、火花都慢半拍 ——
+   * 因為那些反饋是等伺服器的快照回來才播的，比「畫面上踩到刺的那一刻」
+   * 晚了一個單向延遲 ＋ 一個 tick。
+   * 現在自己的反饋改成本地預測就先播（net.js 的 emitPredicted），
+   * 伺服器那份到了再用「事件步號」一對一對消，所以不會播兩次。
+   * 傷害數字是 seed 雜湊算的（rules.js 的 rollSpikeDamage），兩邊一定一樣。 */
+  function measureFeedback(lag) {
+    const w = createWorld({ lag: lag, seed: 17 });
+    const a = w.connect('甲', 'yuan');
+    const b = w.connect('乙', 'mimi');
+    w.advance(400);
+    a.actions.create('挨刺房', 'hard');
+    w.advance(400);
+    b.actions.join(a.state.room.id, 'player');
+    w.advance(400);
+    a.actions.ready(true);
+    b.actions.ready(true);
+    w.advance(400);
+    a.actions.start();
+    w.advance(400);
+    const room = [...w.hub.rooms.values()][0];
+    const meId = a.state.me.id;
+    const driveA = drive(a, 'easy', 5);          /* 弱一點的 AI 才踩得到刺 */
+    const driveB = drive(b, 'normal', 9);
+    const srv = [];
+    const cli = [];
+    let lastPending = null;
+    w.advance(30000, T => {
+      driveA();
+      driveB();
+      /* 伺服器是 30Hz，pending 每個 tick 換一份新的陣列；不比對就會重複計算 */
+      if (room.pending && room.pending !== lastPending) {
+        lastPending = room.pending;
+        for (const e of room.pending) {
+          if ((e.type === 'hurt' || e.type === 'spike') && e.player === meId) {
+            srv.push({ at: T, type: e.type, amount: e.amount, step: e.at });
+          }
+        }
+      }
+      for (const e of a.takeEvents()) {
+        if ((e.type === 'hurt' || e.type === 'spike') && e.player === meId) {
+          cli.push({ at: T, type: e.type, amount: e.amount, step: e.at });
+        }
+      }
+    });
+    let paired = 0, missing = 0, sum = 0, worstAmount = 0;
+    for (const s of srv) {
+      const hit = cli.find(c => c.step === s.step && c.type === s.type && !c.used);
+      if (!hit) { missing++; continue; }
+      hit.used = true;
+      paired++;
+      sum += hit.at - s.at;                      /* 負數 ＝ 比伺服器更早播 */
+      if (s.type === 'hurt' && hit.amount !== s.amount) worstAmount++;
+    }
+    return {
+      srv: srv.length, cli: cli.length, paired: paired, missing: missing,
+      extra: cli.filter(c => !c.used).length,
+      lead: paired ? sum / paired : 0, amountBad: worstAmount
+    };
+  }
+
+  for (const lag of [0, 80, 200]) {
+    const r = measureFeedback(lag);
+    const detail = '伺服器 ' + r.srv + ' 次、客戶端 ' + r.cli + ' 次、提前 ' +
+      (-r.lead).toFixed(0) + 'ms、預測錯 ' + r.extra + ' 次';
+    ok(r.srv >= 5, lag + 'ms：這一局真的被刺到幾次', r.srv + ' 次');
+    ok(r.missing === 0, lag + 'ms：伺服器算出來的每一次都有播到（沒有被對消吃掉）', detail);
+    ok(r.lead < -20, lag + 'ms：反饋比伺服器算出來更早（修好前是晚 40～60ms）', detail);
+    ok(r.extra <= Math.max(1, Math.ceil(r.srv * 0.25)),
+      lag + 'ms：預測錯而多播的次數很少', detail);
+    ok(r.amountBad === 0, lag + 'ms：預測的傷害數字跟伺服器一模一樣', detail);
+  }
+}
+
+/* ---------------------------------------------------------- */
+group('結算停留的十秒內不能一直重播死掉那一下');
+{
+  /* 曾經發生的事：room.pending 是「上一個 tick 發生的事」，結算階段不再推進對局，
+   * 所以它會停在最後那一份（含最後一次受傷、淘汰）—— 而快照每個 tick 都帶著它，
+   * 客戶端就在結算的十秒內以 30Hz 重播死掉那一下的音效、震動與粒子（實測 50 次以上）。 */
+  const { w, a, b } = startedMatch({ lag: 40, seed: 23 });
+  const room = [...w.hub.rooms.values()][0];
+  w.advance(4000);
+  for (const p of room.match.players) { p.hp = 0; p.alive = false; p.state = 'stun'; }
+  w.advance(300);
+  ok(room.phase === 'result', '兩個人都死了 → 結算階段', room.phase);
+  a.takeEvents();                                /* 把結算那一刻的事件收掉 */
+  let repeats = 0;
+  w.advance(3000, () => {
+    for (const e of a.takeEvents()) {
+      if (e.type === 'hurt' || e.type === 'spike' || e.type === 'eliminated') repeats++;
+    }
+  });
+  ok(repeats === 0, '結算停留期間不會再收到受傷／淘汰事件', repeats + ' 次');
 }
 
 /* ---------------------------------------------------------- */

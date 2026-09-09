@@ -296,8 +296,22 @@ group('按著方向鍵走：畫面上要順順地走，不會被往回拉');
     '最大回退 ' + away.back.toFixed(4) + ' 格');
   ok(away.backFrames === 0, '完全沒有看得出來的回退', away.backFrames + ' 幀');
 
-  /* 推到對手身上：被推回來是正常的，但不能一直閃、也不能被拉一大段 */
-  const pushFrames = holdKey(w, key(towardDir), 2500, opt);
+  /* 推到對手身上：被推回來是正常的，但不能一直閃、也不能被拉一大段。
+   * 同時記下伺服器判定的距離，才分得出「真的擠在一起」與「只是從旁邊掉過去」。 */
+  const pushFrames = [];
+  const srvGaps = [];
+  const myPerson = w.socketPerson.get(w.sockets[w.sockets.length - 1]);
+  w.win.dispatch('keydown', { code: key(towardDir) });
+  w.advance(2500, Object.assign({}, opt, {
+    onFrame: () => {
+      pushFrames.push(readActors(w));
+      const m = w.theRoom() && w.theRoom().match;
+      const sm = m && m.players.find(p => p.id === myPerson.id);
+      const sf = m && m.players.find(p => p.id !== myPerson.id);
+      srvGaps.push(sm && sf ? { dx: Math.abs(sm.x - sf.x), dy: Math.abs(sm.y - sf.y) } : null);
+    }
+  }));
+  w.win.dispatch('keyup', { code: key(towardDir) });
   const push = horizontal(pushFrames, mine, towardDir);
   let missing = 0;
   for (const actors of pushFrames) if (actors.length !== 2) missing++;
@@ -308,6 +322,39 @@ group('按著方向鍵走：畫面上要順順地走，不會被往回拉');
     '最大 ' + push.max.toFixed(3) + ' 格');
   ok(push.back <= 0.15, '推擠的時候不會被拉一大段回去（修好前 0.57 格）',
     '最大回退 ' + push.back.toFixed(4) + ' 格');
+
+  /* 推擠時畫面上不能重疊。伺服器上的間距永遠 >= 身寬（resolvePush 會分開），
+   * 但對手刻意畫在 100ms 前，所以「剛好貼著」在畫面上會疊進去半個身體
+   * （實測 0.65 格 ＝ 身寬的 52%）。net.js 的 contactWeight 就是在修這個。
+   * 判斷「真的擠在一起」要用伺服器的距離：畫面上的高度差是延遲後的值，
+   * 一個人從另一個人身邊掉過去時，物理上早就錯開了，那不算推擠。 */
+  let sideBySide = 0, sideWorst = 0, touchFrames = 0, worstOverlap = 0, overlapFrames = 0;
+  for (let i = 0; i < pushFrames.length; i++) {
+    const actors = pushFrames[i];
+    const srv = srvGaps[i];
+    const m = actors.find(a => a.name === mine);
+    const f = actors.find(a => a.name === '小乙');
+    if (!m || !f || !m.scale || !srv) continue;
+    /* 伺服器判定「高度有交疊、而且貼在一起」＝ 真的在推擠 */
+    if (srv.dy >= C.PLAYER_H || srv.dx > C.PLAYER_W + 0.05) continue;
+    touchFrames++;
+    const over = C.PLAYER_W - Math.abs(m.x - f.x) / m.scale;
+    if (over > 0.02) { overlapFrames++; if (over > worstOverlap) worstOverlap = over; }
+    /* 「肩並肩硬推」：畫面上的高度差也很小。這是使用者說的那個情況，重疊要是 0。
+     * 另一種是「從對方旁邊掉下去」：對手的垂直位置是延遲值、本地預測又超前，
+     * 兩邊對高度的看法差到一個身高，那幾幀還會殘留一點重疊（見 net.js 的註解）。 */
+    if (Math.abs(m.y - f.y) / m.scale < C.PLAYER_H * 0.5) {
+      sideBySide++;
+      if (over > sideWorst) sideWorst = over;
+    }
+  }
+  ok(touchFrames > 20, '真的有在推擠（伺服器判定兩人貼在一起）', touchFrames + ' 幀');
+  ok(sideBySide > 10, '其中有肩並肩硬推的畫格', sideBySide + ' 幀');
+  ok(sideWorst <= 0.05, '肩並肩硬推的時候完全不重疊（修好前疊進去 0.65 格）',
+    '最大 ' + sideWorst.toFixed(3) + ' 格');
+  ok(worstOverlap <= 0.35, '從旁邊掉過去那幾幀也只剩一點點（修好前 0.65 格）',
+    overlapFrames + '／' + touchFrames + ' 幀，最大 ' + worstOverlap.toFixed(3) +
+    ' 格（身寬 ' + C.PLAYER_W + ' 格）');
 }
 
 /* ---------------------------------------------------------- */

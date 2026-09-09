@@ -35,7 +35,10 @@
     MAX_REPLAY: 40,       /* 一次最多重演幾步，避免延遲爆掉時卡死 */
     LEAD_PAD_MS: 10,      /* 超前量的安全邊際 */
     LEAD_SLACK_MS: 150,   /* 超前太多才需要放慢，免得一直微調 */
-    PING_MS: 1500         /* 多久量一次 rtt（超前量要靠它算） */
+    PING_MS: 1500,        /* 多久量一次 rtt（超前量要靠它算） */
+    /* 本地預測出來的「自己被打到」特效，最多留多久等伺服器那份來對消。
+     * 一個來回 ＋ 一個 tick 綽綽有餘；對不到就當它是預測錯，讓它自然過期。 */
+    PREDICT_KEEP_MS: 1500
   };
 
   /* ---------------------------------------------------------- */
@@ -84,7 +87,8 @@
       /* 統計（給 netcode-check 驗） */
       count: { snaps: 0, corrections: 0, hardSnaps: 0, replays: 0, replaySteps: 0 },
       err: { last: 0, sum: 0, n: 0, max: 0 },
-      events: []                    /* 這一格要給音效／畫面用的事件 */
+      events: [],                   /* 這一格要給音效／畫面用的事件 */
+      predicted: []                 /* [{ key, wall }] 已經先播過的自己的事件，等伺服器那份來對消 */
     };
 
     const isMe = id => id === st.me.id;
@@ -224,6 +228,7 @@
        * 直接把剛開始的新對局蓋成結算畫面 —— 這就是「開新的一局卻殘留上一局
        * 結算」的成因（實測真的會卡住）。 */
       st.events.length = 0;
+      st.predicted.length = 0;
       /* 快照時間也要跟著歸零：新的一局從 time=0 開始，而舊值可能是上一局的
        * 幾十秒。不清掉的話，下面那個「舊封包直接丟掉」的判斷會把新一局的每一份
        * 快照都當成舊封包丟掉，客戶端就完全收不到權威狀態（整局都在自己亂算）。 */
@@ -286,6 +291,8 @@
         p.fell = sp.fell; p.forfeit = sp.forfeit;
         p.invuln = sp.invuln; p.sinking = sp.sinking;
         p.onStep = sp.onStep;
+        if (sp.ceilHits != null) p.ceilHits = sp.ceilHits;
+        if (sp.ceilCool != null) p.ceilCool = sp.ceilCool;
       }
       if (snap.result) { m.result = snap.result; st.result = snap.result; }
     }
@@ -392,12 +399,72 @@
       }
 
       if (snap.events && snap.events.length) {
-        for (const ev of snap.events) st.events.push(ev);
+        /* 自己的反饋已經在本地預測時就播過了，這裡要對消掉，不然會播兩次 */
+        for (const ev of snap.events) if (!alreadyPlayed(ev)) st.events.push(ev);
       }
       /* 結算只能來自伺服器的快照（上面的 apply 會設 st.result）。
        * 本地鏡像是超前跑的預測，而且對手是用「最後收到的方向」推的 ——
        * 它很容易先自己算出「兩個人都死了」，然後客戶端就會在對手還在玩的時候
        * 跳出結算，勝負也可能是錯的。所以這裡刻意不看本地鏡像的 result。 */
+    }
+
+    /* ---------- 自己的反饋要即時（不等伺服器） ---------- */
+
+    /**
+     * 哪些事件可以靠本地預測先播。
+     * 只有「自己身上、看得到摸得到的反饋」：踩到刺、扣血、落地、假階裂開、
+     * 彈簧、回血、開始下沉。刻意不含死亡與結算 —— 那些一定要伺服器說了才算，
+     * 預測錯的話畫面會先演一次死亡，代價太大。
+     */
+    const PREDICTABLE = new Set(['spike', 'hurt', 'land', 'fakeCrack', 'spring', 'heal', 'sinking']);
+
+    /**
+     * 事件的比對鑰匙：同一件事，伺服器那份跟預測那份要算出同一個鑰匙。
+     * 關鍵是 at（發生在第幾個固定步，伺服器在 lib/rooms.js 蓋上）——
+     * 兩邊跑的是同一份規則核心、同一個固定步長，所以同一件事的步號一模一樣。
+     * 少了 at，連續兩次受傷或「預測錯的那一次」會把別次的伺服器事件吃掉。
+     */
+    function eventKey(e) {
+      return e.type + '|' + (e.player || '') + '|' + (e.step || '') + '|' + (e.source || '') +
+        '|' + (e.kind || '') + '|' + (e.at == null ? '' : e.at);
+    }
+
+    /**
+     * 本地預測跑出來的事件，挑「自己的」先播。
+     * 為什麼要這樣：踩到刺的閃光、震動、噴出來的火花如果等伺服器的快照才播，
+     * 就會比「畫面上踩到刺的那一刻」晚一個單向延遲 ＋ 一個 tick（實測 40～120ms），
+     * 手感上就是「踩到了但特效慢半拍」。傷害數字是用 seed 雜湊算的（見 rules.js 的
+     * rollSpikeDamage），本地算出來跟伺服器一模一樣，所以先播是安全的。
+     * 播過的事件記下鑰匙，等伺服器那份到了就對消掉，不會播第二次。
+     */
+    function emitPredicted(events) {
+      if (!events || !events.length) return;
+      const t = now();
+      const at = Math.round(st.match.time / STEP);   /* 跟伺服器同一個慣例：跑完這一步的步號 */
+      for (const e of events) {
+        if (e.at == null) e.at = at;
+        if (!PREDICTABLE.has(e.type)) continue;
+        if (e.player && !isMe(e.player)) continue;
+        if (!e.player) continue;                 /* 沒有主角的事件（換世界等）交給伺服器 */
+        st.events.push(e);
+        st.predicted.push({ key: eventKey(e), wall: t });
+      }
+      if (st.predicted.length > 60) st.predicted.splice(0, st.predicted.length - 60);
+    }
+
+    /** 伺服器那份事件是不是「已經先播過了」；是的話對消掉一筆 */
+    function alreadyPlayed(e) {
+      if (!st.predicted.length) return false;
+      const t = now();
+      const key = eventKey(e);
+      for (let i = 0; i < st.predicted.length; i++) {
+        const p = st.predicted[i];
+        if (t - p.wall > C.PREDICT_KEEP_MS) continue;
+        if (p.key !== key) continue;
+        st.predicted.splice(i, 1);               /* 一對一對消，連續兩次受傷不會被吃掉 */
+        return true;
+      }
+      return false;
     }
 
     /* ---------- 每一格畫面 ---------- */
@@ -431,7 +498,10 @@
         st.log.push({ time: st.match.time, dir: st.dir });
         if (st.log.length > C.LOG_KEEP) st.log.shift();
         if (beforeStep) beforeStep(st.match);
-        Rules.stepMatch(st.match, inputsAt(st.match.time), STEP_MS);
+        const r = Rules.stepMatch(st.match, inputsAt(st.match.time), STEP_MS);
+        /* 只有「往前跑」的這一步才播預測反饋；回溯重演會把同一段時間再跑一遍，
+         * 那裡的事件一律丟掉（replay() 沒有收），不然同一次受傷會播好幾次。 */
+        emitPredicted(r.events);
         ran++;
       }
       if (st.offset.t > 0) st.offset.t = Math.max(0, st.offset.t - dt / 1000);
@@ -465,7 +535,38 @@
       return t;
     }
 
-    /** 對手：畫在 100ms 前，兩個快照之間內插（§4.2） */
+    /**
+     * 「擠在一起」的權重（0～1）：越貼近越接近 1。
+     *
+     * 對手平常畫在 100ms 前（RENDER_DELAY），這樣看起來才順。但推擠的時候，
+     * 物理上「剛好貼著」的兩個人在畫面上會疊進去半個身體 —— 因為對手的圖是他
+     * 100ms ＋ 本地超前量之前的位置（實測重疊 0.65 格，身寬的 52%；200ms 延遲時
+     * 是 0.88 格）。伺服器上的重疊永遠是 0，所以那純粹是畫面的落差。
+     *
+     * 解法：越靠近就越把畫面位置拉回「預測位置」（推擠判定用的那個），貼上去的
+     * 時候完全用預測位置。這樣遠處保留內插的平順，近處不會重疊，中間是連續的
+     * （靠近的過程中圖自己追上來），不會有接觸瞬間彈一下的問題。
+     */
+    function contactWeight(me, foe) {
+      const W = Rules.C.PLAYER_W, H = Rules.C.PLAYER_H;
+      /* 垂直的判斷要跟規則核心一致：resolvePush 只要「高度有交疊」就會把兩個人
+       * 分開，也就是 dy < PLAYER_H 都算擠在一起。之前這裡從 0.6H 就開始淡出，
+       * 結果一個人從另一個人身邊掉下去時（dy 1.2～2.0）畫面又疊回去了。 */
+      const dy = Math.abs(me.y - foe.y);
+      /* 淡出的終點就是這裡的門檻，兩個數字一定要一致 ——
+       * 不一致的話權重會在門檻上從 0 跳到 0.76，對手的畫面就跳 0.46 格。 */
+      if (dy >= H * 1.8) return 0;                 /* 高度差這麼多，擠不到了 */
+      const dx = Math.abs(me.x - foe.x);
+      const full = W * 1.15;                       /* 這麼近就完全用預測位置 */
+      const none = W * 2.6;                        /* 這麼遠就完全用內插位置 */
+      let t = dx <= full ? 1 : dx >= none ? 0 : (none - dx) / (none - full);
+      /* 垂直只在「已經超出推擠範圍」之後才淡出，而且淡得長一點（0.95H → 1.8H），
+       * 這樣一個人從另一個人身邊掉過去的時候是慢慢交還給內插位置，不會彈一下 */
+      if (dy > H * 0.95) t *= 1 - (dy - H * 0.95) / (H * 0.85);
+      return Math.max(0, Math.min(1, t));
+    }
+
+    /** 對手：畫在 100ms 前，兩個快照之間內插（§4.2）；貼在一起時拉回預測位置 */
     function applyRemoteInterpolation() {
       if (!st.match || st.snaps.length < 2) return;
       const target = remoteClock();
@@ -478,6 +579,7 @@
       }
       const span = b.time - a.time;
       const k = span > 1e-6 ? Math.min(1, Math.max(0, (target - a.time) / span)) : 1;
+      const mine = st.match.players.find(p => isMe(p.id));
       for (const p of st.match.players) {
         if (isMe(p.id)) continue;
         const pa = a.players.find(x => x.id === p.id);
@@ -490,8 +592,23 @@
          * 伺服器用的是當下的對手，兩邊算出來的推擠量不同，每份快照都把我拉回去
          * 一次，推的時候畫面就一直閃一直抖（實測 x 誤差到 1.0 格）。
          * 現在畫面照舊用延遲位置，推擠改用推測位置，兩邊就對得上了。 */
-        p.viewX = pa.x + (pb.x - pa.x) * k;
-        p.viewY = pa.y + (pb.y - pa.y) * k;
+        let vx = pa.x + (pb.x - pa.x) * k;
+        let vy = pa.y + (pb.y - pa.y) * k;
+        /* 擠在一起就把畫面位置拉回預測位置，畫面上才不會重疊（見 contactWeight）。
+         * 權重只看「物理上的距離」（預測位置）——
+         * 試過連畫面上的距離也一起看（想順手修掉「一個人從旁邊掉過去時，
+         * 物理上錯開、畫面上卻看起來疊到」的那 3 幀），但那會讓權重在進出接觸時
+         * 忽然切換，對手的畫面就跳 0.75 格。用物理距離就完全不會跳，
+         * 而真正在推擠（伺服器判定兩人接觸）的時候重疊是 0。 */
+        if (mine && mine.alive && p.alive) {
+          const near = contactWeight(mine, p);
+          if (near > 0) {
+            vx += (p.x - vx) * near;
+            vy += (p.y - vy) * near;
+          }
+        }
+        p.viewX = vx;
+        p.viewY = vy;
       }
     }
 
