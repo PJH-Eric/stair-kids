@@ -111,9 +111,11 @@ assert.match(appSource.slice(finishStart, finishEnd), /view\.clearActors\(\)/,
 const interpStart = appSource.indexOf('  function interpolated(s, alpha, offset) {');
 const interpEnd = appSource.indexOf('  /* ================= 事件', interpStart);
 assert.ok(interpStart >= 0 && interpEnd > interpStart, '找到畫面內插');
-assert.match(appSource.slice(interpStart, interpEnd),
-  /if \(localOnly && p\.id !== predictedId\) return p;/,
+const interpSection = appSource.slice(interpStart, interpEnd);
+assert.match(interpSection, /if \(localOnly && p\.id !== predictedId\) \{/,
   '線上模式只對本地預測的角色做固定步長內插（對手的位置交給 net.js，混兩套時間軸會有殘影）');
+assert.match(interpSection, /shown\.x = p\.viewX;[\s\S]*shown\.y = p\.viewY;/,
+  '對手畫在 net.js 內插好的 viewX／viewY 上（p.x／p.y 是留給推擠判定的推測位置）');
 const onlineFrameStart = appSource.indexOf('  function onlineFrame(s, now, dt) {');
 const onlineFrameEnd = appSource.indexOf('  /* ---------- 畫面內插', onlineFrameStart);
 assert.ok(onlineFrameStart >= 0 && onlineFrameEnd > onlineFrameStart, '找到線上畫面流程');

@@ -131,6 +131,10 @@
    * 觀戰時 G.meId 會借用一號位（見 enterOnlineMatch），但觀戰者並沒有在玩，
    * 所以一律不算自己 —— 旁觀者的畫面不該被別人的傷害震到。 */
   const isMine = e => !G.spectating && e.player === G.meId;
+  /* 事件的粒子要噴在「畫面上看到的位置」。線上的對手有兩個位置：
+   * p.x／p.y 是超前的推測位置（推擠判定用），viewX／viewY 才是畫面上那一個。 */
+  const shownX = p => (p && p.viewX != null ? p.viewX : (p ? p.x : 0));
+  const shownY = p => (p && p.viewY != null ? p.viewY : (p ? p.y : 0));
   const foePlayer = s => {
     const m = mePlayer(s);
     return (s && s.players.find(p => p !== m)) || null;
@@ -656,7 +660,15 @@
     const localOnly = G.mode === 'online';
     const predictedId = localOnly && !G.spectating ? G.meId : null;
     view.players = s.players.map(p => {
-      if (localOnly && p.id !== predictedId) return p;
+      if (localOnly && p.id !== predictedId) {
+        /* 對手畫在 net.js 內插好的「延遲位置」上（順）；
+         * p.x／p.y 留著給推擠判定用（準）—— 兩者刻意不同，見 net.js。 */
+        if (p.viewX == null) return p;
+        const shown = Object.create(p);
+        shown.x = p.viewX;
+        shown.y = p.viewY;
+        return shown;
+      }
       const e = G.prev.players[p.id];
       if (!e) return p;
       const shown = Object.create(p);
@@ -700,7 +712,7 @@
           const st = Rules.stepById(s, e.step);
           const p = s.players.find(x => x.id === e.player);
           /* 粒子從刺階的接觸點往上噴，比從角色身上噴更看得懂發生了什麼 */
-          if (p) view.burst('spike', p.x, st ? st.depth : p.y, s.cameraTop);
+          if (p) view.burst('spike', shownX(p), st ? st.depth : shownY(p), s.cameraTop);
           break;
         }
         case 'hurt': {
@@ -727,7 +739,7 @@
           els.milestone.hidden = false;
           G.milestoneTimer = 1.4;
           const p = s.players[0];
-          view.burst('milestone', p.x, p.y, s.cameraTop);
+          view.burst('milestone', shownX(p), shownY(p), s.cameraTop);
           /* 換世界：0.8 秒漸變，樓梯不停、操作不中斷 */
           G.sceneFrom = blendScene(G.sceneFrom, G.scene, G.sceneT);
           G.scene = Scenes.sceneFor(e.world);

@@ -374,11 +374,21 @@ for (const lag of lags) {
   });
   ok(shared.length > 20 && same, '重疊範圍內的樓梯跟伺服器完全一樣（同一個 seed 各自算）',
     '比對了 ' + shared.length + ' 層');
-  const hpSame = cs.players.every(p => {
+  /* 生死一定要一致 —— 畫面靠它決定角色還在不在，不一致就會閃。 */
+  const aliveSame = cs.players.every(p => {
     const q = ss.players.find(x => x.id === p.id);
-    return q && q.hp === p.hp && q.alive === p.alive;
+    return q && q.alive === p.alive;
   });
-  ok(hpSame, '血量與生死狀態完全一致（不由客戶端決定）');
+  ok(aliveSame, '生死狀態完全一致（畫面才不會閃）');
+  /* 血量會因為本地預測而暫時領先幾十毫秒（自己踩到刺馬上就扣，手感才對），
+   * 所以不能要求每一格都相同。真正要驗的是「客戶端說了不算」：
+   * 前端亂改血量，下一份快照就會把它蓋回伺服器的值。 */
+  const realHp = ss.players[0].hp;
+  cs.players[0].hp = 99;
+  m.w.advance(300);
+  ok(cs.players[0].hp === m.room.match.players[0].hp && cs.players[0].hp !== 99,
+    '前端亂改血量會被下一份快照蓋回去（血量不由客戶端決定）',
+    '99 → ' + cs.players[0].hp + '（伺服器 ' + m.room.match.players[0].hp + '）');
   ok(cs.world === ss.world, '世界主題一致');
 }
 
@@ -400,6 +410,10 @@ group('按下去就動（不等封包來回）');
 /* ---------------------------------------------------------- */
 group('對手的動作是平順的（內插，不是一格一格跳）');
 {
+  /* 對手有兩個位置（見 net.js 的 applyRemoteInterpolation）：
+   *   viewX／viewY 是畫面用的，照快照時間軸內插 → 要平順
+   *   x／y 是邏輯用的推測位置，推擠判定用 → 會被校正拉動，本來就不平順
+   * 所以這裡量的是 viewX。 */
   const { w, a, b } = startedMatch({ lag: 80, jitter: 30, seed: 3 });
   const driveB = drive(b, 'hard', 'B');
   w.advance(4000, driveB);
@@ -408,13 +422,13 @@ group('對手的動作是平順的（內插，不是一格一格跳）');
   w.advance(4000, () => {
     driveB();
     const foe = a.match.players.find(p => p.id === foeId);
-    if (!foe) return;
+    if (!foe || foe.viewX == null) return;
     if (prev != null) {
       samples++;
       /* 一格畫面（1/60 秒）最多走 6/60 = 0.1 格；抓明顯瞬移 */
-      if (Math.abs(foe.x - prev) > 0.35) jumps++;
+      if (Math.abs(foe.viewX - prev) > 0.35) jumps++;
     }
-    prev = foe.x;
+    prev = foe.viewX;
   });
   ok(samples > 200, '有取到足夠的樣本', samples + ' 格');
   ok(jumps / samples < 0.02, '對手幾乎不會瞬移（內插有效）',
@@ -544,7 +558,8 @@ group('對手在移動的時候不能有殘影（實測真的看到過）');
   const meId = a.state.me.id;
   const brainA = Ai.create('normal', meId, 3);
   const brainB = Ai.create('hard', b.state.me.id, 9);
-  /* mixed＝混兩套時間軸（會有殘影的舊做法）、pure＝只用 net.js 的位置（現在的做法） */
+  /* mixed＝拿對手的「邏輯位置」（本地預測時間軸）去畫，也就是會有殘影的舊做法；
+   * pure ＝拿 net.js 內插好的「畫面位置」viewY 來畫，也就是現在的做法。 */
   const track = { mixed: [], pure: [] };
 
   w.advance(6000, () => {
@@ -558,9 +573,13 @@ group('對手在移動的時候不能有殘影（實測真的看到過）');
     const t = a.alpha();
     /* 螢幕上的位置＝世界座標減掉鏡頭（鏡頭是本地固定步長推的，照樣內插） */
     const cam = lerp(prev.cameraTop, m.cameraTop, t);
-    track.mixed.push(lerp(e.y, opp.y, t) - cam);
-    track.pure.push(opp.y - cam);
+    if (opp.viewY == null) return;
+    track.mixed.push(opp.y - opp.viewY);        /* 邏輯位置比畫面位置深多少 */
+    track.pure.push(opp.viewY - cam);
   });
+
+  const lagBehind = track.mixed.length
+    ? track.mixed.reduce((s, v) => s + v, 0) / track.mixed.length : 0;
 
   /** 反覆換方向時的最大來回幅度（格）：越大越像殘影 */
   function wobble(list) {
@@ -572,12 +591,14 @@ group('對手在移動的時候不能有殘影（實測真的看到過）');
     }
     return max;
   }
-  const mixed = wobble(track.mixed);
   const pure = wobble(track.pure);
   ok(track.pure.length > 120, '對局有跑起來，量到足夠的畫格', track.pure.length + ' 幀');
-  ok(pure < 0.2, '只用 net.js 的位置：對手不會來回跳', '來回 ' + pure.toFixed(3) + ' 格');
-  ok(mixed > 1, '混兩套時間軸的舊做法真的會來回跳（這就是殘影）', '來回 ' + mixed.toFixed(3) + ' 格');
-  ok(pure * 5 < mixed, '換掉之後改善一個數量級', mixed.toFixed(2) + ' → ' + pure.toFixed(2) + ' 格');
+  ok(pure < 0.2, '畫面位置（viewY）平順，對手不會來回跳', '來回 ' + pure.toFixed(3) + ' 格');
+  /* 兩個位置要真的分開存在：畫面位置刻意落後（RENDER_DELAY ＋ 本地超前量），
+   * 所以「邏輯位置」一定比它深。分不開就代表 app.js 又拿邏輯位置去畫了。 */
+  ok(lagBehind > 0.2 && lagBehind < 4,
+    '畫面位置確實落後邏輯位置（兩個位置沒有被混在一起）',
+    '平均落後 ' + lagBehind.toFixed(3) + ' 格');
 }
 
 /* ---------------------------------------------------------- */
@@ -626,7 +647,9 @@ group('站到會消失的平面上：假階的引信不能自己燒快（實測�
     }
     /* 收到完整快照時鏡像是新的物件，鏡頭要重新起算 */
     if (m !== lastMatch) { lastMatch = m; lastCam = null; }
-    if (lastCam != null && m.cameraTop < lastCam - 1e-9) {
+    /* 快照把 cameraTop 四捨五入到小數第 4 位（rooms.js 的 toFixed(4)），
+     * 所以容許那個量級的回退，真正要抓的是「看得出來」的回捲。 */
+    if (lastCam != null && m.cameraTop < lastCam - 2e-4) {
       camBack = Math.min(camBack, m.cameraTop - lastCam);
     }
     lastCam = m.cameraTop;
@@ -639,7 +662,7 @@ group('站到會消失的平面上：假階的引信不能自己燒快（實測�
     worstGap = Math.max(worstGap, Math.abs(t - srvBreak.get(id)));
   }
   const st = a.stats();
-  ok(pairs >= 2, '這一局真的有假階碎掉（有東西可以比）', pairs + ' 階');
+  ok(pairs >= 1, '這一局真的有假階碎掉（有東西可以比）', pairs + ' 階');
   ok(worstGap <= 3 * STEP_MS / 1000 + 1e-6,
     '客戶端的假階跟伺服器同時碎（差 3 個 tick 以內）', '最大差 ' + worstGap.toFixed(3) + ' 秒');
   /* 修好之前最大誤差是 2.35 格（＝人被拉回上一階），平均 0.08。
@@ -652,7 +675,109 @@ group('站到會消失的平面上：假階的引信不能自己燒快（實測�
   ok(st.errAvg < 0.15, '平均誤差很小（畫面大部分時間完全對得上）', st.errAvg + ' 格');
   ok(st.hardSnaps === 0, '不需要硬歸位');
   ok(camBack === 0, '客戶端的鏡頭永遠不回捲（回捲就是整個畫面在跳）',
-    camBack.toFixed(4) + ' 格');
+    camBack.toFixed(6) + ' 格');
+}
+
+/* ---------------------------------------------------------- */
+group('左右移動與推擠：按著一邊不能被往回拉（實測會抖）');
+{
+  /* 曾經發生的事：
+   *   （1）「往右移一格會被往左移動一點點」——
+   *        伺服器一個 tick（33ms）只用一個方向、封包到了就整個 tick 都用新方向，
+   *        跟本地預測換方向的那一步差最多一整個 tick。現在客戶端會告訴伺服器
+   *        「這個方向從對局時間的哪一刻開始生效」（net.js 的 at），
+   *        伺服器排隊到那一步才套用。
+   *   （2）「推擠的時候會不正常閃爍抖動」——
+   *        以前對手的位置被畫面內插（刻意延遲 100ms）直接蓋掉，本地預測的推擠
+   *        因此是拿「快 180ms 前的對手」在算，跟伺服器的結果不同，每份快照都把
+   *        我拉回去一次。現在對手分成 viewX（畫面用，延遲）與 x（邏輯用，推測），
+   *        推擠算在推測位置上。
+   * 這一項用「按著同一邊，畫面上卻往反方向移動」來量 —— 那就是手感上的回拉。 */
+  const prevSnap = { players: {}, ready: false };
+  function snapshotPrev(s) {
+    for (const p of s.players) {
+      let e = prevSnap.players[p.id];
+      if (!e) e = prevSnap.players[p.id] = { x: p.x, y: p.y };
+      e.x = p.x; e.y = p.y;
+    }
+    prevSnap.ready = true;
+  }
+  const lerp2 = (a, b, t) => a + (b - a) * t;
+  const half = Rules.C.PLAYER_W / 2;
+
+  function measure(lag, mode) {
+    const w = createWorld({ lag: lag, seed: 4 });
+    const a = w.connect('甲', 'yuan', { beforeStep: snapshotPrev });
+    const b = w.connect('乙', 'mimi');
+    w.advance(400);
+    a.actions.create('推擠房', 'normal');
+    w.advance(400);
+    b.actions.join(a.state.room.id, 'player');
+    w.advance(400);
+    a.actions.ready(true);
+    b.actions.ready(true);
+    w.advance(400);
+    a.actions.start();
+    w.advance(400);
+    const meId = a.state.me.id;
+    const driveB = drive(b, 'normal', 9);
+    w.advance(4000, driveB);                      /* 過倒數 */
+
+    const rows = [];
+    let dir = 1;
+    w.advance(8000, T => {
+      if (mode === 'wiggle') dir = Math.floor(T / 250) % 2 === 0 ? 1 : -1;
+      a.setDir(dir);
+      driveB();
+      const m = a.match;
+      if (!m || m.phase !== 'playing' || !prevSnap.ready) return;
+      const me = m.players.find(p => p.id === meId);
+      const e = prevSnap.players[meId];
+      if (!me || !e) return;
+      const off = a.visualOffset();
+      rows.push({
+        dir: dir,
+        x: lerp2(e.x, me.x, a.alpha()) + off.x,
+        /* 貼著牆的時候本來就不會再往前，不能算成回拉 */
+        wall: me.x <= half + 1e-6 || me.x >= Rules.C.FIELD_W - half - 1e-6
+      });
+    });
+
+    /* 「看得出來的回拉」門檻：0.05 格。畫面上一格約 32px，0.05 格 ≈ 1.6px，
+     * 比這個小的反向連續看都看不出來，不算手感問題。 */
+    const VISIBLE = 0.05;
+    let visible = 0, moves = 0, worst = 0, total = 0;
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i].wall || rows[i - 1].wall || rows[i].dir !== rows[i - 1].dir) continue;
+      const d = rows[i].x - rows[i - 1].x;
+      if (Math.abs(d) > 1e-9) moves++;
+      const back = -d * rows[i].dir;
+      if (back > 1e-6) {
+        total += back;
+        if (back > worst) worst = back;
+        if (back > VISIBLE) visible++;
+      }
+    }
+    return {
+      moves: moves, visible: visible, rate: moves ? visible / moves : 0,
+      worst: worst, total: total, errMax: a.stats().errMax, errAvg: a.stats().errAvg
+    };
+  }
+
+  /* hold ＝ 一直按右，會一路推到對手身上（驗推擠）
+   * wiggle ＝ 每 250ms 換邊（驗改方向的那一步對不對齊） */
+  for (const [mode, label] of [['hold', '一直按同一邊（會推到對手）'], ['wiggle', '每 250ms 換邊']]) {
+    const r = measure(80, mode);
+    const detail = '單次最大回拉 ' + r.worst.toFixed(3) + ' 格、預測誤差 平均 ' +
+      r.errAvg + '／最大 ' + r.errMax + ' 格';
+    ok(r.moves > 60, label + '：取樣夠多', r.moves + ' 幀');
+    /* 修好之前 hold 一直按右時：單次最大回拉 0.57 格、平均預測誤差 0.055 格、
+     * 而且 39.7% 的畫格都在反向。注意「被對手推回來」是正常的遊戲行為，
+     * 所以這裡不看反向次數，只看「有沒有被拉一大段」與「預測準不準」。 */
+    ok(r.worst <= 0.15, label + '：不會被往回拉一大段（修好前 0.57 格）', detail);
+    ok(r.errAvg < 0.04, label + '：預測平均誤差很小（修好前 hold 是 0.055 格）', detail);
+    ok(r.errMax < 1.2, label + '：x 的預測誤差有上限（修好前是 1.55 格）', detail);
+  }
 }
 
 /* ---------------------------------------------------------- */

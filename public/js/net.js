@@ -131,7 +131,13 @@
       st.lastSentDir = d;
       st.lastInputAt = t;
       st.inputSeq++;
-      out({ type: 'input', seq: st.inputSeq, dir: d, ct: t });
+      /* at ＝ 這個方向從「對局時間」的哪一刻開始生效。
+       * 本地預測就是從下一個固定步（也就是現在的 match.time）開始用它，
+       * 所以把同一個時間點告訴伺服器，兩邊才會在同一步換方向。
+       * 少了這個，伺服器只能「封包到了就整個 tick 都用新方向」，
+       * 跟本地預測差最多一個 tick（33ms ＝ 0.2 格），每次改方向都會被拉一下 ——
+       * 手感就是「往右移一格卻被往左拉一點點」。 */
+      out({ type: 'input', seq: st.inputSeq, dir: d, ct: t, at: +st.match.time.toFixed(4) });
     }
 
     /* ---------- 收到訊息 ---------- */
@@ -477,8 +483,15 @@
         const pa = a.players.find(x => x.id === p.id);
         const pb = b.players.find(x => x.id === p.id);
         if (!pa || !pb) continue;
-        p.x = pa.x + (pb.x - pa.x) * k;
-        p.y = pa.y + (pb.y - pa.y) * k;
+        /* 對手有兩個位置，故意不一樣：
+         *   viewX／viewY ＝ 畫面用。照快照時間軸內插、刻意畫在 100ms 前，才會順。
+         *   x／y         ＝ 邏輯用。權威快照 ＋ 本地重演推到「現在」的推測位置。
+         * 以前這裡直接蓋掉 x／y，於是推擠是拿「快 180ms 前的對手」在算 ——
+         * 伺服器用的是當下的對手，兩邊算出來的推擠量不同，每份快照都把我拉回去
+         * 一次，推的時候畫面就一直閃一直抖（實測 x 誤差到 1.0 格）。
+         * 現在畫面照舊用延遲位置，推擠改用推測位置，兩邊就對得上了。 */
+        p.viewX = pa.x + (pb.x - pa.x) * k;
+        p.viewY = pa.y + (pb.y - pa.y) * k;
       }
     }
 

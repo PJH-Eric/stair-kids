@@ -233,6 +233,84 @@ group('分頁被節流之後回來：畫面要接得回去，不能亂跳');
 }
 
 /* ---------------------------------------------------------- */
+/** 水平方向的順暢度（單位：格）。back ＝ 逆著按鍵方向移動的最大一步 */
+function horizontal(frames, name, dir) {
+  const deltas = [];
+  let last = null;
+  for (const actors of frames) {
+    const a = actors.find(x => x.name === name);
+    if (!a || !a.scale) { last = null; continue; }
+    const x = a.x / a.scale;
+    if (last != null) deltas.push(x - last);
+    last = x;
+  }
+  let max = 0, back = 0, backFrames = 0;
+  for (const d of deltas) {
+    if (Math.abs(d) > max) max = Math.abs(d);
+    const b = -d * dir;
+    if (b > 0) { if (b > back) back = b; if (b > 0.05) backFrames++; }
+  }
+  const abs = deltas.map(Math.abs).filter(v => v > 1e-9);
+  return { n: deltas.length, med: median(abs), max: max, back: back, backFrames: backFrames };
+}
+
+/** 按住某個方向鍵幾毫秒，回傳這段時間的每一格畫面 */
+function holdKey(w, code, ms, opt) {
+  w.win.dispatch('keydown', { code: code });
+  const frames = sample(w, ms, opt);
+  w.win.dispatch('keyup', { code: code });
+  return frames;
+}
+
+group('按著方向鍵走：畫面上要順順地走，不會被往回拉');
+{
+  /* 使用者回報「往右移一格會被往左移動一點點」。成因有兩個（都已修）：
+   *   · 伺服器一個 tick 只用一個方向，換方向的那一步跟本地預測差最多一整個 tick
+   *   · 推擠是拿「延遲 180ms 的對手」在算，跟伺服器結果不同
+   * 這裡直接發真的 keydown，量角色在螢幕上有沒有逆著按鍵方向倒退。 */
+  const opt = { frameMs: 1000 / 60 };
+  const w = boot({ lag: 80, seed: 41, frameMs: 1000 / 60 });
+  const foe = startMatch(w, opt);
+  ok(!!foe, '開得起來');
+  const mine = myName(w);
+  w.advance(4000, opt);                                  /* 過倒數 */
+
+  const at = readActors(w);
+  const meNow = at.find(a => a.name === mine);
+  const foeNow = at.find(a => a.name === '小乙');
+  ok(!!meNow && !!foeNow, '兩個角色都在畫面上');
+  /* 先往「離對手遠」的方向走，驗單純的移動；再往對手身上走，驗推擠 */
+  const awayDir = meNow && foeNow ? (meNow.x >= foeNow.x ? 1 : -1) : 1;
+  const towardDir = -awayDir;
+  const key = d => (d > 0 ? 'ArrowRight' : 'ArrowLeft');
+  /* 一格畫面最多能走多少：水平速度 ＋ 輸送帶帶動速度 */
+  const walkBound = (C.MOVE_SPEED + C.BELT_SPEED) * (1 / 60) * 1.2 + 0.02;
+
+  const away = horizontal(holdKey(w, key(awayDir), 1000, opt), mine, awayDir);
+  ok(away.n > 40, '走開這段取樣夠多', away.n + ' 幀');
+  ok(away.med > 0, '真的有在走（按鍵有反應）',
+    '中位數 ' + away.med.toFixed(3) + ' 格／幀');
+  ok(away.max <= walkBound, '走的時候不會瞬移',
+    '最大 ' + away.max.toFixed(3) + '，上限 ' + walkBound.toFixed(3));
+  ok(away.back <= 0.05, '按著一邊走，畫面上不會往回退',
+    '最大回退 ' + away.back.toFixed(4) + ' 格');
+  ok(away.backFrames === 0, '完全沒有看得出來的回退', away.backFrames + ' 幀');
+
+  /* 推到對手身上：被推回來是正常的，但不能一直閃、也不能被拉一大段 */
+  const pushFrames = holdKey(w, key(towardDir), 2500, opt);
+  const push = horizontal(pushFrames, mine, towardDir);
+  let missing = 0;
+  for (const actors of pushFrames) if (actors.length !== 2) missing++;
+  ok(push.n > 100, '推擠這段取樣夠多', push.n + ' 幀');
+  ok(missing === 0, '推擠的時候兩個角色都一直在畫面上（不會閃掉）',
+    missing + ' 幀少了角色');
+  ok(push.max <= walkBound + 0.15, '推擠的時候不會瞬移',
+    '最大 ' + push.max.toFixed(3) + ' 格');
+  ok(push.back <= 0.15, '推擠的時候不會被拉一大段回去（修好前 0.57 格）',
+    '最大回退 ' + push.back.toFixed(4) + ' 格');
+}
+
+/* ---------------------------------------------------------- */
 group('結算畫面只會出現一次（不會閃）');
 {
   const opt = { frameMs: 1000 / 60 };
