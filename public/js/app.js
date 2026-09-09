@@ -83,9 +83,14 @@
     onMatchStart: info => startOnlineMatch(info),
     onMatchEnd: (result, meId) => finish(result, meId),
     onBackToLobby: () => {
-      /* 兩種情況都走這裡：一局收掉了（回房間等下一局），或是離開／被踢（回大廳） */
-      if (G.mode === 'online') { backFromOnlineMatch(); return; }
-      if (G.screen === 'room' || G.screen === 'game') show('lobby');
+      /* 三種情況都走這裡：這一局收場了（回房間等下一局）、離開／被踢、連線斷了。
+       * 要去哪裡一律看「還在不在房間裡」，不能看 G.mode —— 玩家可能已經自己按過
+       * 結算上的「回到房間」，那時 G.mode 早就變回 solo，再把他送去大廳
+       * 等於憑空被踢出房間，下一局也就開不起來了。 */
+      if (G.screen === 'game') { backFromOnlineMatch(); return; }
+      if (G.screen !== 'room') return;
+      if (!online.room) { show('lobby'); return; }
+      online.renderRoom();
     }
   });
 
@@ -463,6 +468,9 @@
     G.scene = Scenes.sceneFor(0);
     G.sceneFrom = null;
     G.sceneT = 1;
+    /* 上一局還沒讀完的事件先倒掉，不然新的一局第一格會補放上一局的音效，
+     * 連結算都可能被重播一次。 */
+    online.takeEvents();
     view.clearActors();
     applyRenderOptions();
     sound.setScene(0);
@@ -485,7 +493,7 @@
 
   /** 這一局收掉了（結算停留結束）→ 回房間等下一局 */
   function backFromOnlineMatch() {
-    if (G.mode !== 'online') return;
+    if (G.mode !== 'online' && G.screen !== 'game') return;
     stopMatch();
     G.mode = 'solo';
     G.meId = 'p1';
@@ -637,7 +645,18 @@
      * 其他欄位（階梯、難度、狀態旗標）都直接讀原本的，階梯的動畫計時也還是寫回同一份物件。 */
     const view = Object.create(s);
     view.cameraTop = lerp(G.prev.cameraTop, s.cameraTop, t);
+    /* 這一層固定步長內插只有「本地預測」的角色能吃。
+     * 線上的對手不是本地預測出來的：net.js 已經照「快照時間軸」把他內插好了
+     * （刻意畫在 100ms 前，見 net.js 的 RENDER_DELAY），而 G.prev 存的是
+     * 「本地預測時間軸」上、回溯重演之後的超前位置 —— 兩者差了大約
+     * 100ms ＋ 單向延遲。把兩套時間軸混在一起 lerp，對手每一幀就會在
+     * 「超前位置」與「延遲位置」之間來回跳（實測來回幅度 2～5 格），
+     * 眼睛看到的就是移動時有殘影。所以對手直接用 net.js 算好的位置。
+     * 觀戰時兩個人都不是本地預測的，兩個都不能吃這一層。 */
+    const localOnly = G.mode === 'online';
+    const predictedId = localOnly && !G.spectating ? G.meId : null;
     view.players = s.players.map(p => {
+      if (localOnly && p.id !== predictedId) return p;
       const e = G.prev.players[p.id];
       if (!e) return p;
       const shown = Object.create(p);
@@ -741,6 +760,9 @@
           buzz(60);
           break;
         case 'over':
+          /* 線上模式的結算一律由 online.js 發（它才知道「我」是誰，也才有去重）。
+           * 這裡再自己叫一次會重複寫一筆本機紀錄，勝負也可能跟伺服器的判定不一樣。 */
+          if (G.mode === 'online') break;
           finish(e.result);
           break;
       }
@@ -986,11 +1008,17 @@
     if (saved.record || win) { sound.play('win'); view.burst('milestone', Rules.C.FIELD_W / 2, 0, 0); }
     else if (foe) sound.play('dead');
 
-    /* 線上模式沒有「再玩一次」與「換難度」—— 回房間讓房主開下一局 */
-    els.again.hidden = !!online2;
-    els.changeDiff.hidden = !!online2;
-    els.resultHome.textContent = online2 ? '回房間' : '回首頁';
-    els.resultHome.classList.toggle('primary', !!online2);
+    /* 結算的三顆按鈕。線上模式借同樣三顆，但意思不一樣：
+     *   再來一局 → 回房間並自動幫他按好準備（開局是伺服器的權限，要兩個人都準備好）
+     *   回到房間 → 不等結算停留跑完，馬上回房間
+     *   回首頁   → 離開房間、收掉連線
+     * 難度是房主在房間裡改的，所以線上沒有「換難度」。 */
+    els.again.hidden = false;
+    els.again.textContent = online2 ? '再來一局' : '再玩一次';
+    els.changeDiff.hidden = false;
+    els.changeDiff.textContent = online2 ? '回到房間' : '換難度';
+    els.resultHome.textContent = '回首頁';
+    els.resultHome.classList.remove('primary');
 
     /* 這局統計（一人挑戰自動省略「被推開」） */
     const rows = [
@@ -1306,11 +1334,18 @@
     goto('setup');
   });
   els.start.addEventListener('click', () => { sound.unlock(); startMatch(); });
-  els.again.addEventListener('click', () => { sound.unlock(); startMatch(); });
-  els.changeDiff.addEventListener('click', () => goto('setup'));
+  els.again.addEventListener('click', () => {
+    sound.unlock();
+    /* 線上不能自己開局（伺服器說了才算），所以這顆是「回房間並自動準備好」 */
+    if (G.mode === 'online') { online.rematch(); return; }
+    startMatch();
+  });
+  els.changeDiff.addEventListener('click', () => {
+    if (G.mode === 'online') { online.backToRoom(); return; }
+    goto('setup');
+  });
   els.resultHome.addEventListener('click', () => {
-    /* 線上模式這顆是「回房間」，不是回首頁（不能順手把房間關掉） */
-    if (G.mode === 'online') { backFromOnlineMatch(); return; }
+    /* 線上按回首頁＝順手離開房間：goto 會通知伺服器把座位放掉，再收掉連線 */
     goto('home');
   });
   /* 左上角的「離開」。這顆原本沒有任何 listener —— index.html 上沒有 data-go，
@@ -1351,7 +1386,7 @@
     const tag = (document.activeElement && document.activeElement.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
     e.preventDefault();
-    (G.mode === 'online' ? els.resultHome : els.again).click();
+    els.again.click();
   });
 
   input.attach({ left: els.padLeft, right: els.padRight, pad: els.pads });

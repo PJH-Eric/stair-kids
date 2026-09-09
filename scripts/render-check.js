@@ -108,6 +108,12 @@ const finishEnd = appSource.indexOf('  /* ================= 暫停選單', finis
 assert.ok(finishStart >= 0 && finishEnd > finishStart, '找到結算流程');
 assert.match(appSource.slice(finishStart, finishEnd), /view\.clearActors\(\)/,
   '結算時會清除畫面上的角色');
+const interpStart = appSource.indexOf('  function interpolated(s, alpha, offset) {');
+const interpEnd = appSource.indexOf('  /* ================= 事件', interpStart);
+assert.ok(interpStart >= 0 && interpEnd > interpStart, '找到畫面內插');
+assert.match(appSource.slice(interpStart, interpEnd),
+  /if \(localOnly && p\.id !== predictedId\) return p;/,
+  '線上模式只對本地預測的角色做固定步長內插（對手的位置交給 net.js，混兩套時間軸會有殘影）');
 const onlineFrameStart = appSource.indexOf('  function onlineFrame(s, now, dt) {');
 const onlineFrameEnd = appSource.indexOf('  /* ---------- 畫面內插', onlineFrameStart);
 assert.ok(onlineFrameStart >= 0 && onlineFrameEnd > onlineFrameStart, '找到線上畫面流程');

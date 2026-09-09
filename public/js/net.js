@@ -99,6 +99,8 @@
       leave: () => out({ type: 'leave' }),
       ready: r => out({ type: 'ready', ready: !!r }),
       start: () => out({ type: 'start' }),
+      /* 結算看完了：兩邊都送出之後，伺服器不用等滿 10 秒就把房間收回大廳 */
+      resultDone: () => out({ type: 'result-done' }),
       seat: () => out({ type: 'seat' }),
       kick: id => out({ type: 'kick', targetId: id }),
       config: cfg => out({ type: 'config', difficulty: cfg.difficulty, name: cfg.name }),
@@ -206,6 +208,15 @@
       st.snaps.length = 0;
       st.offset.x = st.offset.y = st.offset.t = 0;
       st.result = null;
+      /* 上一局的事件不能留到下一局：沒人在讀的時候（結算已經停掉畫面迴圈）
+       * 這個佇列會一直積著，下一局第一格一次倒出來，其中那顆 'over' 會
+       * 直接把剛開始的新對局蓋成結算畫面 —— 這就是「開新的一局卻殘留上一局
+       * 結算」的成因（實測真的會卡住）。 */
+      st.events.length = 0;
+      /* 快照時間也要跟著歸零：新的一局從 time=0 開始，而舊值可能是上一局的
+       * 幾十秒。不清掉的話，下面那個「舊封包直接丟掉」的判斷會把新一局的每一份
+       * 快照都當成舊封包丟掉，客戶端就完全收不到權威狀態（整局都在自己亂算）。 */
+      st.lastSnapTime = null;
       st.count.corrections = 0;
       st.err.sum = 0; st.err.n = 0; st.err.max = 0;
     }
@@ -347,7 +358,10 @@
       if (snap.events && snap.events.length) {
         for (const ev of snap.events) st.events.push(ev);
       }
-      if (m.phase === 'over' && m.result) st.result = m.result;
+      /* 結算只能來自伺服器的快照（上面的 apply 會設 st.result）。
+       * 本地鏡像是超前跑的預測，而且對手是用「最後收到的方向」推的 ——
+       * 它很容易先自己算出「兩個人都死了」，然後客戶端就會在對手還在玩的時候
+       * 跳出結算，勝負也可能是錯的。所以這裡刻意不看本地鏡像的 result。 */
     }
 
     /* ---------- 每一格畫面 ---------- */

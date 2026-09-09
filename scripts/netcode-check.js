@@ -84,15 +84,15 @@ function createWorld(cfg) {
 
   /* --- 客戶端 --- */
   let seq = 0;
-  function connect(name, char) {
+  function connect(name, char, opt) {
     const person = { id: 'p' + (++seq), name: name, char: char || 'yuan', roomId: null, role: null };
-    const client = Net.createClient({
+    const client = Net.createClient(Object.assign({
       now: now, name: name, char: char,
       send(msg) {
         const copy = JSON.parse(JSON.stringify(msg));
         later(() => proto.handle(person, copy));
       }
-    });
+    }, opt || {}));
     client.state.me.id = person.id;
     clients.set(person.id, client);
     client.person = person;
@@ -497,6 +497,83 @@ group('心跳不能誤判（實測真的被誤判過）');
   /* 對照組：真的什麼都不送就該判定斷線 */
   for (let i = 0; i < 4; i++) w.loop.heartbeatRound();
   ok(!me.connected, '完全沒有任何訊息才判定斷線');
+}
+
+/* ---------------------------------------------------------- */
+group('對手在移動的時候不能有殘影（實測真的看到過）');
+{
+  /* 曾經發生的事：雙人對戰時，對手的角色一移動就有殘影。
+   * 原因不在繪圖，而在「兩套時間軸被混在一起」：
+   *   · 對手的位置是 net.js 依「快照時間軸」內插出來的，刻意畫在 100ms 前（RENDER_DELAY）
+   *   · app.js 的畫面內插用的「上一格」卻是「本地預測時間軸」上、回溯重演之後的超前位置
+   * 兩者差了大約 100ms ＋ 單向延遲，拿去 lerp 就會讓對手每一幀在
+   * 「超前位置」與「延遲位置」之間來回跳 —— 眼睛看到的就是殘影。
+   * 所以對手只能直接畫 net.js 算好的位置（app.js 那一層固定步長內插只給本地預測的自己）。
+   *
+   * 這一項量的是「對手在螢幕上的垂直位移有沒有反覆換方向、來回多大」。 */
+  const prev = { cameraTop: 0, players: {}, ready: false };
+  function snapshotPrev(s) {
+    prev.cameraTop = s.cameraTop;
+    for (const p of s.players) {
+      let e = prev.players[p.id];
+      if (!e) e = prev.players[p.id] = { x: p.x, y: p.y };
+      e.x = p.x; e.y = p.y;
+    }
+    prev.ready = true;
+  }
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  const w = createWorld({ lag: 80, seed: 7 });
+  const a = w.connect('甲', 'yuan', { beforeStep: snapshotPrev });
+  const b = w.connect('乙', 'mimi');
+  w.advance(400);
+  a.actions.create('殘影房', 'normal');
+  w.advance(400);
+  b.actions.join(a.state.room.id, 'player');
+  w.advance(400);
+  a.actions.ready(true);
+  b.actions.ready(true);
+  w.advance(400);
+  a.actions.start();
+  w.advance(400);
+
+  const meId = a.state.me.id;
+  const brainA = Ai.create('normal', meId, 3);
+  const brainB = Ai.create('hard', b.state.me.id, 9);
+  /* mixed＝混兩套時間軸（會有殘影的舊做法）、pure＝只用 net.js 的位置（現在的做法） */
+  const track = { mixed: [], pure: [] };
+
+  w.advance(6000, () => {
+    if (a.match) a.setDir(brainA.read(a.match, Rules.STEP).dir);
+    if (b.match) b.setDir(brainB.read(b.match, Rules.STEP).dir);
+    const m = a.match;
+    if (!m || m.phase !== 'playing' || !prev.ready) return;
+    const opp = m.players.find(p => p.id !== meId);
+    const e = opp && prev.players[opp.id];
+    if (!e) return;
+    const t = a.alpha();
+    /* 螢幕上的位置＝世界座標減掉鏡頭（鏡頭是本地固定步長推的，照樣內插） */
+    const cam = lerp(prev.cameraTop, m.cameraTop, t);
+    track.mixed.push(lerp(e.y, opp.y, t) - cam);
+    track.pure.push(opp.y - cam);
+  });
+
+  /** 反覆換方向時的最大來回幅度（格）：越大越像殘影 */
+  function wobble(list) {
+    let max = 0;
+    for (let i = 2; i < list.length; i++) {
+      const d1 = list[i - 1] - list[i - 2];
+      const d2 = list[i] - list[i - 1];
+      if (d1 * d2 < 0) max = Math.max(max, Math.min(Math.abs(d1), Math.abs(d2)));
+    }
+    return max;
+  }
+  const mixed = wobble(track.mixed);
+  const pure = wobble(track.pure);
+  ok(track.pure.length > 120, '對局有跑起來，量到足夠的畫格', track.pure.length + ' 幀');
+  ok(pure < 0.2, '只用 net.js 的位置：對手不會來回跳', '來回 ' + pure.toFixed(3) + ' 格');
+  ok(mixed > 1, '混兩套時間軸的舊做法真的會來回跳（這就是殘影）', '來回 ' + mixed.toFixed(3) + ' 格');
+  ok(pure * 5 < mixed, '換掉之後改善一個數量級', mixed.toFixed(2) + ' → ' + pure.toFixed(2) + ' 格');
 }
 
 /* ---------------------------------------------------------- */

@@ -28,17 +28,22 @@ npm start
 ## 怎麼驗
 
 ```
-npm run verify         # 下面七支全部跑一次（零依賴、不需要瀏覽器）
+npm run verify         # 下面全部跑一次（零依賴、不需要瀏覽器）
 npm test               # tests/verify.js           規則核心單元測試
 npm run test:stairs    # scripts/stairs-check.js   一萬層樓梯：可達性、無死路、空隙看得出來
 npm run test:match     # scripts/match-check.js    單機與對戰一局跑完、難度差異
 npm run test:ai        # scripts/ai-check.js       四段 AI 的行為差異（各 200 局）
 npm run test:online    # scripts/online-check.js   房間、席位、觀戰、搶位、邀請、斷線判輸
+npm run test:online-ui # scripts/online-ui-check.js  結算快照重複抵達不會重開對局
 npm run test:netcode   # scripts/netcode-check.js  假網路＋假時鐘的預測校正（可指定延遲）
 npm run test:result    # scripts/result-check.js   結算內容與本機紀錄
+npm run test:render    # scripts/render-check.js   死亡與結算之後的畫面清理
+npm run test:audio     # scripts/audio-check.js    音訊設定
+npm run test:online-chat # scripts/online-chat-check.js  對局中的文字聊天
+npm run test:flow      # scripts/flow-check.js     線上完整流程（假瀏覽器跑真的 app.js）
 ```
 
-七支都是零依賴的純 Node，不需要瀏覽器。指定延遲的用法：
+全部都是零依賴的純 Node，不需要瀏覽器。指定延遲的用法：
 
 ```
 node scripts/netcode-check.js --lag=80                      # M2 的驗收條件
@@ -342,6 +347,21 @@ M0 的做法：實作在 `stairs.js`，`rules.js` 直接轉出 `Rules.makeStairs
 
 這樣分得出「連線真的斷了」與「這個分頁忙了一下」。修好之後同一份測試跑起來
 **心跳誤判 0 次**（之前每一局結束都會發生）。
+
+### 假瀏覽器跑真前端的流程驗收（`scripts/flow-check.js`）
+
+「結算畫面殘留」「回到房間開不了下一局」這類 bug 都不在某一個函式裡，而在四層
+接起來的縫上：伺服器的房間階段（`lib/rooms.js`）× 快照（`lib/match-loop.js`）
+× 線上狀態機（`public/js/online.js`）× 畫面流程（`public/js/app.js`）。
+單元測試量不到，所以這一支在 Node 裡放一個最小的假瀏覽器（DOM、rAF、
+`setTimeout`、WebSocket、localStorage、假時鐘），照 `index.html` 的順序把
+`public/js` 全部載進同一個 context，另一端接真的 rooms ＋ match-loop ＋ protocol，
+對手用第二條真的協定連線。**按鈕是真的 `click()`，畫面狀態是真的從 DOM 讀出來的。**
+
+走的流程：首頁 → 大廳 → 開房間 → 對手加入 → 兩人準備 → 開始 → 對戰 → 雙方死亡
+→ 結算（再來一局／回到房間／回首頁三顆）→ 再來一局 → 回房間（按鈕跟原本開房間一樣）
+→ 等對方準備好才能開始 → 第二局 → 回到房間 → 第三局 → 回首頁 → 斷線退回大廳。
+它一樣是零依賴、不用瀏覽器，所以有進 `npm run verify`。
 
 ### 用真瀏覽器跑的端對端驗收
 

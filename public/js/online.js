@@ -19,6 +19,12 @@
   /* 對局中保留自由輸入與短語；輸入框聚焦時，input.js 會讓文字輸入優先。 */
   const PHRASES = ['加油！', '小心刺！', '厲害！', '等我一下', '再來一局', '哈哈哈'];
 
+  /* 結算至少留在畫面上多久（毫秒）。
+   * 伺服器的結算停留是 10 秒（rooms.js 的 RESULT_MS），正常情況下結算一結束就播，
+   * 等房間回到大廳時早就看夠了。這個下限是給「結算來得很晚」的情況用的 ——
+   * 沒有它的話結算會閃一下就被收掉。 */
+  const MIN_RESULT_MS = 4000;
+
   const $ = (sel, root2) => (root2 || document).querySelector(sel);
   const esc = t => String(t == null ? '' : t)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -103,7 +109,11 @@
       nameMax: 8,
       wantRoom: null,             /* 連上線之後要進的房號 */
       inMatch: false,
-      resultShown: false,
+      resultShown: false,             /* 這一局的結算已經播給 app.js 了 */
+      resultAt: 0,                    /* 結算是什麼時候播的（決定還要不要多留幾秒） */
+      wrapped: false,                 /* 這一局已經收場（畫面已經離開結算） */
+      wantRematch: false,             /* 按過「再來一局」：回到房間就自動準備好 */
+      wrapTimer: 0,
       spectating: false,
       lastRoomPhase: null,
       chatSeen: 0
@@ -181,13 +191,23 @@
         S.socket = null;
         const wasOnline = S.status === 'online';
         setStatus('offline');
-        if (S.inMatch) {
-          notice('連線斷了，這局判輸', 'bad');
-          S.inMatch = false;
-          if (opt.onBackToLobby) opt.onBackToLobby();
-        }
+        /* 斷線就是離開這間房：伺服器已經把座位標成離線（對局中還會判輸），
+         * 而重連會拿到一個新的身分，回不到原本的座位。所以本地也要把房間收掉 ——
+         * 留著只會讓畫面停在一間按什麼都沒反應的幽靈房間裡。 */
+        clearWrap();
+        const wasInRoom = !!(S.client && S.client.state.room);
+        if (S.inMatch) notice('連線斷了，這局判輸', 'bad');
+        else if (wasOnline && wasInRoom) notice('連線斷了，先回大廳', 'bad');
+        S.inMatch = false;
+        S.resultShown = false;
+        S.resultAt = 0;
+        S.wrapped = false;
+        S.wantRematch = false;
+        S.lastRoomPhase = null;
+        if (S.client) S.client.state.room = null;
         renderRoom();
         renderLobby();
+        if (wasInRoom && opt.onBackToLobby) opt.onBackToLobby();
         /* 自動重試三次（越試越久），之後交給「重新連線」按鈕 */
         if (wasOnline && S.retries < 3) {
           S.retries++;
@@ -201,6 +221,7 @@
     function disconnect() {
       clearTimeout(S.retryTimer);
       clearTimeout(S.wakeTimer);
+      clearWrap();
       S.retries = 99;
       if (S.socket) { const s = S.socket; S.socket = null; try { s.close(); } catch (e) { /* 已經斷了 */ } }
       S.client = null;
@@ -244,12 +265,6 @@
         renderRoom();
         renderChat();
         if (msg.type === 'joined' && opt.onEnterRoom) opt.onEnterRoom(room);
-        const delayedResult = msg.type === 'room' && room && room.phase === 'lobby' &&
-          S.inMatch && c.state.result && !S.resultShown;
-        if (delayedResult) {
-          notifyMatchEnd();
-          return;
-        }
         checkPhase(room);
         return;
       }
@@ -265,37 +280,93 @@
     function checkPhase(room) {
       if (!room) return;
       const c = S.client;
-      if (room.phase !== S.lastRoomPhase) {
-        const prev = S.lastRoomPhase;
+      const prev = S.lastRoomPhase;
+      if (room.phase !== prev) {
         S.lastRoomPhase = room.phase;
-        if (room.phase === 'playing') S.resultShown = false;
-        /* 只有「從對局／結算回到房間」才通知，第一次看到房間（prev 是 null）不算 ——
-         * 不然剛進房就會被當成「這局結束了」而被送回大廳。 */
-        if (room.phase === 'lobby' && S.inMatch) {
-          S.inMatch = false;
-        } else if (room.phase === 'lobby' && prev && prev !== 'lobby' && opt.onBackToLobby) {
-          opt.onBackToLobby();
+        /* 新的一局：把上一局的收場狀態全部清乾淨 */
+        if (room.phase === 'playing') {
+          S.resultShown = false;
+          S.resultAt = 0;
+          S.wrapped = false;
+          S.wantRematch = false;
+          clearWrap();
         }
       }
+
+      /* ---- 開場 ---- */
+      /* 正好在結算階段才進來（重新整理、晚一步進房）也要進遊戲畫面，才看得到結果 */
       const resultReady = room.phase === 'result' && !S.resultShown;
-      if (!S.inMatch && c.match && (room.phase === 'playing' || resultReady)) {
+      if (!S.inMatch && !S.wrapped && c.match && (room.phase === 'playing' || resultReady)) {
         S.inMatch = true;
         S.spectating = room.youAre !== 'player';
         if (opt.onMatchStart) opt.onMatchStart({ spectating: S.spectating, meId: myId(), room: room });
       }
+
+      /* ---- 收場 ---- */
+      /* 「房間回到大廳」是這一局結束的唯一信號，而伺服器只在階段變的時候推一次
+       * 房間狀態、回到大廳之後也不再推快照 —— 所以這一則訊息一定要處理完，
+       * 不能像以前那樣提前 return。漏掉就沒有下一次機會，畫面會永遠卡在上一局的
+       * 結算上，連下一局都開不起來（實測真的卡住過）。 */
+      if (room.phase === 'lobby' && prev && prev !== 'lobby') {
+        notifyMatchEnd();                 /* 結算還沒播過就補播（沒有結果就什麼都不做） */
+        const seen = S.resultShown ? Date.now() - S.resultAt : MIN_RESULT_MS;
+        if (seen >= MIN_RESULT_MS) wrapUp();
+        else scheduleWrap(MIN_RESULT_MS - seen);
+      }
+
+      /* 按過「再來一局」的人，一回到房間就自動幫他按好準備 ——
+       * 之後就跟原本開房間一模一樣：等對方也準備好，房主按開始。 */
+      if (room.phase === 'lobby' && S.wantRematch) {
+        S.wantRematch = false;
+        sendReady(room);
+      }
+    }
+
+    /** 還沒按準備的玩家就幫他按下去（不重複送） */
+    function sendReady(room) {
+      const c = S.client;
+      if (!c || !room) return;
+      const me = room.members && room.members.find(m => m.id === myId());
+      if (me && me.role === 'player' && !me.ready) c.actions.ready(true);
     }
 
     function notifyMatchEnd() {
       const c = S.client;
-      if (!c || !c.state.result || S.resultShown) return;
+      if (!c || !c.state.result || S.resultShown || S.wrapped) return;
       S.resultShown = true;
+      S.resultAt = Date.now();
       S.inMatch = false;
       if (opt.onMatchEnd) opt.onMatchEnd(c.state.result, myId());
     }
 
+    function clearWrap() {
+      if (S.wrapTimer) clearTimeout(S.wrapTimer);
+      S.wrapTimer = 0;
+    }
+
+    function scheduleWrap(ms) {
+      clearWrap();
+      S.wrapTimer = setTimeout(() => { S.wrapTimer = 0; wrapUp(); }, Math.max(0, ms));
+    }
+
+    /** 這一局收場：叫 app.js 離開結算畫面（回房間等下一局，或回大廳） */
+    function wrapUp() {
+      clearWrap();
+      if (S.wrapped) return;
+      if (!S.inMatch && !S.resultShown) return;   /* 根本沒進過這一局，不用收場 */
+      S.wrapped = true;
+      S.inMatch = false;
+      renderRoom();
+      if (opt.onBackToLobby) opt.onBackToLobby();
+    }
+
     function leaveToLobby() {
+      clearWrap();
       S.inMatch = false;
       S.resultShown = false;
+      S.resultAt = 0;
+      S.wrapped = false;
+      S.wantRematch = false;
       S.lastRoomPhase = null;
       if (S.client) S.client.state.room = null;
       renderRoom();
@@ -455,7 +526,9 @@
       if (els.roomHint) {
         els.roomHint.textContent =
           room.phase === 'playing' ? '對局進行中'
-          : room.phase === 'result' ? '結算中，等一下就回房間'
+          : room.phase === 'result'
+            ? (S.wantRematch ? '已經按了再來一局，回到房間就會自動幫你準備好'
+              : '結算中，等一下就回房間')
           : !amPlayer ? '你在觀戰。席位空出來就可以搶（先按先得）'
           : seats.length < room.seats ? '等另一個人進來，或用邀請連結叫朋友'
           : room.canStart ? '兩個人都準備好了，房主可以開始'
@@ -669,9 +742,34 @@
     bind();
     setStatus('offline');
 
+    /**
+     * 結算畫面上的「再來一局」：馬上回房間，並且自動幫他按好準備。
+     * 之後的流程跟原本開房間一模一樣 —— 等對方也準備好，房主按開始。
+     * （不能直接開下一局：開局是伺服器的權限，而且要兩個人都準備好。）
+     */
+    function rematch() {
+      const c = S.client;
+      const room = c && c.state.room;
+      S.wantRematch = true;
+      if (c) c.actions.resultDone();      /* 兩邊都按了就馬上回房間，不用等結算停留 */
+      if (room && room.phase === 'lobby') {
+        S.wantRematch = false;
+        sendReady(room);
+      }
+      backToRoom();
+    }
+
+    /** 結算畫面上的「回到房間」：不等結算停留跑完，馬上收場 */
+    function backToRoom() {
+      if (S.client) S.client.actions.resultDone();
+      S.resultShown = true;         /* 已經看過結算了，不要再補播 */
+      wrapUp();
+      renderRoom();
+    }
+
     return {
       PHRASES,
-      connect, disconnect, client,
+      connect, disconnect, client, rematch, backToRoom,
       renderLobby, renderRoom, renderChat,
       takeInviteFromUrl,
       get status() { return S.status; },
