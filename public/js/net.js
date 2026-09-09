@@ -26,6 +26,8 @@
     LOG_KEEP: 360,        /* 保留 6 秒的輸入紀錄（60Hz × 6），重演夠用了 */
     SNAP_KEEP: 20,        /* 對手內插用的快照緩衝 */
     RENDER_DELAY: 0.10,   /* 對手畫在 100ms 前（§4.2） */
+    CLOCK_EASE: 0.10,     /* 對手播放時鐘每一格往目標收多少（0～1） */
+    CLOCK_SNAP: 0.25,     /* 差超過這麼多秒就直接對時（重連、分頁切回來） */
     HARD_SNAP: 4.0,       /* 誤差大於 4 格就直接歸位（傳送、重新連線） */
     DEAD_ZONE: 0.02,      /* 誤差小於這個就當沒事，免得一直微抖 */
     SMOOTH: 0.12,         /* 校正的視覺位移在幾秒內補完 */
@@ -71,6 +73,8 @@
       lastSentDir: null,
       log: [],                      /* [{ time, dir }] 每一步實際用的方向 */
       snaps: [],                    /* [{ time, at, players }] 對手內插用 */
+      playAt: null,                 /* 對手的播放時鐘（對局時間） */
+      playWall: null,               /* 上面那個時鐘對應的真實時間 */
       offset: { x: 0, y: 0, t: 0 }, /* 校正後的視覺補正（自己） */
       /* 連線品質 */
       rtt: 0, jitter: 0, lastPongAt: 0, lastPingAt: 0, hb: 0,
@@ -206,6 +210,7 @@
       }, snap.seed);
       st.log.length = 0;
       st.snaps.length = 0;
+      st.playAt = st.playWall = null;
       st.offset.x = st.offset.y = st.offset.t = 0;
       st.result = null;
       /* 上一局的事件不能留到下一局：沒人在讀的時候（結算已經停掉畫面迴圈）
@@ -245,11 +250,23 @@
           m.steps = m.steps.filter(s => !gone.has(s.id));
         }
       }
-      /* 假階的崩解狀態是會變的，只能靠快照 */
+      /* 假階的崩解狀態是會變的，只能靠快照。
+       * dirty 是「所有正在裂或已經碎掉的階梯」的完整清單，所以不在清單裡的一律要
+       * 清回原狀 —— 這一段以前只更新清單裡的那幾階，於是：
+       *   本地預測比伺服器超前 100ms 左右，會先踩上假階、先把 0.25 秒的引信點著；
+       *   這時伺服器還沒踩到，清單裡當然沒有這一階，引信就不會被回捲；
+       *   而回溯重演是「從快照時間點重跑到現在」，每收一份快照就把同一段時間
+       *   再扣一次（實測平均 6.75 步／份 × 30 份／秒），引信等於以四倍速在燒。
+       * 結果假階比伺服器早很多就碎了，人先掉下去、下一份快照又被拉回階梯上，
+       * 一來一回誤差可以到 2.35 格 —— 這就是「站到會消失的平面上，消失的時候
+       * 人物跟平面會不正常跳動」。清單當成完整真相之後，引信只會被扣一次。 */
       if (snap.dirty) {
-        for (const d of snap.dirty) {
-          const s = m.steps.find(x => x.id === d.id);
-          if (s) { s.breakIn = d.breakIn; s.broken = d.broken; }
+        const marked = new Map();
+        for (const d of snap.dirty) marked.set(d.id, d);
+        for (const s of m.steps) {
+          const d = marked.get(s.id);
+          if (d) { s.breakIn = d.breakIn; s.broken = d.broken; }
+          else if (s.breakIn != null || s.broken) { s.breakIn = null; s.broken = false; }
         }
       }
 
@@ -276,6 +293,12 @@
       st.count.replays++;
       st.count.replaySteps += steps;
       for (let i = 0; i < steps; i++) {
+        /* 最後一步之前重新記一次「上一格」。
+         * 回溯重演等於把「現在」搬到新的時間軸上，而畫面內插用的「上一格」
+         * 還停在校正前的舊時間軸 —— 兩邊相減，校正的那一幀畫面就會甩一下
+         * （實測角色甩到 1.3 格）。把基準記在重演的最後一步，內插的兩端就都
+         * 在同一條時間軸上了。 */
+        if (beforeStep && i === steps - 1) beforeStep(m);
         Rules.stepMatch(m, inputsAt(m.time), STEP_MS);
       }
       return steps;
@@ -351,7 +374,14 @@
           st.offset.x = st.offset.y = st.offset.t = 0;   /* 太遠就直接歸位，不平滑 */
         } else if (e > C.DEAD_ZONE) {
           st.count.corrections++;
-          st.offset.x = dx; st.offset.y = dy; st.offset.t = C.SMOOTH;
+          /* 還沒補完的視覺位移要「疊上去」，不能直接蓋掉。
+           * 蓋掉的話，剩下那一段就會在同一幀補完 —— 而且校正常常一次只偏一個軸，
+           * 一次純水平的校正（dy≈0）會把還在補的垂直位移直接清成 0，
+           * 角色就瞬移一整格（實測 1.29 格，站到假階上崩解時最明顯）。 */
+          const left = visualOffset();
+          st.offset.x = left.x + dx;
+          st.offset.y = left.y + dy;
+          st.offset.t = C.SMOOTH;
         }
       }
 
@@ -403,11 +433,36 @@
       return ran;
     }
 
+    /**
+     * 對手的播放時鐘。要畫在「最新快照 − RENDER_DELAY」那個時間點上，但不能直接
+     * 用 newest.time − RENDER_DELAY + (now − newest.at) 算 ——
+     * 伺服器的權威迴圈是 setInterval ＋ 累加器，只要遲到一次就會在同一輪補兩個
+     * tick、兩份快照同一瞬間抵達。那個算式會因此瞬間往前跳一整個 tick，
+     * 對手就在畫面上瞬移（實測 0.65 格，144Hz 特別明顯）。
+     * 所以時鐘自己跟著真實時間走，再用每格 10% 慢慢往目標收；差太多才直接對時。
+     */
+    function remoteClock() {
+      const newest = st.snaps[st.snaps.length - 1];
+      const wall = now();
+      const want = newest.time - C.RENDER_DELAY + (wall - newest.at) / 1000;
+      if (st.playAt == null || st.playWall == null) {
+        st.playAt = want;
+        st.playWall = wall;
+        return want;
+      }
+      let t = st.playAt + (wall - st.playWall) / 1000;   /* 先照真實時間前進 */
+      st.playWall = wall;
+      const diff = want - t;
+      if (Math.abs(diff) > C.CLOCK_SNAP) t = want;       /* 差太多：直接對時 */
+      else t += diff * C.CLOCK_EASE;                     /* 差一點：慢慢收 */
+      st.playAt = t;
+      return t;
+    }
+
     /** 對手：畫在 100ms 前，兩個快照之間內插（§4.2） */
     function applyRemoteInterpolation() {
       if (!st.match || st.snaps.length < 2) return;
-      const newest = st.snaps[st.snaps.length - 1];
-      const target = newest.time - C.RENDER_DELAY + (now() - newest.at) / 1000;
+      const target = remoteClock();
       let a = st.snaps[0], b = st.snaps[st.snaps.length - 1];
       for (let i = 0; i < st.snaps.length - 1; i++) {
         if (st.snaps[i].time <= target && st.snaps[i + 1].time >= target) {

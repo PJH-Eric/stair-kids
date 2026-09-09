@@ -105,11 +105,15 @@ function createWorld(cfg) {
     hub.markDisconnected(client.person.id);
   }
 
-  /** 推進 ms 毫秒（每 1/60 秒一格） */
-  function advance(ms, onFrame) {
+  /**
+   * 推進 ms 毫秒。預設每 1/60 秒一格（正常的畫面更新率），
+   * frameMs 可以改成 8.33（144Hz）或 250（分頁被瀏覽器節流）來驗時間相關的機制。
+   */
+  function advance(ms, onFrame, frameMs) {
     const end = T + ms;
+    const step = frameMs || STEP_MS;
     while (T < end) {
-      T += STEP_MS;
+      T += step;
       /* 送達的封包 */
       for (let i = 0; i < queue.length; i++) {
         if (queue[i].at <= T) { const it = queue.splice(i, 1)[0]; i--; it.run(); }
@@ -574,6 +578,172 @@ group('對手在移動的時候不能有殘影（實測真的看到過）');
   ok(pure < 0.2, '只用 net.js 的位置：對手不會來回跳', '來回 ' + pure.toFixed(3) + ' 格');
   ok(mixed > 1, '混兩套時間軸的舊做法真的會來回跳（這就是殘影）', '來回 ' + mixed.toFixed(3) + ' 格');
   ok(pure * 5 < mixed, '換掉之後改善一個數量級', mixed.toFixed(2) + ' → ' + pure.toFixed(2) + ' 格');
+}
+
+/* ---------------------------------------------------------- */
+group('站到會消失的平面上：假階的引信不能自己燒快（實測會跳動）');
+{
+  /* 曾經發生的事：站到會消失的平面（假階）上，消失的那一刻人物跟平面會不正常跳動。
+   * 原因是 apply() 只更新伺服器點名的那幾階：
+   *   本地預測比伺服器超前 100ms 左右，會先踩上假階、先把 0.25 秒的引信點著；
+   *   這時伺服器還沒踩到，dirty 清單裡當然沒有它，引信就不會被回捲；
+   *   而回溯重演是「從快照時間點重跑到現在」，每收一份快照都把同一段時間再扣一次
+   *   （平均 6.75 步／份 × 30 份／秒），引信等於四倍速在燒。
+   * 假階因此比伺服器早碎，人先掉下去、下一份快照又被拉回階梯上，
+   * 一來一回誤差量到 2.35 格。現在 dirty 當成完整真相，引信只會被扣一次。 */
+  const w = createWorld({ lag: 80, seed: 11 });
+  const a = w.connect('甲', 'yuan');
+  const b = w.connect('乙', 'mimi');
+  w.advance(400);
+  a.actions.create('假階房', 'normal');
+  w.advance(400);
+  b.actions.join(a.state.room.id, 'player');
+  w.advance(400);
+  a.actions.ready(true);
+  b.actions.ready(true);
+  w.advance(400);
+  a.actions.start();
+  w.advance(400);
+
+  const room = [...w.hub.rooms.values()][0];
+  const driveA = drive(a, 'hard', 3);
+  const driveB = drive(b, 'normal', 9);
+  const srvBreak = new Map(), cliBreak = new Map();
+  let camBack = 0, lastCam = null, lastMatch = null;
+
+  w.advance(20000, () => {
+    driveA();
+    driveB();
+    if (room.match) {
+      for (const st of room.match.steps) {
+        if (st.broken && !srvBreak.has(st.id)) srvBreak.set(st.id, room.match.time);
+      }
+    }
+    const m = a.match;
+    if (!m) return;
+    for (const st of m.steps) {
+      if (st.broken && !cliBreak.has(st.id)) cliBreak.set(st.id, m.time);
+    }
+    /* 收到完整快照時鏡像是新的物件，鏡頭要重新起算 */
+    if (m !== lastMatch) { lastMatch = m; lastCam = null; }
+    if (lastCam != null && m.cameraTop < lastCam - 1e-9) {
+      camBack = Math.min(camBack, m.cameraTop - lastCam);
+    }
+    lastCam = m.cameraTop;
+  });
+
+  let pairs = 0, worstGap = 0;
+  for (const [id, t] of cliBreak) {
+    if (!srvBreak.has(id)) continue;
+    pairs++;
+    worstGap = Math.max(worstGap, Math.abs(t - srvBreak.get(id)));
+  }
+  const st = a.stats();
+  ok(pairs >= 2, '這一局真的有假階碎掉（有東西可以比）', pairs + ' 階');
+  ok(worstGap <= 3 * STEP_MS / 1000 + 1e-6,
+    '客戶端的假階跟伺服器同時碎（差 3 個 tick 以內）', '最大差 ' + worstGap.toFixed(3) + ' 秒');
+  /* 修好之前最大誤差是 2.35 格（＝人被拉回上一階），平均 0.08。
+   * 剩下的那一點是另一個來源：伺服器一個 tick（33ms）只用一個方向，
+   * 客戶端卻是每 1/60 秒一步各用當下的方向，所以走到階梯邊緣時偶爾會
+   * 一邊踩到、一邊踩空，差一整階。它會被視覺補正在 0.12 秒內滑掉
+   * （smooth-check 量到的單幀位移都還在物理上限內），不是瞬移。 */
+  ok(st.errMax < 2, '自己的位置不會被拉回上一階（誤差遠小於修好前的 2.35 格）',
+    '最大 ' + st.errMax + ' 格、平均 ' + st.errAvg);
+  ok(st.errAvg < 0.15, '平均誤差很小（畫面大部分時間完全對得上）', st.errAvg + ' 格');
+  ok(st.hardSnaps === 0, '不需要硬歸位');
+  ok(camBack === 0, '客戶端的鏡頭永遠不回捲（回捲就是整個畫面在跳）',
+    camBack.toFixed(4) + ' 格');
+}
+
+/* ---------------------------------------------------------- */
+group('時間相關的機制：30Hz 迴圈、掉幀、量延遲、結算停留、輸入節流');
+{
+  /* 1. 伺服器的 30Hz 累加器：對局時間要跟真實時間一致 */
+  const { w, a, b } = startedMatch({ lag: 40, seed: 5 });
+  const room = [...w.hub.rooms.values()][0];
+  const driveA = drive(a, 'normal', 1), driveB = drive(b, 'normal', 2);
+  const tick = () => { driveA(); driveB(); };
+  w.advance(4000, tick);                       /* 過倒數 */
+  const t0 = room.match.time, wall0 = w.now();
+  w.advance(5000, tick);
+  const drift = Math.abs((room.match.time - t0) - (w.now() - wall0) / 1000);
+  ok(drift < 0.05, '30Hz 權威迴圈：對局時間跟真實時間一致', '差 ' + drift.toFixed(4) + ' 秒');
+
+  /* 2. 量延遲：PING_MS 是 1.5 秒一次，跑幾秒就該量得出來 */
+  /* 假網路的單向延遲是 lag/2，再加上「一格才處理一次封包」的量化（16.7ms／跳），
+   * 所以量出來會比設定的 40ms 多一點，但不能少、也不能多一倍。 */
+  const rtt = a.stats().rtt;
+  ok(rtt >= 40 && rtt <= 40 + 2 * STEP_MS + 10, '延遲量得出來（PING_MS 的機制有在跑）',
+    rtt + 'ms vs 設定 40ms');
+
+  /* 3. 本地超前量：應該約等於單向延遲 ＋ 一個 tick（太小＝預測沒在超前，按鍵會鈍） */
+  const ahead = a.stats().aheadMs;
+  ok(ahead > 1000 / 30 && ahead < 250, '本地模擬確實在超前跑（按鍵才不會鈍）',
+    ahead + 'ms，至少要一個 tick（33ms）');
+
+  /* 4. 分頁被節流：一次跳 250ms 的畫格，補完之後不能亂掉 */
+  const before = a.stats().hardSnaps;
+  w.advance(2000, tick, 250);
+  w.advance(2000, tick);
+  ok(a.stats().hardSnaps === before, '分頁節流回來不需要硬歸位');
+  ok(Math.abs(a.match.time - room.match.time) < 0.5,
+    '節流回來之後客戶端與伺服器的時間還是對得上',
+    '差 ' + (a.match.time - room.match.time).toFixed(3) + ' 秒');
+  ok(room.phase === 'playing' || room.phase === 'result', '這一局沒有因為節流而壞掉',
+    room.phase);
+}
+
+{
+  /* 5. 結算停留：沒人回報看完就要等滿 10 秒（RESULT_MS） */
+  const { w, a, b } = startedMatch({ lag: 40, seed: 9 });
+  const room = [...w.hub.rooms.values()][0];
+  w.advance(4000);
+  for (const p of room.match.players) { p.hp = 0; p.alive = false; p.state = 'stun'; }
+  w.advance(200);
+  ok(room.phase === 'result', '兩個人都死了 → 結算階段', room.phase);
+  const startedAt = w.now();
+  w.advance(9000);
+  ok(room.phase === 'result', '9 秒還在結算停留（結算不會被提早收掉）', room.phase);
+  w.advance(1500);
+  ok(room.phase === 'lobby', '10 秒之後自動回房間', room.phase);
+  const waited = (w.now() - startedAt) / 1000;
+  ok(waited >= 9.5 && waited <= 11, '停留時間就是設定的 10 秒', waited.toFixed(1) + ' 秒');
+}
+
+{
+  /* 6. 兩邊都按了「再來一局／回到房間」就不用等滿 10 秒 */
+  const { w, a, b } = startedMatch({ lag: 40, seed: 21 });
+  const room = [...w.hub.rooms.values()][0];
+  w.advance(4000);
+  for (const p of room.match.players) { p.hp = 0; p.alive = false; p.state = 'stun'; }
+  w.advance(200);
+  ok(room.phase === 'result', '進到結算階段');
+  a.actions.resultDone();
+  w.advance(300);
+  ok(room.phase === 'result', '只有一邊看完，還是要等（對方還在看結算）', room.phase);
+  b.actions.resultDone();
+  w.advance(300);
+  ok(room.phase === 'lobby', '兩邊都看完就馬上回房間', room.phase);
+}
+
+{
+  /* 7. 輸入節流（INPUT_MIN_MS = 33ms）只擋「方向沒變」的重送，
+   *    真的改方向一定要送得出去 —— 不然按了會沒反應。 */
+  const { w, a, b } = startedMatch({ lag: 40, seed: 33 });
+  const room = [...w.hub.rooms.values()][0];
+  w.advance(4000);
+  const meId = a.state.me.id;
+  const dirOnServer = () => {
+    const it = room.inputs.get(meId);
+    return it ? it.dir : 0;
+  };
+  let allArrived = true;
+  for (const dir of [1, -1, 1, 0, -1, 1]) {
+    a.setDir(dir);
+    w.advance(120);
+    if (dirOnServer() !== dir) allArrived = false;
+  }
+  ok(allArrived, '連續改方向，每一次都送到伺服器（節流不會吃掉按鍵）');
 }
 
 /* ---------------------------------------------------------- */

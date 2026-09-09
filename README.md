@@ -41,6 +41,7 @@ npm run test:render    # scripts/render-check.js   死亡與結算之後的畫�
 npm run test:audio     # scripts/audio-check.js    音訊設定
 npm run test:online-chat # scripts/online-chat-check.js  對局中的文字聊天
 npm run test:flow      # scripts/flow-check.js     線上完整流程（假瀏覽器跑真的 app.js）
+npm run test:smooth    # scripts/smooth-check.js   線上畫面順暢度（60/144/30Hz、掉幀、延遲抖動）
 ```
 
 全部都是零依賴的純 Node，不需要瀏覽器。指定延遲的用法：
@@ -347,6 +348,24 @@ M0 的做法：實作在 `stairs.js`，`rules.js` 直接轉出 `Rules.makeStairs
 
 這樣分得出「連線真的斷了」與「這個分頁忙了一下」。修好之後同一份測試跑起來
 **心跳誤判 0 次**（之前每一局結束都會發生）。
+
+### 畫面順暢度驗收（`scripts/smooth-check.js`）
+
+「對手有殘影」「站到會消失的平面上會跳動」這種問題，程式碼本身不會報錯，
+只有量「每一格畫面角色在螢幕上動了多少」才抓得到。這一支用同一個假瀏覽器
+（`scripts/fake-browser.js`）跑真的前端，直接讀角色圖層每一格被寫進去的
+`transform`，再用角色自己的 `scale(k)` 把像素換回「格」，所以門檻可以直接
+用規則核心的速度上限來算（落速 18 ＋ 鏡頭追速 8 ＝ 26 格／秒）：
+
+| 指標 | 意思 | 修好前 → 修好後 |
+| --- | --- | --- |
+| 單幀最大位移 | 一格畫面移動幾格；超過物理上限就是瞬移 | 對手 0.65 → 0.13 格（144Hz） |
+| 來回幅度 | 連續兩幀反向的較小邊，也就是抖動大小 | 3.49 → 0.07 格 |
+| 大幅來回比例 | 反向 > 0.15 格的畫格佔比 | 67% → 0% |
+
+跑的組合：60Hz／144Hz／30Hz 畫面 × 0ms／80ms／200ms＋40ms 抖動，
+再加「伺服器權威迴圈被拖慢成 100ms 一次」與「分頁被節流成 4Hz 再回來」。
+每一種都驗倒數 3、2、1 有顯示、兩個角色都畫得出來、結算只出現一次。
 
 ### 假瀏覽器跑真前端的流程驗收（`scripts/flow-check.js`）
 
