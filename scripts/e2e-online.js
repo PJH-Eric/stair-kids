@@ -10,7 +10,7 @@
  *   node scripts/e2e-online.js --url=https://xxx.onrender.com --shots=./screenshots
  *
  * 驗的是「三個瀏覽器同時連同一台伺服器」才看得出來的東西：
- * 開房、大廳列表、加入、席位滿了自動觀戰、準備好、開始、對戰、快速短語、
+ * 開房、大廳列表、加入、席位滿了自動觀戰、準備好、開始、對戰、文字聊天、快速短語、
  * 邀請連結、搶位、踢人、結算、結算停留結束自動回房間、房間沒人自動關掉。
  */
 'use strict';
@@ -160,6 +160,10 @@ const group = t => console.log('\n' + t);
   await tap(A, '#game-chat-phrases [data-say]'); await wait(800);
   const heard = await B.$$eval('#game-chat-list li', ns => ns.map(n => n.textContent.trim()));
   ok(heard.some(t => t.indexOf('加油') >= 0), '對手收得到快速短語', JSON.stringify(heard.slice(-2)));
+  await A.fill('#game-chat-input', '對局中也可以打字');
+  await A.press('#game-chat-input', 'Enter'); await wait(800);
+  const typed = await B.$$eval('#game-chat-list li', ns => ns.map(n => n.textContent.trim()));
+  ok(typed.some(t => t.indexOf('對局中也可以打字') >= 0), '對手收得到對局文字訊息', JSON.stringify(typed.slice(-2)));
   await shot(A, '線上-對戰中');
   await shot(C, '線上-觀戰中');
 

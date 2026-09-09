@@ -16,7 +16,7 @@
   const Characters = root.Characters;
   const Nicknames = root.Nicknames;
 
-  /* 對局中不能打字（方向鍵會被輸入框吃掉），所以只給短語（規劃書 §7.4） */
+  /* 對局中保留自由輸入與短語；輸入框聚焦時，input.js 會讓文字輸入優先。 */
   const PHRASES = ['加油！', '小心刺！', '厲害！', '等我一下', '再來一局', '哈哈哈'];
 
   const $ = (sel, root2) => (root2 || document).querySelector(sel);
@@ -86,7 +86,9 @@
 
       gameChat: $('#side-chat'),
       gameChatList: $('#game-chat-list'),
-      gameChatPhrases: $('#game-chat-phrases')
+      gameChatPhrases: $('#game-chat-phrases'),
+      gameChatForm: $('#game-chat-form'),
+      gameChatInput: $('#game-chat-input')
     };
 
     const S = {
@@ -620,13 +622,18 @@
         }
       });
 
-      if (els.chatForm) els.chatForm.addEventListener('submit', ev => {
-        ev.preventDefault();
-        const text = els.chatInput ? els.chatInput.value : '';
+      const submitChat = input => {
+        const text = input ? input.value : '';
         if (!text.trim()) return;
         if (S.client) S.client.actions.chat(text);
-        if (els.chatInput) els.chatInput.value = '';
-      });
+        if (input) input.value = '';
+      };
+      const chatSubmit = input => ev => {
+        ev.preventDefault();
+        submitChat(input);
+      };
+      if (els.chatForm) els.chatForm.addEventListener('submit', chatSubmit(els.chatInput));
+      if (els.gameChatForm) els.gameChatForm.addEventListener('submit', chatSubmit(els.gameChatInput));
 
       const sayHandler = ev => {
         const btn = ev.target.closest('[data-say]');

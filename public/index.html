@@ -309,11 +309,15 @@
         </ul>
       </div>
 
-      <!-- 對局中的聊天：只放最後幾行 ＋ 快速短語（打字會被方向鍵吃掉，所以不給輸入框） -->
+      <!-- 對局中的聊天：最後幾行、自由輸入與快速短語 -->
       <div class="side-block side-chat" id="side-chat" hidden>
         <div class="side-label block-label">聊天</div>
         <ul class="chat-list mini" id="game-chat-list"></ul>
         <div class="chat-phrases mini" id="game-chat-phrases"></div>
+        <form class="chat-form mini" id="game-chat-form" autocomplete="off">
+          <input id="game-chat-input" type="text" maxlength="60" placeholder="打字聊天…">
+          <button class="mini-btn go" type="submit">送出</button>
+        </form>
       </div>
 
       <div class="side-foot">
