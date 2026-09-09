@@ -23,14 +23,16 @@
     { id: 'synth', name: '電子音', wave: 'square', decay: 0.22, gain: 0.09, octave: 1 }
   ];
 
-  function create() {
+  function create(initialSettings) {
     let ctx = null;
     let master = null, sfxGain = null, bgmGain = null;
     let unlocked = false;
     let timer = null, cursor = 0;
     let scene = 0;            /* 目前世界對應的樂器索引 */
     let tempoMul = 1;         /* 速度倍率越高，節拍越快 */
-    const settings = { bgm: true, sfx: true, bgmVol: 0.35, sfxVol: 0.6 };
+    const settings = Object.assign({
+      bgm: true, sfx: true, bgmVol: 0.35, sfxVol: 0.6
+    }, initialSettings || {});
 
     function unlock() {
       if (unlocked) return;

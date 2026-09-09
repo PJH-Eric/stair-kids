@@ -53,7 +53,13 @@
   };
 
   let store = Store.load();
-  const sound = Sound.create();
+  /* 先帶入本機設定，首次使用者手勢解鎖音訊時才不會回到預設開啟。 */
+  const sound = Sound.create({
+    bgm: store.bgm,
+    bgmVol: store.bgmVol,
+    sfx: store.sfx,
+    sfxVol: store.sfxVol
+  });
   const input = Input.create();
   const view = Render.create(els.canvas, els.actors);
   const settingsModal = SvgUI.modal(els.modal, els.settingsBtn);
