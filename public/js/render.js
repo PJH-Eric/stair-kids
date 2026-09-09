@@ -14,8 +14,11 @@
   const fieldWidth = () => (root.Rules ? root.Rules.C.FIELD_W : 14);
   const playerW = () => (root.Rules ? root.Rules.C.PLAYER_W : 1.25);
   const playerH = () => (root.Rules ? root.Rules.C.PLAYER_H : 2.0);
-  const VOID_UNITS = 2.2;               /* 死亡線下面留幾格的深淵：
-                                         * 看得到「掉下去就沒了」，又不會浪費半個螢幕。 */
+  const VOID_UNITS = 1.2;               /* 死亡線下面留幾格的深淵：
+                                         * 看得到「掉下去就沒了」，又不會浪費半個螢幕。
+                                         * 2.2 → 1.2：這段是不能玩的死空間，而且它在 resize()
+                                         * 的高度預算裡會等比壓縮可玩區域的縮放 ——
+                                         * 2.2 格會吃掉 11% 的高度，看起來就像畫面被切走一塊。 */
   const CEIL_UNITS = 1.1;               /* 畫面最上面留給天花板的高度（格）。
                                          * 天花板的底座本來畫在 cameraTop 以上，也就是畫面外，
                                          * 結果只剩白色的刺露在淺色背景上，等於看不見。
@@ -821,13 +824,16 @@
       ctx.restore();
     }
 
-    /** 場地下緣以外的「外面」：畫成暗色，讓玩家看得出掉出去就沒了 */
+    /** 場地下緣以外的「外面」：畫成一層偏暗的霧，讓玩家看得出掉出去就沒了。
+     * 不可以畫成近黑的實心色塊 —— 那看起來像「畫面被裁掉」而不是「下面是深淵」，
+     * 原本最深到 85% 不透明，實測就是這個感覺。 */
     function drawVoid() {
       if (view.fieldBottom >= view.h - 0.5) return;
       ctx.save();
-      const g = ctx.createLinearGradient(0, view.fieldBottom, 0, Math.min(view.h, view.fieldBottom + 40));
-      g.addColorStop(0, 'rgba(30,16,8,.55)');
-      g.addColorStop(1, 'rgba(20,10,5,.85)');
+      /* 漸層走完整段深淵，不要寫死 40px：縮放差很多時會變成上半漸層、下半死黑一片 */
+      const g = ctx.createLinearGradient(0, view.fieldBottom, 0, view.h);
+      g.addColorStop(0, 'rgba(74,52,38,.16)');
+      g.addColorStop(1, 'rgba(48,32,22,.42)');
       ctx.fillStyle = g;
       ctx.fillRect(0, view.fieldBottom, view.w, view.h - view.fieldBottom);
       ctx.restore();
