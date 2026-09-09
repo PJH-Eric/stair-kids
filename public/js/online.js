@@ -88,6 +88,7 @@
       pendingInvite: null,        /* 連上線之後要用的邀請碼 */
       wantRoom: null,             /* 連上線之後要進的房號 */
       inMatch: false,
+      resultShown: false,
       spectating: false,
       lastRoomPhase: null,
       chatSeen: 0
@@ -218,15 +219,18 @@
         renderRoom();
         renderChat();
         if (msg.type === 'joined' && opt.onEnterRoom) opt.onEnterRoom(room);
+        const delayedResult = msg.type === 'room' && room && room.phase === 'lobby' &&
+          S.inMatch && c.state.result && !S.resultShown;
+        if (delayedResult) {
+          notifyMatchEnd();
+          return;
+        }
         checkPhase(room);
         return;
       }
       if (msg.type === 'snap') {
         checkPhase(c.state.room);
-        if (c.state.result && S.inMatch) {
-          S.inMatch = false;
-          if (opt.onMatchEnd) opt.onMatchEnd(c.state.result, myId());
-        }
+        notifyMatchEnd();
       }
     }
 
@@ -239,6 +243,7 @@
       if (room.phase !== S.lastRoomPhase) {
         const prev = S.lastRoomPhase;
         S.lastRoomPhase = room.phase;
+        if (room.phase === 'playing') S.resultShown = false;
         /* 只有「從對局／結算回到房間」才通知，第一次看到房間（prev 是 null）不算 ——
          * 不然剛進房就會被當成「這局結束了」而被送回大廳。 */
         if (room.phase === 'lobby' && S.inMatch) {
@@ -247,15 +252,25 @@
           opt.onBackToLobby();
         }
       }
-      if (!S.inMatch && (room.phase === 'playing' || room.phase === 'result') && c.match) {
+      const resultReady = room.phase === 'result' && !S.resultShown;
+      if (!S.inMatch && c.match && (room.phase === 'playing' || resultReady)) {
         S.inMatch = true;
         S.spectating = room.youAre !== 'player';
         if (opt.onMatchStart) opt.onMatchStart({ spectating: S.spectating, meId: myId(), room: room });
       }
     }
 
+    function notifyMatchEnd() {
+      const c = S.client;
+      if (!c || !c.state.result || S.resultShown) return;
+      S.resultShown = true;
+      S.inMatch = false;
+      if (opt.onMatchEnd) opt.onMatchEnd(c.state.result, myId());
+    }
+
     function leaveToLobby() {
       S.inMatch = false;
+      S.resultShown = false;
       S.lastRoomPhase = null;
       if (S.client) S.client.state.room = null;
       renderRoom();
