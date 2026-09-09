@@ -65,6 +65,11 @@
      * 不然兩個人都會叫「小玩家」，對手欄根本分不出誰是誰 */
     nameOf: () => (store.nickname || '').trim(),
     charOf: () => G.char,
+    onNameChange: name => {
+      store.nickname = name;
+      Store.save(store);
+      els.nickname.value = name;
+    },
     /* 畫面內插要在每個固定步之前存一份位置，線上跟單機走同一套 */
     beforeStep: st => snapshotPrev(st),
     onNotice: (text, kind) => toast(text, kind),
@@ -1364,7 +1369,7 @@
     if (document.hidden && G.match && G.match.phase !== 'over') togglePause(true);
   });
 
-  /* 暱稱與角色改了就同步給伺服器（房間卡片、名牌、觀戰名單都要跟著換） */
+  /* 設定頁的暱稱改了就同步給伺服器（房間卡片、名牌、觀戰名單都要跟著換） */
   els.nickname.addEventListener('change', () => {
     store.nickname = (els.nickname.value || '').trim();
     Store.save(store);
@@ -1385,10 +1390,10 @@
   G.difficulty = store.difficulty || 'normal';
   show('home');
 
-  /* 網址帶 ?invite=xxx（朋友貼給你的連結）→ 直接連線進那間房。
-   * 有效性由伺服器驗，無效會回一句看得懂的話。 */
+  /* 網址帶 ?invite=xxx（朋友貼給你的連結）→ 先到大廳確認暱稱，再加入那間房。
+   * token 有效性由伺服器驗，無效會回一句看得懂的話。 */
   if (online.takeInviteFromUrl()) {
-    toast('用邀請連結加入房間…');
+    toast('收到房間邀請，先確認暱稱再加入。');
     show('lobby');
   }
 })();

@@ -919,6 +919,27 @@ button.soon-item:active { transform: translateY(2px); }
 .net-state[data-state="connecting"] { background: #FFF3D6; border-color: #E7C777; color: #8A6416; }
 .net-state[data-state="error"] { background: #FBE1E4; border-color: #E39AA6; color: #A3364A; }
 
+.invite-join-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(250px, 1.35fr);
+  gap: 4px 16px;
+  align-items: end;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 3px solid #E7C777;
+  border-radius: 16px;
+  background: #FFF8E8;
+  box-shadow: 0 3px 0 rgba(167, 125, 61, .16);
+}
+.invite-join-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.invite-join-copy strong { color: var(--brand-dark); font-size: 16px; }
+.invite-join-copy span { color: var(--ink-soft); font-size: 13px; }
+.invite-join-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.invite-join-form .field { flex: 1 1 150px; margin: 0; }
+.invite-join-form .field input { max-width: none; }
+.invite-join-form .big-btn { flex: 0 1 auto; }
+.invite-join-card > .hint { grid-column: 1 / -1; margin: 4px 0 0; }
+
 .lobby-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .lobby-actions .big-btn { flex: 1 1 180px; }
 
@@ -1022,6 +1043,21 @@ button.soon-item:active { transform: translateY(2px); }
 .diff-btn.on { background: var(--brand); border-color: var(--brand-dark); color: #fff; }
 .diff-btn:disabled { cursor: default; opacity: .75; }
 
+.room-identity {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .62);
+}
+.room-identity .field { flex: 1 1 180px; margin: 0; }
+.room-identity .field input { max-width: none; }
+.room-identity .hint { flex: 1 1 100%; margin: 0; }
+
 .room-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
 .room-actions .big-btn { flex: 0 1 auto; }
 /* 「離開房間」推到最右邊，才不會跟「開始這局」擠在一起被誤按 */
@@ -1097,6 +1133,10 @@ button.soon-item:active { transform: translateY(2px); }
 
 /* 手機直向：聊天室矮一點，席位一欄一個 */
 @media (orientation: portrait) and (max-width: 620px) {
+  .invite-join-card { grid-template-columns: 1fr; }
+  .invite-join-card > .hint { grid-column: auto; }
+  .invite-join-form { align-items: stretch; }
+  .invite-join-form .big-btn { flex: 1 1 100%; }
   .chat-list { height: 118px; }
   .seat-list { grid-template-columns: 1fr; }
   .room-actions .big-btn { flex: 1 1 100%; }

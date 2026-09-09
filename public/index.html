@@ -106,6 +106,21 @@
       <button id="btn-refresh" class="mini-btn" type="button">重新整理</button>
     </div>
 
+    <div class="invite-join-card" id="invite-join" hidden>
+      <div class="invite-join-copy">
+        <strong>你收到房間邀請</strong>
+        <span id="invite-join-room">請先確認暱稱，再加入房間</span>
+      </div>
+      <form class="invite-join-form" id="invite-join-form" autocomplete="off">
+        <label class="field">
+          <span>進房暱稱</span>
+          <input id="invite-nickname" type="text" maxlength="8" autocomplete="nickname" placeholder="小玩家">
+        </label>
+        <button id="btn-invite-join" class="big-btn primary" type="submit">確認加入房間</button>
+      </form>
+      <p class="hint tiny" id="invite-join-hint" role="status"></p>
+    </div>
+
     <div class="lobby-actions">
       <button id="btn-quick" class="big-btn primary" type="button">快速加入</button>
       <button id="btn-create" class="big-btn" type="button">開一間新房</button>
@@ -121,9 +136,6 @@
       </div>
     </div>
 
-    <div class="panel-actions">
-      <button class="big-btn ghost" type="button" data-go="setup">改暱稱與角色</button>
-    </div>
   </div>
 </section>
 
@@ -134,6 +146,15 @@
       <h2 id="room-title">房間</h2>
       <div class="room-diff" id="room-diff" role="group" aria-label="難度"></div>
     </div>
+
+    <form class="room-identity" id="room-identity" hidden autocomplete="off">
+      <label class="field">
+        <span>房內暱稱</span>
+        <input id="room-nickname" type="text" maxlength="8" autocomplete="nickname" placeholder="小玩家">
+      </label>
+      <button id="btn-room-nickname" class="mini-btn" type="submit">套用暱稱</button>
+      <span class="hint tiny" id="room-nickname-hint" role="status">房間內可以隨時修改，其他人會即時看到。</span>
+    </form>
 
     <ul class="seat-list" id="room-seats"></ul>
 

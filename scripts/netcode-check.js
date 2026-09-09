@@ -206,6 +206,28 @@ group('連線、大廳、開房（走完整協定）');
 }
 
 /* ---------------------------------------------------------- */
+group('邀請連結：確認暱稱後才加入');
+{
+  const w = createWorld({ lag: 0 });
+  const host = w.connect('房主');
+  w.advance(300);
+  host.actions.create('邀請測試房', 'normal');
+  w.advance(300);
+  host.actions.invite();
+  w.advance(300);
+  const token = host.state.room && host.state.room.invite;
+  const guest = w.connect('裝置上的舊暱稱');
+  w.advance(300);
+  guest.actions.useInvite(token, '被邀請的新暱稱');
+  w.advance(300);
+  const guestMember = guest.state.room && guest.state.room.members.find(m => m.id === guest.state.me.id);
+  const hostMember = host.state.room && host.state.room.members.find(m => m.id === guest.state.me.id);
+  ok(!!token, '房主可以產生邀請 token');
+  ok(guestMember && guestMember.name === '被邀請的新暱稱', '邀請確認後以新暱稱加入房間');
+  ok(hostMember && hostMember.name === '被邀請的新暱稱', '房內其他人即時看到邀請者的新暱稱');
+}
+
+/* ---------------------------------------------------------- */
 group('客戶端只送輸入意圖（改前端也作弊不了）');
 {
   const w = createWorld({ lag: 0 });

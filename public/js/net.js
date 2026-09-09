@@ -105,7 +105,11 @@
       chat: text => out({ type: 'chat', text: text }),
       invite: () => out({ type: 'invite' }),
       revokeInvite: () => out({ type: 'invite:revoke' }),
-      useInvite: token => out({ type: 'invite:resolve', token: token }),
+      useInvite: (token, name) => {
+        const msg = { type: 'invite:resolve', token: token };
+        if (name != null) msg.name = name;
+        out(msg);
+      },
       rename: name => { st.me.name = name; out({ type: 'rename', name: name }); },
       setChar: ch => { st.me.char = ch; out({ type: 'char', char: ch }); },
       ping: () => out({ type: 'ping', t: now() })

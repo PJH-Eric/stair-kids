@@ -47,6 +47,12 @@
       lobbyList: $('#lobby-list'),
       lobbyEmpty: $('#lobby-empty'),
       lobbyMe: $('#lobby-me'),
+      inviteJoin: $('#invite-join'),
+      inviteJoinForm: $('#invite-join-form'),
+      inviteJoinRoom: $('#invite-join-room'),
+      inviteNickname: $('#invite-nickname'),
+      btnInviteJoin: $('#btn-invite-join'),
+      inviteJoinHint: $('#invite-join-hint'),
       btnQuick: $('#btn-quick'),
       btnCreate: $('#btn-create'),
       btnRefresh: $('#btn-refresh'),
@@ -54,6 +60,11 @@
 
       roomTitle: $('#room-title'),
       roomDiff: $('#room-diff'),
+      roomIdentity: $('#room-identity'),
+      roomNickname: $('#room-nickname'),
+      roomNicknameForm: $('#room-identity'),
+      btnRoomNickname: $('#btn-room-nickname'),
+      roomNicknameHint: $('#room-nickname-hint'),
       roomSeats: $('#room-seats'),
       roomSpecs: $('#room-specs'),
       roomSpecsBlock: $('#room-specs-block'),
@@ -85,7 +96,9 @@
       retries: 0,
       retryTimer: 0,
       wakeTimer: 0,
-      pendingInvite: null,        /* 連上線之後要用的邀請碼 */
+      pendingInvite: null,        /* { token, roomId }，確認暱稱後才使用 */
+      inviteSubmitting: false,
+      nameMax: 8,
       wantRoom: null,             /* 連上線之後要進的房號 */
       inMatch: false,
       resultShown: false,
@@ -200,15 +213,21 @@
       if (!c) return;
 
       if (msg.type === 'welcome') {
-        /* 身分確認之後才處理「進來就要做的事」（邀請連結、指定房號） */
-        if (S.pendingInvite) { const t = S.pendingInvite; S.pendingInvite = null; c.actions.useInvite(t); }
-        else if (S.wantRoom) { const r = S.wantRoom; S.wantRoom = null; c.actions.join(r, 'player'); }
+        S.nameMax = Number(msg.nameMaxLen) || S.nameMax;
+        /* 邀請連結先停在大廳讓使用者改暱稱；只有按確認才使用 token 加入。 */
+        if (S.wantRoom) { const r = S.wantRoom; S.wantRoom = null; c.actions.join(r, 'player'); }
         if (S.afterConnect) { const f = S.afterConnect; S.afterConnect = null; f(); }
         renderLobby();
         return;
       }
       if (msg.type === 'rooms') { renderLobby(); return; }
-      if (msg.type === 'error') { notice(msg.text, 'bad'); renderRoom(); return; }
+      if (msg.type === 'error') {
+        S.inviteSubmitting = false;
+        notice(msg.text, 'bad');
+        renderLobby();
+        renderRoom();
+        return;
+      }
       if (msg.type === 'notice') { notice(msg.text); return; }
       if (msg.type === 'kicked') { notice('你被房主請出房間了', 'bad'); leaveToLobby(); return; }
       if (msg.type === 'left') { leaveToLobby(); return; }
@@ -216,6 +235,10 @@
 
       if (msg.type === 'joined' || msg.type === 'room') {
         const room = c.state.room;
+        if (msg.type === 'joined' && S.pendingInvite) {
+          S.pendingInvite = null;
+          S.inviteSubmitting = false;
+        }
         renderRoom();
         renderChat();
         if (msg.type === 'joined' && opt.onEnterRoom) opt.onEnterRoom(room);
@@ -279,11 +302,47 @@
 
     /* ---------- 大廳 ---------- */
 
+    function cleanName(name) {
+      return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().slice(0, S.nameMax);
+    }
+
+    function rememberName(name) {
+      if (opt.onNameChange) opt.onNameChange(name);
+      if (S.client) S.client.state.me.name = name;
+    }
+
+    function currentName() {
+      if (S.client && S.client.state.me.name) return S.client.state.me.name;
+      return opt.nameOf ? String(opt.nameOf() || '').trim() : '';
+    }
+
     function renderLobby() {
       const c = S.client;
       if (els.lobbyMe && c) {
         els.lobbyMe.innerHTML = Render.kidAvatarSvg(Characters.byId(c.state.me.char), 34) +
           '<b>' + esc(c.state.me.name) + '</b>';
+      }
+      if (els.inviteJoin) {
+        const invite = S.pendingInvite;
+        els.inviteJoin.hidden = !invite;
+        if (invite) {
+          if (els.inviteJoinRoom) {
+            els.inviteJoinRoom.textContent = invite.roomId
+              ? '房號 ' + invite.roomId + '，請確認暱稱後加入'
+              : '請確認暱稱後加入邀請房間';
+          }
+          if (els.inviteNickname && document.activeElement !== els.inviteNickname) {
+            els.inviteNickname.value = currentName();
+          }
+          if (els.btnInviteJoin) els.btnInviteJoin.disabled = S.status !== 'online' ||
+            !c || S.inviteSubmitting;
+          if (els.inviteJoinHint) {
+            els.inviteJoinHint.textContent = S.inviteSubmitting
+              ? '正在加入房間…'
+              : S.status === 'online' ? '可以修改暱稱，確認後才會加入。'
+              : '等待連線中…';
+          }
+        }
       }
       if (!els.lobbyList) return;
       const rooms = (c && c.state.rooms) || [];
@@ -336,11 +395,13 @@
       if (!room) {
         els.roomSeats.innerHTML = '';
         if (els.roomTitle) els.roomTitle.textContent = '房間';
+        if (els.roomIdentity) els.roomIdentity.hidden = true;
         return;
       }
       const iAmHost = !!room.isHost;
       const seats = room.members.filter(m => m.role === 'player');
       const specs = room.members.filter(m => m.role === 'spectator');
+      const me = room.members.find(m => m.id === myId());
 
       if (els.roomTitle) els.roomTitle.textContent = room.name;
       if (els.roomDiff) {
@@ -349,6 +410,10 @@
           .map(id => '<button class="diff-btn' + (room.difficulty === id ? ' on' : '') +
             '" type="button" data-diff="' + id + '"' + (iAmHost && room.phase === 'lobby' ? '' : ' disabled') +
             '>' + Rules.DIFFICULTY[id].name + '</button>').join('');
+      }
+      if (els.roomIdentity) els.roomIdentity.hidden = !me;
+      if (els.roomNickname && me && document.activeElement !== els.roomNickname) {
+        els.roomNickname.value = me.name || '';
       }
 
       const empty = '<li class="seat is-empty"><div class="seat-face"></div>' +
@@ -369,7 +434,6 @@
           '</li>').join('');
       }
 
-      const me = room.members.find(m => m.id === myId());
       const amPlayer = me && me.role === 'player';
       if (els.btnReady) {
         els.btnReady.hidden = !amPlayer || room.phase !== 'lobby';
@@ -384,7 +448,7 @@
       if (els.btnInvite) els.btnInvite.hidden = !iAmHost;
       if (els.inviteBox) {
         els.inviteBox.hidden = !room.invite;
-        if (room.invite && els.inviteLink) els.inviteLink.value = inviteHref(room.invite);
+        if (room.invite && els.inviteLink) els.inviteLink.value = inviteHref(room.invite, room.id);
       }
       if (els.roomHint) {
         els.roomHint.textContent =
@@ -398,14 +462,15 @@
       renderChat();
     }
 
-    function inviteHref(token) {
+    function inviteHref(token, roomId) {
       try {
         const u = new URL(root.location.href);
+        if (roomId) u.searchParams.set('room', roomId);
         u.searchParams.set('invite', token);
         u.hash = '';
         return u.toString();
       } catch (e) {
-        return root.location.href.split('?')[0] + '?invite=' + token;
+        return root.location.href.split('?')[0] + (roomId ? '?room=' + encodeURIComponent(roomId) + '&' : '?') + 'invite=' + token;
       }
     }
 
@@ -440,6 +505,45 @@
       if (els.gameChatPhrases) els.gameChatPhrases.innerHTML = html;
     }
 
+    function commitRoomName() {
+      const c = S.client;
+      const name = cleanName(els.roomNickname && els.roomNickname.value);
+      if (!name) {
+        notice('暱稱不能空白', 'bad');
+        return false;
+      }
+      if (!c || S.status !== 'online') {
+        notice('目前還沒有連線，暱稱稍後再試', 'bad');
+        return false;
+      }
+      if (name !== c.state.me.name) c.actions.rename(name);
+      rememberName(name);
+      if (els.roomNicknameHint) els.roomNicknameHint.textContent = '已套用，房間成員會看到新的暱稱。';
+      renderRoom();
+      renderLobby();
+      return true;
+    }
+
+    function commitInvite() {
+      const c = S.client;
+      const invite = S.pendingInvite;
+      const name = cleanName(els.inviteNickname && els.inviteNickname.value);
+      if (!invite) return false;
+      if (!name) {
+        notice('暱稱不能空白', 'bad');
+        return false;
+      }
+      if (!c || S.status !== 'online') {
+        notice('正在連線，請稍等一下再加入', 'bad');
+        return false;
+      }
+      rememberName(name);
+      S.inviteSubmitting = true;
+      c.actions.useInvite(invite.token, name);
+      renderLobby();
+      return true;
+    }
+
     /* ---------- 綁事件 ---------- */
 
     function bind() {
@@ -455,6 +559,15 @@
         S.retries = 0;
         connect();
       });
+      if (els.inviteJoinForm) els.inviteJoinForm.addEventListener('submit', ev => {
+        ev.preventDefault();
+        commitInvite();
+      });
+      if (els.roomNicknameForm) els.roomNicknameForm.addEventListener('submit', ev => {
+        ev.preventDefault();
+        commitRoomName();
+      });
+      if (els.roomNickname) els.roomNickname.addEventListener('change', commitRoomName);
 
       if (els.lobbyList) els.lobbyList.addEventListener('click', ev => {
         const btn = ev.target.closest('[data-join]');
@@ -526,14 +639,17 @@
 
     /* ---------- 對外 ---------- */
 
-    /** 網址帶 ?invite=xxx 就直接進那間房（伺服器會驗，無效會給看得懂的提示） */
+    /** 網址帶 ?invite=xxx 先停在大廳，確認暱稱後才進房。 */
     function takeInviteFromUrl() {
       let token = '';
+      let roomId = '';
       try {
-        token = new URLSearchParams(root.location.search).get('invite') || '';
+        const params = new URLSearchParams(root.location.search);
+        token = params.get('invite') || '';
+        roomId = params.get('room') || '';
       } catch (e) { token = ''; }
       if (!token) return null;
-      S.pendingInvite = token;
+      S.pendingInvite = { token: token, roomId: roomId };
       /* 用掉之後把網址清乾淨，重新整理才不會又跳一次 */
       try {
         const u = new URL(root.location.href);

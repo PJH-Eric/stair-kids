@@ -120,6 +120,16 @@ const group = t => console.log('\n' + t);
   const invite = await A.inputValue('#invite-link');
   ok(/invite=[a-z0-9]{8,}/.test(invite), '產生得出邀請連結', invite);
 
+  const D = await open('受邀者', { width: 1024, height: 768 }, invite);
+  ok(await screen(D) === 'screen-lobby', '邀請連結先停在大廳，不會直接進房');
+  ok(await D.$eval('#invite-join', el => !el.hidden), '大廳顯示邀請確認區');
+  await D.fill('#invite-nickname', '邀請後的新暱稱');
+  await tap(D, '#btn-invite-join'); await wait(900);
+  ok(await screen(D) === 'screen-room', '確認暱稱後才加入邀請房間');
+  ok(await D.$$eval('#room-seats .seat b', ns => ns.some(n => n.textContent.indexOf('邀請後的新暱稱') >= 0)),
+    '邀請房間使用確認後的新暱稱');
+  await tap(D, '#btn-leave-room'); await wait(700);
+
   group('準備好與開始');
   await tap(A, '#btn-ready'); await wait(400);
   ok(!(await A.$eval('#btn-start-online', el => !el.hidden && !el.disabled)),
