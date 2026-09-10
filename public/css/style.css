@@ -796,13 +796,16 @@ button.soon-item:active { transform: translateY(2px); }
    * 幼幼班多一顆按鈕、中文字寬又隨裝置字體變，在這裡抄死一個數字一定會對不上。
    * ＋20px ＝ 右邊 10px 的邊距再留 10px 間隙；備援值是「設定按鈕 44px ＋ 邊距」。 */
   .side { padding-right: calc(var(--tools-w, 44px) + 20px + var(--safe-r)); }
-  /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊）。
-   * 垂直位置由 app.js 的 placePads() 量出來（--pad-top）：貼著樓梯畫面的下緣，
-   * 遊戲與操作區連成一整塊，空白全部落到最下面。
-   * --pad-top 還沒量到（剛載入、或量不到尺寸）就先貼底：只留 6px 給立體陰影，
-   * iPhone 的 home indicator 與 Android 的手勢列由 var(--safe-b) 讓開。 */
-  .pad-left { left: calc(16px + var(--safe-l)); bottom: calc(6px + var(--safe-b)); top: var(--pad-top, auto); }
-  .pad-right { left: auto; right: calc(16px + var(--safe-r)); bottom: calc(6px + var(--safe-b)); top: var(--pad-top, auto); }
+  /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊），而且**貼著螢幕最底部**。
+   * 手是握在機身下緣的，拇指的自然落點就在那裡 —— 這條是 Eric 指定的，
+   * 而且優先於「把樓梯畫面下面那條空白擠掉」：上一版讓方向鍵往上貼齊樓梯畫面下緣
+   * （量出來的 --pad-top），按鍵就浮在畫面中間、不在底部了，拇指要往上撐才按得到。
+   * 那條空白留在操作區裡沒關係，.stage 的 border-bottom 已經畫出分界。
+   * 只留 6px：立體陰影（0 6px 0）要有地方畫，不然按鍵看起來像被裁掉半截。
+   * var(--safe-b) 負責 iPhone 的 home indicator 與 Android 的手勢列，
+   * 那一段本來就不能放東西（放了會被系統手勢吃掉）。 */
+  .pad-left { left: calc(16px + var(--safe-l)); bottom: calc(6px + var(--safe-b)); }
+  .pad-right { left: auto; right: calc(16px + var(--safe-r)); bottom: calc(6px + var(--safe-b)); }
   /* 遊戲區與操作區之間畫一條分隔，空白才看得出來是「操作區」不是沒畫完 */
   .stage { border-bottom: 3px solid var(--line); }
   /* 左上角的「離開房間」是 position: fixed，直向的薄狀態列要讓開左邊，
