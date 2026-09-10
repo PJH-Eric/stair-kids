@@ -18,8 +18,7 @@
     sideFoe: $('#side-foe'), hudFoeName: $('#hud-foe-name'), hudFoeLabel: $('#hud-foe-label'),
     hudFoeDepth: $('#hud-foe-depth'), hudFoeHp: $('#hud-foe-hp'),
     canvas: $('#canvas'), actors: $('#actors'), stage: $('#stage'),
-    wrap: document.querySelector('.game-wrap'), side: $('#side'),
-    wrap: $('.game-wrap'), side: $('#side'),
+    wrap: $('.game-wrap'), side: $('#side'), tools: $('.corner-tools'),
     hudDepth: $('#hud-depth'), hudHp: $('#hud-hp'), hudHpRow: $('#hud-hp-row'),
     hudDiff: $('#hud-diff'), hudSpeed: $('#hud-speed'),
     hudWorld: $('#hud-world'), hudNext: $('#hud-next'),
@@ -183,9 +182,22 @@
 
   const BACK_TO = { setup: 'home', online: 'home', help: 'home', lobby: 'online', room: 'lobby' };
 
-  /** 右上角的「結束這局」有沒有出現：直向的狀態列要靠這個讓開右邊 */
-  function markFinishBtn() {
-    document.body.classList.toggle('has-finish', !els.finishBtn.hidden);
+  /**
+   * 量左上角的「離開房間」與右上角的「設定／結束這局」實際佔多寬，丟給 CSS 用。
+   *
+   * 這兩組是 position: fixed，手機直向的資訊欄被壓成上方薄狀態列之後，
+   * 它們就正好疊在狀態列上，狀態列要讓開這麼多才不會被蓋掉深度與血量。
+   * 寬度不是固定值：左邊的字會在「返回／離開房間」之間換，右邊幼幼班還會多一顆
+   * 「結束這局」，而且中文字寬會隨裝置字體變 —— 在 CSS 裡抄死一個數字一定會對不上，
+   * 所以量出來（跟 fitStage() 量 --side-w 同一個做法）。
+   */
+  function measureCorners() {
+    const set = (name, el, visible) => {
+      const w = visible && el ? Math.ceil(el.getBoundingClientRect().width) : 0;
+      document.documentElement.style.setProperty(name, w + 'px');
+    };
+    set('--nav-w', els.nav, !els.nav.hidden);
+    set('--tools-w', els.tools, true);
   }
 
   function show(name) {
@@ -202,7 +214,7 @@
     if (name !== 'game' && els.ovResult) els.ovResult.hidden = true;
     syncPads();
     els.finishBtn.hidden = true;
-    markFinishBtn();
+    measureCorners();
     if (name === 'home') { renderHomeRecords(); refreshPresence(); }
     if (name === 'setup') renderSetup();
     /* 進遊戲畫面才量得到真正的尺寸（隱藏中的 section 量出來是 0），所以在這裡重新收邊 */
@@ -447,7 +459,7 @@
     armFirstTimeTip();
     show('game');
     els.finishBtn.hidden = !G.match.diff.endless;
-    markFinishBtn();
+    measureCorners();
     updateHud(true);
     input.clear();
     loop(0);
@@ -484,7 +496,7 @@
     armFirstTimeTip();
     show('game');
     els.finishBtn.hidden = true;
-    markFinishBtn();
+    measureCorners();
     if (els.spectateTag) els.spectateTag.hidden = !G.spectating;
     if (els.sideChat) els.sideChat.hidden = false;
     /* 觀戰不給方向鍵（也不會送輸入意圖） */
@@ -1053,7 +1065,7 @@
       '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('');
 
     els.finishBtn.hidden = true;
-    markFinishBtn();
+    measureCorners();
     /* 側欄的「本機最深」要跟著更新，不然會停在這局開始前的值 */
     if (els.hudBest) {
       const rec = store.records[result.difficulty];
@@ -1108,6 +1120,8 @@
 
   function fitStage() {
     if (!els.wrap) return;
+    /* 轉向與縮放視窗都會改變按鈕的寬度（斷點會換字級），所以每次收邊都重量一次 */
+    measureCorners();
     const st = view.view;
     const box = els.canvas.getBoundingClientRect();
     /* 直向與窄螢幕不收（那些情況是寬度吃緊，場地本來就已經佔滿）；

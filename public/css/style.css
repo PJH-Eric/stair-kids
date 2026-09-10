@@ -747,7 +747,14 @@ button.soon-item:active { transform: translateY(2px); }
     gap: 8px;
     border-right: 0;
     border-bottom: 2px solid var(--line);
-    padding: calc(6px + var(--safe-t)) 100px 6px calc(10px + var(--safe-l));
+    padding: calc(6px + var(--safe-t)) 6px 6px calc(10px + var(--safe-l));
+    /* 高度一定要撐到「整顆固定按鈕都塞得進狀態列」。
+     * 直向的場地是滿寬的（沒有牆可以擋，見 render.js 的 offX），而狀態列自然高度只有 38px，
+     * 左上角的「離開房間」與右上角的「設定」都是 fixed 按鈕，原本會有一半垂到樓梯畫面上，
+     * 剛好蓋掉最上面的天花板刺 —— 那是最需要看清楚的東西。
+     * 48px ＝ 按鈕的 4px 上緣 ＋ 40px 高（對局中收小，見下面）＋ 邊框與 2px 餘裕。
+     * 不多讓：狀態列每高 1px，下面留給方向鍵的空白就少 1px。 */
+    min-height: calc(48px + var(--safe-t));
     overflow: hidden;
     white-space: nowrap;
   }
@@ -772,9 +779,11 @@ button.soon-item:active { transform: translateY(2px); }
   /* 直向的方向鍵：場地下面本來就空出一塊（見 app.js 的 fitStage），
    * 所以按鍵可以做大 —— 寬一點好按，兩邊各一顆用兩手拇指。 */
   :root { --pad-w: 136px; --pad-h: 112px; }
-  /* 右上角有設定（幼幼班還多一顆「結束這局」），狀態列要讓開，不然世界名稱會被蓋掉 */
-  .side { padding-right: 96px; }
-  body.has-finish .side { padding-right: 190px; }
+  /* 右上角的設定（幼幼班還多一顆「結束這局」）疊在狀態列上，狀態列要讓開它實際的寬度，
+   * 不然世界名稱與速度倍率會被蓋掉。寬度由 app.js 的 measureCorners() 量出來 ——
+   * 幼幼班多一顆按鈕、中文字寬又隨裝置字體變，在這裡抄死一個數字一定會對不上。
+   * ＋20px ＝ 右邊 10px 的邊距再留 10px 間隙；備援值是「設定按鈕 44px ＋ 邊距」。 */
+  .side { padding-right: calc(var(--tools-w, 44px) + 20px + var(--safe-r)); }
   /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊）。
    * 場地的長寬比接近正方形，直向的視窗一定比它高，多出來的高度被 app.js 的
    * fitStage() 收掉之後就是這一塊空白 —— 剛好給方向鍵，所以直向的按鍵可以放大。 */
@@ -783,8 +792,22 @@ button.soon-item:active { transform: translateY(2px); }
   /* 遊戲區與操作區之間畫一條分隔，空白才看得出來是「操作區」不是沒畫完 */
   .stage { border-bottom: 3px solid var(--line); }
   /* 左上角的「離開房間」是 position: fixed，直向的薄狀態列要讓開左邊，
-   * 不然會蓋掉最重要的深度數字（橫向的資訊欄本來就留了 58px 的上方留白）。 */
-  body.in-game .side { padding-left: calc(104px + var(--safe-l)); }
+   * 不然會蓋掉最重要的深度數字（橫向的資訊欄本來就留了 58px 的上方留白）。
+   * 一樣用量出來的寬度：原本抄死的 104px 比「← 離開房間」實際的 102px ＋ 10px 邊距還窄，
+   * 深度的第一位數本來就已經被壓到。 */
+  body.in-game .side { padding-left: calc(var(--nav-w, 102px) + 20px + var(--safe-l)); }
+
+  /* 對局中把左上角的「離開房間」與右上角的設定收小成 40px 並往上貼：
+   * 一是整顆才塞得進薄狀態列（44px 的按鈕會讓狀態列高到吃掉方向鍵的空間），
+   * 二是玩的時候手指就在螢幕上滑，這兩顆越小越不會誤觸 ——
+   * 線上對局誤觸「離開房間」等於直接判輸（規劃書 §4.4）。
+   * 選單畫面維持 pointer:coarse 的 44px，那裡沒有誤觸的代價。 */
+  body.in-game .screen-nav,
+  body.in-game .corner-tools { top: calc(4px + var(--safe-t)); }
+  body.in-game .corner-tools .icon-btn { height: 40px; border-radius: 12px; }
+  body.in-game #btn-settings { width: 40px; }
+  body.in-game .corner-tools .icon-btn svg { width: 22px; height: 22px; }
+  body.in-game .nav-btn { min-height: 40px; font-size: 13px; padding-left: 10px; padding-right: 10px; }
 }
 
 /* 很窄的手機（≤ 380px）：再讓一步，難度文字收掉只留速度倍率 */
