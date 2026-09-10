@@ -1215,22 +1215,47 @@
     /* 視窗比可玩區域高很多（直向）：多出來的高度要收掉，不然半個螢幕是死的。
      * 只在有觸控按鍵的裝置上收 —— 桌機沒有按鍵可以放，收掉只會在下面留一條空白。
      *
-     * 收到哪裡：以前是收到「場地剛好放得下」（wantStageH），但方向鍵縮小之後，
-     * 樓梯畫面與方向鍵之間會空出一條幾十 px 的帶狀空白 —— 那條既不是遊戲也不是操作區，
-     * 純粹浪費（Eric 回報「遊戲高度可以再高一點、下面的操作區可以再小一點」）。
-     * 改成收到「方向鍵上緣再留 8px」：多出來的高度全部給樓梯畫面，
-     * 死亡線以下就是那口深井（render.js 的 voidTop 從死亡線開始畫，所以看得出來是井不是空白）。
-     * 直向才這樣做：橫向的方向鍵本來就疊在樓梯畫面上，拿它的上緣當上限會把畫面壓扁。 */
+     * 收到哪裡：就收到「場地剛好放得下」（wantStageH）。
+     * 中間試過「一路長到方向鍵上緣」，想把那條帶狀空白吃掉 —— 那是錯的：
+     * 手機直向的場地寬度已經被螢幕寬度綁死（12 格鋪滿寬度，scale 由寬度決定），
+     * 多給的高度一格樓梯也長不出來，**全部都變成死亡線以下的深淵**，
+     * 實測深淵從畫面的 6.5% 漲到 16%（Eric 回報「深淵比例太多」）。
+     * 剩下的那條空白就留給方向鍵當操作區（.stage 的 border-bottom 會畫出分界）。 */
     if (wantsPads() && box.height > st.wantStageH + 8) {
-      let portrait = false;
-      try { portrait = window.matchMedia('(orientation: portrait)').matches; } catch (e) { portrait = false; }
-      const padTop = portrait && els.padLeft ? els.padLeft.getBoundingClientRect().top : 0;
-      const stageTop = els.stage.getBoundingClientRect().top;
-      const room = padTop > stageTop ? Math.floor(padTop - stageTop - 8) : 0;
-      els.stage.style.maxHeight = Math.max(st.wantStageH, room) + 'px';
+      els.stage.style.maxHeight = st.wantStageH + 'px';
     } else {
       els.stage.style.maxHeight = '';
     }
+    placePads();
+  }
+
+  /**
+   * 直向：方向鍵貼著樓梯畫面的下緣擺，不是浮在螢幕最底部。
+   *
+   * 樓梯畫面下面一定會空出一條（場地寬度被螢幕寬度綁死，高度給再多也長不出樓梯，
+   * 見上面 fitStage 的說明）。方向鍵如果貼在螢幕最底下，那條空白就卡在
+   * 遊戲與操作區「中間」，看起來像畫面沒畫完；貼上去之後遊戲與操作變成一整塊，
+   * 空白全部落到最下面（Eric 指定「貼合操作鍵，在上面一點」）。
+   * 位置要用量的：樓梯畫面的高度隨螢幕寬度變，CSS 抄不到。
+   */
+  function placePads() {
+    const root = document.documentElement;
+    let portrait = false;
+    try { portrait = window.matchMedia('(orientation: portrait)').matches; } catch (e) { portrait = false; }
+    if (!portrait || !wantsPads() || !els.padLeft || !els.pads) {
+      root.style.removeProperty('--pad-top');       /* 橫向照 CSS 的貼底規則 */
+      return;
+    }
+    const stageBox = els.stage.getBoundingClientRect();
+    const padsBox = els.pads.getBoundingClientRect();
+    const padH = els.padLeft.offsetHeight || 0;
+    if (!padsBox.height || !padH) return;
+    const want = Math.round(stageBox.bottom - padsBox.top + 10);
+    /* 樓梯畫面下面放不下一整顆按鍵（平板直向就是這樣，場地本來就填滿整個高度）：
+     * 交還給 CSS 的貼底規則，讓方向鍵照原本的方式疊在畫面下緣。 */
+    const limit = Math.max(0, padsBox.height - padH - 6);
+    if (want > limit) { root.style.removeProperty('--pad-top'); return; }
+    root.style.setProperty('--pad-top', Math.max(0, want) + 'px');
   }
 
   function applyRenderOptions() {
