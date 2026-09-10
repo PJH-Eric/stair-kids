@@ -157,18 +157,30 @@ ok(!room1 || !room1.members.has(leavingId) || !room1.members.get(leavingId).conn
   '伺服器那邊的座位放掉了');
 
 /* ---------------------------------------------------------- */
-group('連線斷掉：不要留在一間按什麼都沒反應的幽靈房間');
-/* 重連會拿到新的身分，回不到原本的座位，所以本地也要把房間收掉、退回大廳。
- * 以前只有「對局中」才通知，坐在房間裡斷線的人會停在一間死掉的房間畫面上。 */
+group('連線斷掉：不要留在一間按什麼都沒反應的幽靈房間，但要自己連回去');
+/* 斷線的當下一定要先離開房間畫面（重連拿到的是新身分，舊的房間物件已經死了），
+ * 以前只有「對局中」才通知，坐在房間裡斷線的人會停在一間死掉的房間畫面上。
+ * 但停在大廳也不對：手機切到別的 App（切去貼邀請連結）一定會斷線，
+ * 對使用者來說那就是「房間自己關掉了」。伺服器現在會把等人的房間留 60 秒
+ * （rooms.js 的 EMPTY_GRACE_MS），客戶端重連之後要自己走回同一間房。 */
 goLobby.click();
 ok(w.until(() => screenNow() === 'lobby' && mySocket().readyState === 1, 5000), '重新連上大廳');
 el('btn-create').click();
 ok(w.until(() => screenNow() === 'room', 3000), '又開了一間房', screenNow());
+/* theRoom() 是「第一間房」，這時候對手還待在第一局那間，所以要問「我在哪一間」 */
+const roomOf = id => [...w.hub.rooms.values()].find(r => r.members.has(id));
+const roomBefore = roomOf(myId());
 mySocket().close();
-w.advance(300);
-ok(screenNow() === 'lobby', '連線斷了會退回大廳，不會卡在房間畫面', screenNow());
-ok(el('toast').textContent.indexOf('連線斷了') === 0, '而且有講原因',
+ok(el('toast').textContent.indexOf('連線斷了') === 0, '斷線當下有講原因',
   el('toast').textContent);
+ok(w.until(() => screenNow() === 'room' && mySocket().readyState === 1, 5000),
+  '重連之後自己走回同一間房（不是留在大廳，也不是卡在幽靈房間）', screenNow());
+const roomBack = roomOf(myId());
+ok(roomBefore && roomBack && roomBack.id === roomBefore.id, '回到的是同一間房',
+  roomBefore && roomBack ? roomBefore.id + ' → ' + roomBack.id : '找不到房間');
+ok(roomBack && roomBack.hostId === myId(), '而且還是房主，開得了下一局');
+ok(roomBack && [...roomBack.members.values()].length === 1,
+  '斷線前的舊席位有收掉，房間裡只有回來的這一個人');
 
 /* ---------------------------------------------------------- */
 console.log('\n' + pass + ' 項通過，' + fail + ' 項失敗');

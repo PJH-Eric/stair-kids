@@ -195,9 +195,14 @@
          * 而重連會拿到一個新的身分，回不到原本的座位。所以本地也要把房間收掉 ——
          * 留著只會讓畫面停在一間按什麼都沒反應的幽靈房間裡。 */
         clearWrap();
-        const wasInRoom = !!(S.client && S.client.state.room);
+        const lostRoom = S.client && S.client.state.room ? S.client.state.room.id : null;
+        const wasInRoom = !!lostRoom;
+        /* 剛剛在哪一間房：重新連上就自動回去。手機切到別的 App、螢幕暗掉都會斷線，
+         * 伺服器那邊「等人」的房間會留 60 秒（rooms.js 的 EMPTY_GRACE_MS），
+         * 所以切回來通常還回得去 —— 回不去（房間真的收掉了）會收到錯誤訊息。 */
+        if (lostRoom && !S.inMatch) S.wantRoom = lostRoom;
         if (S.inMatch) notice('連線斷了，這局判輸', 'bad');
-        else if (wasOnline && wasInRoom) notice('連線斷了，先回大廳', 'bad');
+        else if (wasOnline && wasInRoom) notice('連線斷了，正在回到房間…', 'bad');
         S.inMatch = false;
         S.resultShown = false;
         S.resultAt = 0;
@@ -222,6 +227,7 @@
       clearTimeout(S.retryTimer);
       clearTimeout(S.wakeTimer);
       clearWrap();
+      S.wantRoom = null;               /* 自己走的，就不要再自動回房間 */
       S.retries = 99;
       if (S.socket) { const s = S.socket; S.socket = null; try { s.close(); } catch (e) { /* 已經斷了 */ } }
       S.client = null;
@@ -362,6 +368,7 @@
 
     function leaveToLobby() {
       clearWrap();
+      S.wantRoom = null;               /* 被踢或自己離開：不要再自動回那間房 */
       S.inMatch = false;
       S.resultShown = false;
       S.resultAt = 0;
@@ -762,7 +769,28 @@
       return token;
     }
 
+    /**
+     * 手機切回前景就再連一次，並且回到剛剛那間房。
+     *
+     * 分頁被切到背景（切去 LINE 貼邀請連結、螢幕暗掉）時連線一定會斷，
+     * 而 onclose 的自動重試那三次通常在背景就用完了 —— 切回來只會看到「沒有連線」。
+     * 只在「剛剛真的在房間裡」（S.wantRoom）的時候才重連，
+     * 不然在首頁放著的人也會被硬連上去。
+     */
+    function watchVisibility() {
+      const doc = root.document;
+      if (!doc || !doc.addEventListener) return;
+      doc.addEventListener('visibilitychange', () => {
+        if (doc.visibilityState !== 'visible') return;
+        if (!S.wantRoom) return;
+        if (S.status === 'online' || S.status === 'connecting') return;
+        S.retries = 0;
+        connect();
+      });
+    }
+
     bind();
+    watchVisibility();
     setStatus('offline');
 
     /**

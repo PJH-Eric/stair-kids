@@ -64,6 +64,55 @@ group('大廳與開房');
 }
 
 /* ---------------------------------------------------------- */
+group('斷線後的房間寬限（手機切出去再回來）');
+{
+  /* Eric 回報：開好房、切去 LINE 貼邀請連結、切回來房間就沒了。
+   * 手機切到背景連線一定會斷，以前一斷線就立刻關房，邀請連結也跟著失效。 */
+  let clock = 1000;
+  const hub = createHub({ now: () => clock });
+  const r = hub.createRoom(person('A', '甲'), {}).room;
+  const token = hub.makeInvite(r.id, 'A').token;
+  hub.markDisconnected('A');
+  ok(hub.rooms.has(r.id), '房主切出去（斷線）之後房間還在');
+  ok(!hub.resolveInvite(token).error, '邀請連結也還有效，朋友照樣進得來');
+  ok(hub.listRooms().length === 0, '但沒人的房間不會出現在大廳列表裡');
+
+  clock += 30000;
+  hub.tick(33);
+  ok(hub.rooms.has(r.id), '半分鐘後還留著（等他切回來）');
+
+  /* 切回來：重新連線一定是新的身分，所以是用新 id 進房 */
+  const back = hub.join(r.id, person('A2', '甲'), 'player');
+  ok(!back.error && back.role === 'player', '切回來坐得回席位（不是被擠成觀戰）');
+  ok(r.hostId === 'A2', '切回來還是房主（開得了下一局）');
+  ok(hub.connectedSeats(r).length === 1, '舊的離線席位有收掉，不會佔著位子');
+
+  clock += CONST.EMPTY_GRACE_MS * 2;
+  hub.tick(33);
+  ok(hub.rooms.has(r.id), '人在裡面就不會被寬限時間收掉');
+}
+{
+  /* 真的沒人回來，房間還是要收掉，不然大廳會累積一堆空房 */
+  let clock = 1000;
+  const hub = createHub({ now: () => clock });
+  const r = hub.createRoom(person('A'), {}).room;
+  const token = hub.makeInvite(r.id, 'A').token;
+  hub.markDisconnected('A');
+  clock += CONST.EMPTY_GRACE_MS + 1;
+  hub.tick(33);
+  ok(!hub.rooms.has(r.id), '寬限時間過了就真的關房');
+  ok(hub.resolveInvite(token).error, '關房之後邀請連結一起失效');
+  ok(hub.consumeClosedRooms().indexOf(r.id) >= 0, '關掉的房間有回報出去（大廳要更新）');
+}
+{
+  /* 對局中沒人看就沒有留的意義（兩個人都斷線＝這局沒人在乎了） */
+  const { hub, room } = playingRoom();
+  hub.markDisconnected('A');
+  hub.markDisconnected('B');
+  ok(!hub.rooms.has(room.id), '對局中兩個人都斷線 → 房間照舊立刻關掉');
+}
+
+/* ---------------------------------------------------------- */
 group('2 席位與自動轉觀戰');
 {
   const hub = createHub();
