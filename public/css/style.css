@@ -596,8 +596,10 @@ button.soon-item:active { transform: translateY(2px); }
 /* 橫向：兩顆都在左下（左手拇指操作，右手扶著裝置），中間留間距避免誤觸（規劃書 §7.1）。
  * --side-w 由 app.js 量出來（資訊欄寬度會隨斷點變）：方向鍵要落在樓梯畫面上，
  * 不能蓋在左邊的資訊欄上 —— 平板橫向實測就是蓋在「本機最深」那幾行字上面。 */
-.pad-left { left: calc(var(--side-w, 0px) + 18px + var(--safe-l)); bottom: calc(18px + var(--safe-b)); }
-.pad-right { left: calc(var(--side-w, 0px) + 18px + var(--safe-l) + var(--pad-w, var(--pad-size)) + 16px); bottom: calc(18px + var(--safe-b)); }
+/* 底部一樣貼齊（只留 6px 給立體陰影）：手機橫向是兩手捧著、拇指壓在機身下緣，
+ * 按鍵往上抬只會讓拇指要伸長。平板橫向下面另外有規則抬高一點（那是捧在手上的距離）。 */
+.pad-left { left: calc(var(--side-w, 0px) + 18px + var(--safe-l)); bottom: calc(6px + var(--safe-b)); }
+.pad-right { left: calc(var(--side-w, 0px) + 18px + var(--safe-l) + var(--pad-w, var(--pad-size)) + 16px); bottom: calc(6px + var(--safe-b)); }
 .pads.hidden { display: none; }
 
 /* ---------- 暫停與結算 ---------- */
@@ -794,11 +796,14 @@ button.soon-item:active { transform: translateY(2px); }
    * 幼幼班多一顆按鈕、中文字寬又隨裝置字體變，在這裡抄死一個數字一定會對不上。
    * ＋20px ＝ 右邊 10px 的邊距再留 10px 間隙；備援值是「設定按鈕 44px ＋ 邊距」。 */
   .side { padding-right: calc(var(--tools-w, 44px) + 20px + var(--safe-r)); }
-  /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊）。
-   * 場地的長寬比接近正方形，直向的視窗一定比它高，多出來的高度被 app.js 的
-   * fitStage() 收掉之後就是這一塊空白 —— 剛好給方向鍵，所以直向的按鍵可以放大。 */
-  .pad-left { left: calc(16px + var(--safe-l)); bottom: calc(14px + var(--safe-b)); }
-  .pad-right { left: auto; right: calc(16px + var(--safe-r)); bottom: calc(14px + var(--safe-b)); }
+  /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊），而且**貼著螢幕最底部** ——
+   * 手是握在機身下緣的，拇指自然落點就在那裡；按鍵離底部越遠越要把手往上撐，
+   * 而且中間那段空白也是白白浪費（Eric 指定）。
+   * 只留 6px：立體陰影（0 6px 0）要有地方畫，不然按鍵看起來像被裁掉半截。
+   * var(--safe-b) 負責 iPhone 的 home indicator 與 Android 的手勢列，
+   * 那一段本來就不能放東西（放了會被系統手勢吃掉）。 */
+  .pad-left { left: calc(16px + var(--safe-l)); bottom: calc(6px + var(--safe-b)); }
+  .pad-right { left: auto; right: calc(16px + var(--safe-r)); bottom: calc(6px + var(--safe-b)); }
   /* 遊戲區與操作區之間畫一條分隔，空白才看得出來是「操作區」不是沒畫完 */
   .stage { border-bottom: 3px solid var(--line); }
   /* 左上角的「離開房間」是 position: fixed，直向的薄狀態列要讓開左邊，
