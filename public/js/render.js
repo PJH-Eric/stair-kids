@@ -350,9 +350,12 @@
       view.offX = (view.w - fieldW * view.scale) / 2;
       view.offY = CEIL_UNITS * view.scale;              /* cameraTop 對到的畫面 y */
       view.fieldBottom = view.offY + view.viewH * view.scale;
-      /* 寬度先達到限制時，畫布可能比「天花板＋可見區＋深淵」更高。
-       * 深淵仍只保留 VOID_UNITS 的高度，紅色下墜警示也要跟著這個起點下移。 */
-      view.voidTop = Math.max(view.fieldBottom, view.h - VOID_UNITS * view.scale);
+      /* 寬度先達到限制時（手機直向一定是），畫布會比「天花板＋可見區＋深淵」更高。
+       * 深淵從死亡線就開始畫，多出來的高度全部算進去 —— 死亡線以下本來就是「掉下去就沒了」，
+       * 畫成一口越來越黑的井，玩家才看得出那是井不是還可以站的地方。
+       * 以前是把深淵固定成 VOID_UNITS 高、貼在畫布最下面，中間那段就變成一片看不出意思的
+       * 淺色空白，紅色下墜警示也跟著跑到死亡線下面好幾十 px（警示應該就在會死的那條線上）。 */
+      view.voidTop = view.fieldBottom;
       view.fieldPx = fieldW * view.scale;
       /* 寬螢幕上高度才是瓶頸：場地寬度已經被視窗高度綁死，舞台再寬也只是多出兩片牆。
        * 所以回報一個「舞台最多需要多寬」，讓 app.js 把整組面板收到這個寬度，

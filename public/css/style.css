@@ -758,7 +758,11 @@ button.soon-item:active { transform: translateY(2px); }
     overflow: hidden;
     white-space: nowrap;
   }
-  .side-who, .side-foot, .side-live, .world-bar, #hud-next { display: none; }
+  /* 直向沒有側欄，只有一條薄狀態列 —— 這些都放不進去。
+   * .side-chat 一定要一起收：對局中的聊天塊有 86px 高的訊息列表與輸入框，
+   * 排進這一條 row 之後會把狀態列撐成三倍高、還把深度與血量擠到設定按鈕底下。
+   * 手機直向的對局就不聊天了（房間裡照樣有完整聊天室與快速短語）。 */
+  .side-who, .side-foot, .side-live, .side-chat, .world-bar, #hud-next { display: none; }
   /* 直向的薄狀態列只留對手深度，血量與名字擠不下 */
   .side-foe { margin: 0; padding: 0; border: 0; flex-direction: row; align-items: center; }
   .side-foe .side-row:not(.side-depth) { display: none; }
@@ -776,9 +780,15 @@ button.soon-item:active { transform: translateY(2px); }
   .hearts .heart { width: 13px; height: 13px; flex: 0 0 auto; }
   #hud-diff { display: none; }
   #hud-world { max-width: 22vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* 直向的方向鍵：場地下面本來就空出一塊（見 app.js 的 fitStage），
-   * 所以按鍵可以做大 —— 寬一點好按，兩邊各一顆用兩手拇指。 */
-  :root { --pad-w: 136px; --pad-h: 112px; }
+  /* 真的放不下的時候由 app.js 的 fitSideBar() 照優先序收（世界 → 速度倍率 → 對手深度）。
+   * 為什麼不能只靠 padding 讓開右上角的設定按鈕：flex 溢出的內容不會替你留 padding-right，
+   * 會直接滑到按鈕底下被蓋掉 —— 內容一定要真的放得下。 */
+  .side .hud-drop { display: none !important; }
+  /* 直向的方向鍵：兩邊各一顆用兩手拇指，寬 ＞ 高（拇指是橫著滑的）。
+   * 高度刻意壓下來（112 → 88）：那一塊每矮 1px，上面的樓梯畫面就多 1px
+   * （fitStage() 會把樓梯畫面收到方向鍵上緣）—— Eric 要的是「遊戲高一點、操作區小一點」。
+   * 寬度只收一點點，橫向的可按面積才不會跟著變小。 */
+  :root { --pad-w: 128px; --pad-h: 88px; }
   /* 右上角的設定（幼幼班還多一顆「結束這局」）疊在狀態列上，狀態列要讓開它實際的寬度，
    * 不然世界名稱與速度倍率會被蓋掉。寬度由 app.js 的 measureCorners() 量出來 ——
    * 幼幼班多一顆按鈕、中文字寬又隨裝置字體變，在這裡抄死一個數字一定會對不上。
@@ -787,8 +797,8 @@ button.soon-item:active { transform: translateY(2px); }
   /* 直向：左鍵左下、右鍵右下（兩手拇指各一邊）。
    * 場地的長寬比接近正方形，直向的視窗一定比它高，多出來的高度被 app.js 的
    * fitStage() 收掉之後就是這一塊空白 —— 剛好給方向鍵，所以直向的按鍵可以放大。 */
-  .pad-left { left: calc(16px + var(--safe-l)); bottom: calc(24px + var(--safe-b)); }
-  .pad-right { left: auto; right: calc(16px + var(--safe-r)); bottom: calc(24px + var(--safe-b)); }
+  .pad-left { left: calc(16px + var(--safe-l)); bottom: calc(14px + var(--safe-b)); }
+  .pad-right { left: auto; right: calc(16px + var(--safe-r)); bottom: calc(14px + var(--safe-b)); }
   /* 遊戲區與操作區之間畫一條分隔，空白才看得出來是「操作區」不是沒畫完 */
   .stage { border-bottom: 3px solid var(--line); }
   /* 左上角的「離開房間」是 position: fixed，直向的薄狀態列要讓開左邊，
@@ -812,10 +822,11 @@ button.soon-item:active { transform: translateY(2px); }
 
 /* 很窄的手機（≤ 380px）：再讓一步，難度文字收掉只留速度倍率 */
 @media (orientation: portrait) and (max-width: 380px) {
-  :root { --pad-w: 118px; --pad-h: 98px; }
+  :root { --pad-w: 112px; --pad-h: 80px; }
   .side { gap: 6px; }
   .hearts .heart { width: 11px; height: 11px; }
-  #hud-world { display: none; }          /* 真的很窄：世界名稱讓給血量 */
+  /* 「很窄就把世界名稱收掉」不再寫死在這裡：放不放得下由 fitSideBar() 量出來決定，
+   * 380px 的手機在單機還放得下世界名稱，收掉只是白白浪費。 */
 }
 
 /* 手機橫向：高度不足 → 按鍵縮小、資訊欄再收窄 */

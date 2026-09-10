@@ -22,6 +22,7 @@
     hudDepth: $('#hud-depth'), hudHp: $('#hud-hp'), hudHpRow: $('#hud-hp-row'),
     hudDiff: $('#hud-diff'), hudSpeed: $('#hud-speed'),
     hudWorld: $('#hud-world'), hudNext: $('#hud-next'),
+    sideWorld: $('#side-world'), hudDiffRow: $('#hud-diff-row'),
     hudAvatar: $('#hud-avatar'), hudName: $('#hud-name'), hudWorldFill: $('#hud-world-fill'),
     liveSpikes: $('#live-spikes'), liveSprings: $('#live-springs'),
     liveFakes: $('#live-fakes'), liveCeil: $('#live-ceil'),
@@ -873,7 +874,7 @@
 
   /* ================= 資訊欄 ================= */
 
-  let hudCache = { depth: -1, hp: -1, foeHp: -1, foeId: null, world: -1, speed: '', compact: null };
+  let hudCache = { depth: -1, hp: -1, foeHp: -1, foeId: null, world: -1, speed: '', compact: null, sideSig: '' };
 
   /** 窄的薄狀態列擠不下一整排愛心（手機直向 10 顆就會被裁掉），改用「愛心＋數字」。
    * 平板直向有 800 多 px，照樣排一整排愛心比較好讀，所以要看寬度不是只看方向。 */
@@ -963,6 +964,14 @@
       els.hudHpRow.hidden = false;
       els.hudName.textContent = p.name;
       els.hudAvatar.innerHTML = Render.kidAvatarSvg(charOf(p.char), 50);
+    }
+    /* 內容的寬度變了才重新量狀態列（深度多一位數、愛心變少、換世界、對手出現或淘汰）。
+     * 每一格都量太貴，量得太少又會有一段時間是溢出到設定按鈕底下的。 */
+    const sig = [String(meters).length, els.hudHp.textContent, els.hudWorld.textContent,
+      els.hudFoeDepth.textContent.length, els.sideFoe.hidden ? 0 : 1].join('|');
+    if (force || sig !== hudCache.sideSig) {
+      hudCache.sideSig = sig;
+      fitSideBar();
     }
   }
 
@@ -1129,10 +1138,59 @@
    */
   const sideWidth = () => (els.side ? els.side.getBoundingClientRect().width : 0);
 
+  /* 直向薄狀態列收東西的順序（最不重要的先收）。規劃書 §7.1 的優先序是
+   * 深度 ＞ 血量 ＞ 對手深度 ＞ 速度倍率 ＞ 世界，反過來就是這一串。
+   * 深度與血量永遠留著 —— 玩到一半看不到血量比看不到世界名稱嚴重得多。 */
+  const sideDropOrder = () => [els.sideWorld, els.hudDiffRow, els.sideFoe];
+
+  /** 狀態列裡「現在真的看得到」的那幾塊加起來有多寬（含中間的 gap） */
+  function sideContentWidth(gap) {
+    let sum = 0;
+    let n = 0;
+    for (const el of els.side.children) {
+      if (!el || el.offsetParent == null || !el.offsetWidth) continue;
+      sum += el.offsetWidth;
+      n++;
+    }
+    return n ? sum + gap * (n - 1) : 0;
+  }
+
+  /**
+   * 手機直向的薄狀態列是唯一「寬度真的不夠」的版面：左右各要讓開一顆固定按鈕，
+   * 中間還要塞深度、血量、速度倍率、世界，線上再多一塊對手深度。
+   * 實測 390px 的手機在線上對局要 314px，位置只有 218px —— 溢出的那一段會滑到
+   * 右上角的設定按鈕底下被蓋掉（flex 溢出時不會替你留 padding-right，
+   * 所以光是把 padding 讓夠沒有用，內容一定要真的放得下）。
+   *
+   * CSS 的斷點猜不準這些組合：深度會從 1 位數長到 4 位數、愛心會變少、
+   * 世界名稱長短不一、線上才有對手 —— 所以量出來，照優先序從最不重要的開始收。
+   */
+  function fitSideBar() {
+    const side = els.side;
+    if (!side || !side.children || !window.getComputedStyle) return;
+    const drops = sideDropOrder();
+    /* 先全部放回來再重新判斷：視窗變寬、對手淘汰之後要收得回去 */
+    for (const el of drops) if (el && el.classList) el.classList.remove('hud-drop');
+    if (G.screen !== 'game') return;
+    let portrait = false;
+    try { portrait = window.matchMedia('(orientation: portrait)').matches; } catch (e) { portrait = false; }
+    if (!portrait) return;                       /* 橫向是左邊的直欄，高度夠、不會擠 */
+    const cs = window.getComputedStyle(side);
+    const gap = parseFloat(cs.columnGap) || 0;
+    const avail = side.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    if (!Number.isFinite(avail) || avail <= 0) return;
+    for (const el of drops) {
+      const w = sideContentWidth(gap);
+      if (!Number.isFinite(w) || w <= avail) return;
+      if (el && el.classList) el.classList.add('hud-drop');
+    }
+  }
+
   function fitStage() {
     if (!els.wrap) return;
     /* 轉向與縮放視窗都會改變按鈕的寬度（斷點會換字級），所以每次收邊都重量一次 */
     measureCorners();
+    fitSideBar();
     const st = view.view;
     const box = els.canvas.getBoundingClientRect();
     /* 直向與窄螢幕不收（那些情況是寬度吃緊，場地本來就已經佔滿）；
@@ -1154,12 +1212,22 @@
     /* 橫向的方向鍵要避開左邊的資訊欄（不然會蓋在「本機最深」那些字上面）。
      * 資訊欄的寬度會隨斷點變，所以量出來丟給 CSS 用，不要在 CSS 裡抄一份。 */
     document.documentElement.style.setProperty('--side-w', Math.round(sideWidth()) + 'px');
-    /* 視窗比可玩區域高很多（直向）：收掉多出來的高度，
-     * 不然死亡線以下會露出一大片深淵，等於半個螢幕是死的。空出來的地方剛好放方向鍵。
-     * 只在有觸控按鍵的裝置上收 —— 桌機沒有按鍵可以放，收掉只會在下面留一條空白，
-     * 那還不如讓深淵把畫面填滿（深淵本來就是「掉下去就沒了」的視覺提示）。 */
+    /* 視窗比可玩區域高很多（直向）：多出來的高度要收掉，不然半個螢幕是死的。
+     * 只在有觸控按鍵的裝置上收 —— 桌機沒有按鍵可以放，收掉只會在下面留一條空白。
+     *
+     * 收到哪裡：以前是收到「場地剛好放得下」（wantStageH），但方向鍵縮小之後，
+     * 樓梯畫面與方向鍵之間會空出一條幾十 px 的帶狀空白 —— 那條既不是遊戲也不是操作區，
+     * 純粹浪費（Eric 回報「遊戲高度可以再高一點、下面的操作區可以再小一點」）。
+     * 改成收到「方向鍵上緣再留 8px」：多出來的高度全部給樓梯畫面，
+     * 死亡線以下就是那口深井（render.js 的 voidTop 從死亡線開始畫，所以看得出來是井不是空白）。
+     * 直向才這樣做：橫向的方向鍵本來就疊在樓梯畫面上，拿它的上緣當上限會把畫面壓扁。 */
     if (wantsPads() && box.height > st.wantStageH + 8) {
-      els.stage.style.maxHeight = st.wantStageH + 'px';
+      let portrait = false;
+      try { portrait = window.matchMedia('(orientation: portrait)').matches; } catch (e) { portrait = false; }
+      const padTop = portrait && els.padLeft ? els.padLeft.getBoundingClientRect().top : 0;
+      const stageTop = els.stage.getBoundingClientRect().top;
+      const room = padTop > stageTop ? Math.floor(padTop - stageTop - 8) : 0;
+      els.stage.style.maxHeight = Math.max(st.wantStageH, room) + 'px';
     } else {
       els.stage.style.maxHeight = '';
     }
