@@ -695,18 +695,41 @@
         }
       });
 
-      const submitChat = input => {
+      const submitChat = (input, giveBack) => {
         const text = input ? input.value : '';
         if (!text.trim()) return;
         if (S.client) S.client.actions.chat(text);
-        if (input) input.value = '';
+        if (!input) return;
+        input.value = '';
+        /* 對局中送完一定要把焦點還給遊戲。焦點留在輸入框的話，input.js 的 typing()
+         * 會把方向鍵整個擋掉 —— 打完一句話就再也不能動，只能眼睜睜被天花板追上，
+         * 而且畫面上完全看不出來原因（Eric 回報）。房間裡沒有這個問題，
+         * 那裡留著焦點才好連續聊天。 */
+        if (giveBack && input.blur) input.blur();
       };
-      const chatSubmit = input => ev => {
+      const chatSubmit = (input, giveBack) => ev => {
         ev.preventDefault();
-        submitChat(input);
+        submitChat(input, giveBack);
       };
-      if (els.chatForm) els.chatForm.addEventListener('submit', chatSubmit(els.chatInput));
-      if (els.gameChatForm) els.gameChatForm.addEventListener('submit', chatSubmit(els.gameChatInput));
+      if (els.chatForm) els.chatForm.addEventListener('submit', chatSubmit(els.chatInput, false));
+      if (els.gameChatForm) els.gameChatForm.addEventListener('submit', chatSubmit(els.gameChatInput, true));
+
+      /* 對局中的聊天框：Esc 直接跳回遊戲（不用找滑鼠點畫面），
+       * 聚焦時把「方向鍵停用」講出來 —— 不講的話玩家只會覺得遊戲壞了。
+       * Esc 在這裡不往上傳，所以第一下是離開輸入框、第二下才是叫出選單。 */
+      if (els.gameChatInput) {
+        const markTyping = on => {
+          if (els.gameChat && els.gameChat.classList) els.gameChat.classList.toggle('typing', on);
+        };
+        els.gameChatInput.addEventListener('keydown', ev => {
+          if (ev.key !== 'Escape' && ev.key !== 'Esc') return;
+          if (ev.preventDefault) ev.preventDefault();
+          if (ev.stopPropagation) ev.stopPropagation();
+          if (els.gameChatInput.blur) els.gameChatInput.blur();
+        });
+        els.gameChatInput.addEventListener('focus', () => markTyping(true));
+        els.gameChatInput.addEventListener('blur', () => markTyping(false));
+      }
 
       const sayHandler = ev => {
         const btn = ev.target.closest('[data-say]');

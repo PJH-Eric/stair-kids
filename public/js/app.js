@@ -200,6 +200,17 @@
     set('--tools-w', els.tools, true);
   }
 
+  /**
+   * 焦點還留在輸入框（房間的聊天、暱稱欄）就進對局的話，input.js 的 typing()
+   * 會把方向鍵全部擋掉 —— 一開局就完全不能動。開局前一律把鍵盤還給遊戲。
+   */
+  function blurTyping() {
+    const el = document.activeElement;
+    if (!el || el === document.body || !el.blur) return;
+    const tag = (el.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable) el.blur();
+  }
+
   function show(name) {
     G.screen = name;
     $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
@@ -218,7 +229,7 @@
     if (name === 'home') { renderHomeRecords(); refreshPresence(); }
     if (name === 'setup') renderSetup();
     /* 進遊戲畫面才量得到真正的尺寸（隱藏中的 section 量出來是 0），所以在這裡重新收邊 */
-    if (name === 'game') { applyRenderOptions(); updateRotateTip(); }
+    if (name === 'game') { blurTyping(); applyRenderOptions(); updateRotateTip(); }
     if (name === 'lobby') {
       online.syncMe((store.nickname || '').trim(), G.char);
       online.connect();

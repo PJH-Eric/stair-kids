@@ -1125,6 +1125,18 @@ button.soon-item:active { transform: translateY(2px); }
 .mini-btn.phrase { font-size: 12px; padding: 3px 9px; }
 .chat-phrases.mini .mini-btn.phrase { font-size: 11px; padding: 2px 7px; }
 
+/* 對局中的聊天框一聚焦，方向鍵就會被輸入框吃掉（input.js 的 typing()）。
+ * 那是必要的（不然打不了字），但玩家要知道自己現在為什麼動不了、怎麼回去。 */
+.chat-typing {
+  display: none;
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: #A3364A;
+}
+.side-chat.typing .chat-typing { display: block; }
+
 .chat-form { display: flex; gap: 6px; }
 .chat-form input {
   flex: 1 1 auto;
