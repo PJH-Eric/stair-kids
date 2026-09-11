@@ -16,7 +16,11 @@
   <button id="btn-settings" class="icon-btn" type="button" aria-label="設定" title="設定"></button>
 </div>
 
+<!-- 左上角固定的「退出」位置：首頁是回遊戲大廳（跳出這個遊戲），其他畫面是返回上一層。
+     同一個位置只會有一顆，不會互相疊到。大廳網址跟其他遊戲專案一致（GitHub Pages）。 -->
 <nav id="screen-nav" class="screen-nav" aria-label="畫面導覽">
+  <a id="lobby-home-link" class="nav-btn lobby-home-link" href="https://pjh-eric.github.io/game-lobby/"
+     aria-label="回遊戲大廳" hidden>← 回遊戲大廳</a>
   <button id="btn-back" class="nav-btn" type="button">← 返回</button>
 </nav>
 
@@ -391,39 +395,90 @@
 <!-- ============ 設定彈窗（右上角唯一入口） ============ -->
 <div class="modal-mask" id="modal-settings" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
   <div class="modal-card">
+    <!-- 標題列與底下的按鈕列固定住，只有中間那段捲動 ——
+         手機橫向的視窗只有 390px 高，整張一起捲的話標題與「完成」都會捲不見。 -->
     <div class="modal-head">
-      <h2 id="settings-title">設定</h2>
+      <span class="modal-badge" id="settings-badge" aria-hidden="true"></span>
+      <div class="modal-titles">
+        <h2 id="settings-title">設定</h2>
+        <p class="modal-sub">改完馬上生效，只記在這台裝置上</p>
+      </div>
       <button id="btn-settings-close" class="icon-btn plain" type="button" aria-label="關閉設定"></button>
     </div>
 
-    <div class="set-row">
-      <label class="switch"><input type="checkbox" id="set-bgm"><span>背景音樂</span></label>
-      <input type="range" id="set-bgm-vol" min="0" max="100" step="5" aria-label="背景音樂音量">
-      <b class="vol-num" id="set-bgm-num">35%</b>
-    </div>
-    <div class="set-row">
-      <label class="switch"><input type="checkbox" id="set-sfx"><span>音效</span></label>
-      <input type="range" id="set-sfx-vol" min="0" max="100" step="5" aria-label="音效音量">
-      <b class="vol-num" id="set-sfx-num">60%</b>
-    </div>
-    <div class="set-row">
-      <label class="switch"><input type="checkbox" id="set-vibrate"><span>震動（觸控裝置）</span></label>
-    </div>
-    <div class="set-row">
-      <label class="switch"><input type="checkbox" id="set-motion"><span>減少動態（關掉震動與粒子）</span></label>
-    </div>
-    <div class="set-row">
-      <label class="switch"><input type="checkbox" id="set-color"><span>色彩輔助（加強形狀差異與外框）</span></label>
-    </div>
-    <div class="set-row">
-      <label class="switch"><input type="checkbox" id="set-guide"><span>顯示深度輔助線（每 10 公尺）</span></label>
+    <div class="modal-body">
+      <!-- 分成四組（聲音／手感／看得清楚／資料）：找一個設定只要先掃四個標題，
+           比原本六條平鋪的長句子快得多，每一條也才放得下一行說明 -->
+      <section class="set-group" aria-labelledby="set-g-sound">
+        <h3 class="set-group-title" id="set-g-sound"><span class="set-group-icon" data-set-icon="sound" aria-hidden="true"></span>聲音</h3>
+        <div class="set-card">
+          <label class="set-row" for="set-bgm">
+            <span class="set-text"><b>背景音樂</b><small>一邊跑一邊有輕快的旋律</small></span>
+            <input class="switch-input" type="checkbox" id="set-bgm">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <!-- 音量條獨立一行：跟開關擠在同一行的話，手機上兩邊都太窄、也不好拖 -->
+          <div class="set-slider" id="row-bgm-vol">
+            <input type="range" id="set-bgm-vol" min="0" max="100" step="5" aria-label="背景音樂音量">
+            <b class="vol-num" id="set-bgm-num">35%</b>
+          </div>
+          <label class="set-row" for="set-sfx">
+            <span class="set-text"><b>音效</b><small>踩到階梯、彈跳、受傷的提示音</small></span>
+            <input class="switch-input" type="checkbox" id="set-sfx">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <div class="set-slider" id="row-sfx-vol">
+            <input type="range" id="set-sfx-vol" min="0" max="100" step="5" aria-label="音效音量">
+            <b class="vol-num" id="set-sfx-num">60%</b>
+          </div>
+        </div>
+      </section>
+
+      <section class="set-group" aria-labelledby="set-g-feel">
+        <h3 class="set-group-title" id="set-g-feel"><span class="set-group-icon" data-set-icon="feel" aria-hidden="true"></span>手感</h3>
+        <div class="set-card">
+          <label class="set-row" for="set-vibrate">
+            <span class="set-text"><b>震動</b><small>受傷、快掉出去時震一下（手機、平板）</small></span>
+            <input class="switch-input" type="checkbox" id="set-vibrate">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <label class="set-row" for="set-motion">
+            <span class="set-text"><b>減少動態</b><small>關掉鏡頭震動與粒子，畫面比較不晃</small></span>
+            <input class="switch-input" type="checkbox" id="set-motion">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="set-group" aria-labelledby="set-g-see">
+        <h3 class="set-group-title" id="set-g-see"><span class="set-group-icon" data-set-icon="see" aria-hidden="true"></span>看得清楚</h3>
+        <div class="set-card">
+          <label class="set-row" for="set-color">
+            <span class="set-text"><b>色彩輔助</b><small>五種階梯加強形狀差異與外框</small></span>
+            <input class="switch-input" type="checkbox" id="set-color">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <label class="set-row" for="set-guide">
+            <span class="set-text"><b>深度輔助線</b><small>每 10 公尺畫一條，看得出跑多深</small></span>
+            <input class="switch-input" type="checkbox" id="set-guide">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="set-group" aria-labelledby="set-g-data">
+        <h3 class="set-group-title" id="set-g-data"><span class="set-group-icon" data-set-icon="data" aria-hidden="true"></span>這台裝置上的資料</h3>
+        <div class="set-card set-card-actions">
+          <button id="set-reset" class="big-btn ghost" type="button">恢復預設設定</button>
+          <button id="set-clear" class="big-btn ghost" type="button">清除本機紀錄</button>
+        </div>
+        <p class="hint tiny" id="set-msg" role="status"></p>
+      </section>
     </div>
 
     <div class="modal-foot">
-      <button id="set-clear" class="big-btn ghost" type="button">清除本機紀錄</button>
-      <button id="set-reset" class="big-btn ghost" type="button">恢復預設</button>
+      <button id="set-done" class="big-btn primary" type="button">完成</button>
     </div>
-    <p class="hint tiny" id="set-msg" role="status"></p>
   </div>
 </div>
 

@@ -23,6 +23,8 @@
  */
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { boot } = require('./fake-browser.js');
 
 /* ---------------------------------------------------------- */
@@ -60,11 +62,64 @@ group('開場：首頁 → 大廳 → 開房間');
 w.advance(200);
 ok(screenNow() === 'home', '一開始在首頁', screenNow());
 
+/* 左上角那一顆：首頁是「回遊戲大廳」（跳出這個遊戲），其他畫面是「返回」。
+ * 兩顆共用同一個位置，一次只能有一顆 —— 從遊戲大廳開分頁進來的人少了它就回不去。 */
+ok(el('lobby-home-link').hidden === false, '首頁看得到「回遊戲大廳」');
+ok(el('btn-back').hidden === true, '首頁不會同時出現「返回」（同一個位置只放一顆）');
+ok(el('screen-nav').hidden === false, '首頁的左上角導覽列是開著的');
+{
+  /* 網址與寫法要跟其他遊戲專案一致（都是指到 GitHub Pages 上的 game-lobby）。
+   * 它是真的 <a>，不是 button ＋ location.href：長按要能複製、中鍵要能開新分頁。 */
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const tag = /<a[^>]*id="lobby-home-link"[^>]*>/.exec(html);
+  ok(!!tag, '「回遊戲大廳」是一個 <a> 連結');
+  ok(!!tag && /href="https:\/\/pjh-eric\.github\.io\/game-lobby\/"/.test(tag[0]),
+    '指到遊戲大廳（跟其他遊戲專案同一個網址）');
+  ok(!!tag && /aria-label="回遊戲大廳"/.test(tag[0]), '有給讀螢幕軟體的說明');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'style.css'), 'utf8');
+  ok(/\.nav-btn\[hidden\]\s*\{[^}]*display:\s*none/.test(css),
+    '藏起來的時候真的不見（.lobby-home-link 有 display，會蓋掉 [hidden] 的預設值）');
+}
+
+/* ---------------------------------------------------------- */
+group('設定：開關、音量條、關掉聲音就停用音量');
+{
+  el('btn-settings').click();
+  w.advance(50);
+  ok(el('modal-settings').hidden === false, '右上角的齒輪打得開設定');
+  {
+    /* 假瀏覽器只照 index.html 的屬性建節點，不解析文字，所以字面從原始碼看 */
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+    ok(/id="set-done"[^>]*>完成</.test(html), '底下有一顆明確的「完成」（原本只有右上角那顆小叉叉）');
+  }
+  /* 音量條在聲音關掉時要停用並變灰 —— 原本還拖得動，拖了卻完全沒反應 */
+  el('set-bgm').checked = false;
+  el('set-bgm').dispatch('input');
+  w.advance(20);
+  ok(el('set-bgm-vol').disabled === true, '關掉背景音樂，音量條跟著停用');
+  el('set-bgm').checked = true;
+  el('set-bgm').dispatch('input');
+  w.advance(20);
+  ok(el('set-bgm-vol').disabled === false, '開回來就能拖了');
+  /* 拉音量要即時看得到百分比 */
+  el('set-sfx-vol').value = '40';
+  el('set-sfx-vol').dispatch('input');
+  w.advance(20);
+  ok(el('set-sfx-num').textContent === '40%', '拉音量，旁邊的百分比跟著變', el('set-sfx-num').textContent);
+  el('set-done').click();
+  w.advance(50);
+  ok(el('modal-settings').hidden === true, '按「完成」就關起來');
+}
+
+/* ---------------------------------------------------------- */
+group('首頁 → 大廳 → 開房間');
 const goLobby = w.dom.dataGo.find(b => b.dataset.go === 'lobby');
 ok(!!goLobby, '首頁有「跟別人玩」的入口');
 goLobby.click();
 ok(w.until(() => screenNow() === 'lobby' && el('lobby-status').textContent === '已連線', 3000),
   '進大廳並連上伺服器', el('lobby-status').textContent);
+ok(el('lobby-home-link').hidden === true, '離開首頁就換回「返回」，不會兩顆疊在一起');
+ok(el('btn-back').hidden === false, '大廳看得到「返回」');
 
 el('btn-create').click();
 ok(w.until(() => screenNow() === 'room', 3000), '開房間之後進到房間畫面', screenNow());
@@ -151,6 +206,8 @@ el('btn-result-home').click();
 w.advance(500);
 ok(screenNow() === 'home', '回到首頁', screenNow());
 ok(el('ov-result').hidden === true, '首頁不會殘留結算畫面');
+ok(el('lobby-home-link').hidden === false && el('btn-back').hidden === true,
+  '打完一局回到首頁，左上角也換回「回遊戲大廳」');
 ok(mySocket().readyState === 3, '離開線上區域會把連線收掉');
 const room1 = theRoom();
 ok(!room1 || !room1.members.has(leavingId) || !room1.members.get(leavingId).connected,

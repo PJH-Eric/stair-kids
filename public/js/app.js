@@ -8,7 +8,8 @@
   const $$ = sel => [...document.querySelectorAll(sel)];
 
   const els = {
-    nav: $('#screen-nav'), back: $('#btn-back'), leaveRoom: $('#btn-leave-room'),
+    nav: $('#screen-nav'), back: $('#btn-back'), lobbyLink: $('#lobby-home-link'),
+    leaveRoom: $('#btn-leave-room'),
     settingsBtn: $('#btn-settings'), finishBtn: $('#btn-finish'),
     homeArt: $('#home-art'), homeRecords: $('#home-records'),
     nickname: $('#in-nickname'), charPicker: $('#char-picker'),
@@ -46,8 +47,10 @@
     setSfx: $('#set-sfx'), setSfxVol: $('#set-sfx-vol'),
     setVibrate: $('#set-vibrate'), setMotion: $('#set-motion'),
     setColor: $('#set-color'), setGuide: $('#set-guide'),
-    setClear: $('#set-clear'), setReset: $('#set-reset'),
+    setClear: $('#set-clear'), setReset: $('#set-reset'), setDone: $('#set-done'),
     setBgmNum: $('#set-bgm-num'), setSfxNum: $('#set-sfx-num'),
+    setBgmRow: $('#row-bgm-vol'), setSfxRow: $('#row-sfx-vol'),
+    settingsBadge: $('#settings-badge'),
     homeOnline: $('#home-online'),
     helpSteps: $('#help-steps'), helpCeiling: $('#help-ceiling'), helpDiff: $('#help-diff')
   };
@@ -133,6 +136,18 @@
    * 觀戰時 G.meId 會借用一號位（見 enterOnlineMatch），但觀戰者並沒有在玩，
    * 所以一律不算自己 —— 旁觀者的畫面不該被別人的傷害震到。 */
   const isMine = e => !G.spectating && e.player === G.meId;
+  /**
+   * 這個事件該不該在「我這台機器上」出聲音／做反饋。
+   *
+   * 對手踩到刺、回血、彈跳、快掉出去，以前一律照播音效，下沉還會震動 ——
+   * 玩家明明什麼事都沒有，卻聽到慘叫又感覺到震動，會以為是自己出事（Eric 回報）。
+   * 對手發生什麼事，看他的角色、粒子與 HUD 就知道了，不必也不該打到我身上。
+   *
+   * 兩個例外照樣要有聲音：
+   *   1. 沒有 player 的是場地事件（倒數、里程碑、假階崩解），跟誰都無關；
+   *   2. 觀戰沒有「我」，全部都要播，不然整場靜音。
+   */
+  const forMe = e => e.player == null || G.spectating || e.player === G.meId;
   /* 事件的粒子要噴在「畫面上看到的位置」。線上的對手有兩個位置：
    * p.x／p.y 是超前的推測位置（推擠判定用），viewX／viewY 才是畫面上那一個。 */
   const shownX = p => (p && p.viewX != null ? p.viewX : (p ? p.x : 0));
@@ -219,8 +234,14 @@
     $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
     /* 左上角是全站統一的「退出」位置：選單畫面是返回上一層，
      * 房間與遊戲中則是離開這間房／這一局。原本遊戲畫面完全沒有這顆，
-     * 只能按 Esc，觸控裝置根本沒有 Esc 可以按。 */
-    els.nav.hidden = !BACK_TO[name] && name !== 'game';
+     * 只能按 Esc，觸控裝置根本沒有 Esc 可以按。
+     * 首頁再往上一層就是遊戲大廳（這個遊戲是從那裡點進來的），所以首頁放「回遊戲大廳」——
+     * 少了它玩家只能按瀏覽器的上一頁，從大廳直接開分頁進來的人根本回不去。
+     * 兩顆共用同一個位置，一次只會出現一顆。 */
+    const atHome = name === 'home';
+    els.back.hidden = atHome;
+    if (els.lobbyLink) els.lobbyLink.hidden = !atHome;
+    els.nav.hidden = !atHome && !BACK_TO[name] && name !== 'game';
     if (BACK_TO[name]) els.back.dataset.go = BACK_TO[name];
     els.back.textContent = (name === 'game' || name === 'room') ? '← 離開房間' : '← 返回';
     document.body.classList.toggle('in-game', name === 'game');
@@ -717,6 +738,9 @@
   function handleEvents(events) {
     const s = G.match;
     for (const e of events) {
+      /* 音效與「打在我身上」的反饋（震動、閃紅、鏡頭抖、愛心跳）只給我自己的事件；
+       * 對手的事件照樣在他的位置畫粒子與姿勢，但不出聲、不震動（見 forMe 的說明）。 */
+      const mine = forMe(e);
       switch (e.type) {
         case 'countdown':
           sound.play('click');
@@ -725,22 +749,23 @@
           els.countdown.hidden = true;
           break;
         case 'land':
-          if (e.kind === 'normal' || e.kind === 'belt') sound.play('land');
+          if (mine && (e.kind === 'normal' || e.kind === 'belt')) sound.play('land');
           break;
         case 'spring': {
-          sound.play('spring');
+          if (mine) sound.play('spring');
           const st = Rules.stepById(s, e.step);
+          /* 粒子留著：它噴在那一階上（可能是對手踩的），看得出那裡有彈簧，不是打在我身上 */
           if (st) view.burst('spring', (st.x0 + st.x1) / 2, st.depth, s.cameraTop);
           break;
         }
         case 'fakeCrack':
-          sound.play('fake');
+          if (mine) sound.play('fake');
           break;
         case 'fakeBreak':
           view.burst('fake', e.x, e.depth, s.cameraTop);
           break;
         case 'spike': {
-          sound.play('spike');
+          if (mine) sound.play('spike');
           const st = Rules.stepById(s, e.step);
           const p = s.players.find(x => x.id === e.player);
           /* 粒子從刺階的接觸點往上噴，比從角色身上噴更看得懂發生了什麼 */
@@ -752,7 +777,7 @@
            * 傷害改成 1～5 隨機之後，玩家要能一眼分出「刮到一下」跟「踩慘了」。 */
           const amount = e.amount || 1;
           const hpTarget = syncHpHud(e.player, e.hp);
-          if (e.source === 'ceiling') {
+          if (mine && e.source === 'ceiling') {
             /* 天花板上面也是刺，被刺到的反饋要跟踩到刺階一樣明顯 */
             sound.play('warn');
             sound.play('spike');
@@ -770,7 +795,9 @@
           els.milestoneText.textContent = e.meters + ' m！' + Scenes.sceneFor(e.world).name;
           els.milestone.hidden = false;
           G.milestoneTimer = 1.4;
-          const p = s.players[0];
+          /* 慶祝的彩帶噴在「我」身上（觀戰沒有我，就噴在主視角那一位）——
+           * 以前寫死 players[0]，線上當二號位的時候彩帶會噴到對手身上。 */
+          const p = mePlayer(s) || s.players[0];
           view.burst('milestone', shownX(p), shownY(p), s.cameraTop);
           /* 換世界：0.8 秒漸變，樓梯不停、操作不中斷 */
           G.sceneFrom = blendScene(G.sceneFrom, G.scene, G.sceneT);
@@ -780,25 +807,27 @@
           break;
         }
         case 'heal': {
-          sound.play('heal');
           syncHpHud(e.player, e.hp);
+          if (!mine) break;                  /* 對手回血只更新他的 HUD，我的愛心不要跟著跳 */
+          sound.play('heal');
           /* 愛心排跳一下（updateHud 會重畫 innerHTML，所以要在下一格才加 class） */
           G.healPulse = true;
           break;
         }
         case 'sinking':
+          if (!mine) break;                  /* 對手快掉出去不該讓我的手機震動 */
           sound.play('sink');
           buzz(15);
           break;
         case 'fell':
-          sound.play('fell');
+          if (mine) sound.play('fell');
           if (!isMine(e)) break;
           view.kick(12);
           flashHurt(true);
           buzz(80);
           break;
         case 'eliminated':
-          sound.play('dead');
+          if (mine) sound.play('dead');
           if (!isMine(e)) break;
           view.kick(10);
           buzz(60);
@@ -1332,7 +1361,19 @@
     els.setColor.checked = store.colorAssist;
     els.setGuide.checked = store.depthGuide;
     syncVolNums();
+    syncVolEnabled();
     disarmClear();
+  }
+
+  /** 聲音關掉的時候音量條要停用並變灰 —— 原本還拖得動，拖了卻完全沒反應，
+   * 使用者只會覺得「這個設定壞了」。 */
+  function syncVolEnabled() {
+    const set = (row, input, on) => {
+      if (input) input.disabled = !on;
+      if (row && row.classList) row.classList.toggle('off', !on);
+    };
+    set(els.setBgmRow, els.setBgmVol, store.bgm);
+    set(els.setSfxRow, els.setSfxVol, store.sfx);
   }
 
   function pushSettings() {
@@ -1366,6 +1407,7 @@
       store[key] = isRange ? Number(el.value) / 100 : el.checked;
       pushSettings();
       syncVolNums();
+      syncVolEnabled();
       els.setMsg.textContent = '';
     });
   }
@@ -1385,6 +1427,8 @@
     settingsModal.open(els.settingsBtn);
   });
   els.modalClose.addEventListener('click', () => settingsModal.close());
+  /* 右上角那顆 × 很小，而且「設定好了要按哪裡」不該用猜的 —— 底下給一顆明確的「完成」 */
+  if (els.setDone) els.setDone.addEventListener('click', () => { sound.play('click'); settingsModal.close(); });
   els.modal.addEventListener('click', e => { if (e.target === els.modal) settingsModal.close(); });
   els.setClear.addEventListener('click', () => {
     /* 清紀錄是不可逆的，所以第一下只是「舉手」，要再按一次才真的清 */
@@ -1570,6 +1614,10 @@
   els.padRight.innerHTML = SvgUI.arrowIcon(1);
   els.settingsBtn.innerHTML = SvgUI.gearIcon();
   els.modalClose.innerHTML = SvgUI.closeIcon();
+  if (els.settingsBadge) els.settingsBadge.innerHTML = SvgUI.gearIcon();
+  /* 設定頁每一組的小圖示（聲音／手感／看得清楚／資料）。圖示只是輔助，
+   * 所以放 data-set-icon 由 JS 填，HTML 裡不必塞四段 svg 原始碼。 */
+  $$('[data-set-icon]').forEach(el => { el.innerHTML = SvgUI.settingIcon(el.dataset.setIcon); });
 
   window.addEventListener('resize', () => {
     applyRenderOptions();

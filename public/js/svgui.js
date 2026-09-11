@@ -64,6 +64,21 @@
   function closeIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/></svg>';
   }
+  /**
+   * 設定頁分組的小圖示。四組：聲音、手感、看得清楚、這台裝置上的資料。
+   * 一律線稿（stroke）＋ currentColor，跟齒輪／叉叉同一套語言，不用 emoji ——
+   * emoji 在每台裝置長得都不一樣，而且會跟著系統字體縮放跑掉。
+   */
+  function settingIcon(kind) {
+    const wrap = inner =>
+      '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" ' +
+      'stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+    if (kind === 'sound') return wrap('<path d="M5 9.5h3l4.5-3.5v12L8 14.5H5z"/><path d="M16.5 9a4 4 0 0 1 0 6"/><path d="M19 6.5a7.5 7.5 0 0 1 0 11"/>');
+    if (kind === 'feel') return wrap('<path d="M12 4.5v15"/><path d="M7.5 8v8M16.5 8v8"/><path d="M3.5 10.5v3M20.5 10.5v3"/>');
+    if (kind === 'see') return wrap('<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>');
+    return wrap('<path d="M4.5 6.5c0-1.7 3.4-3 7.5-3s7.5 1.3 7.5 3-3.4 3-7.5 3-7.5-1.3-7.5-3Z"/><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/>');
+  }
+
   function flagIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M8 4h11l-2.4 4L19 12H8z" fill="currentColor"/></svg>';
   }
@@ -178,7 +193,7 @@
   }
 
   root.SvgUI = {
-    hearts, heartSvg, arrowIcon, gearIcon, closeIcon, flagIcon,
+    hearts, heartSvg, arrowIcon, gearIcon, closeIcon, flagIcon, settingIcon,
     stepIcon, ceilingIcon, modal, homeArt
   };
 })(typeof self !== 'undefined' ? self : this);
