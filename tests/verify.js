@@ -811,6 +811,68 @@ group('可重現性（線上同步與測試的前提）');
 }
 
 /* ---------------------------------------------------------- */
+group('每一局的可見高度（手機直向要看得更深）');
+{
+  const mk = v => Rules.createMatch({ difficulty: 'normal', mode: 'solo',
+    players: [{ id: 'p1' }], viewH: v }, 'viewh');
+  eq(mk().viewH, C.VIEW_H, '沒指定就用預設的 ' + C.VIEW_H + ' 格');
+  eq(mk(22).viewH, 22, '指定 22 格就是 22 格（手機直向會要到這麼深）');
+  eq(mk(999).viewH, C.VIEW_H_MAX, '超過上限收到 ' + C.VIEW_H_MAX + ' 格（死亡線不能丟到天邊）');
+  eq(mk(4).viewH, C.VIEW_H_MIN, '低於下限收到 ' + C.VIEW_H_MIN + ' 格（角色下方一定要看得到落點）');
+  eq(mk(20.6).viewH, 21, '半格會讓死亡線落在階梯中間，一律取整數格');
+  eq(mk('壞掉的值').viewH, C.VIEW_H, '前端亂給就退回預設值');
+}
+{
+  /* 死亡線跟著這一局的可見高度走：同樣的沉沒深度，看得淺的先死 */
+  const fallAt = v => {
+    const s = sandbox({ steps: [], at: [{ x: 6, y: 0, onStep: null }] });
+    s.viewH = v;                        /* sandbox 借預設的一局來改，其他條件完全一樣 */
+    run(s, 6);
+    return s.players[0].y;
+  };
+  const shallow = fallAt(C.VIEW_H), deep = fallAt(24);
+  ok(deep > shallow + 4, '看 24 格的那一局要掉得更深才算摔死（' +
+    shallow.toFixed(1) + ' → ' + deep.toFixed(1) + ' 格）');
+  const s = sandbox({ steps: [], at: [{ x: 6, y: 0, onStep: null }] });
+  s.viewH = 24;
+  run(s, 6);
+  ok(s.players[0].y - C.PLAYER_H > s.cameraTop + C.VIEW_H,
+    '看得深的那一局，掉到「預設死亡線」以下還活著（死亡線真的跟著移動了）');
+}
+{
+  /* 畫面形狀 → 看幾格。用實際裝置的數字驗，免得改著改著又回到「一半螢幕是空白」。
+   * availH ＝ 螢幕高 − 狀態列（48＋safe-top）− 方向鍵（88＋6＋safe-bottom）− 6px 間隙。
+   * EXTRA ＝ 天花板 1.1 ＋ 深淵 1.2（render.js 的高度預算）。 */
+  const EXTRA = 2.3;
+  const fits = (w, availH) => {
+    const v = Rules.viewHForBox(w, availH, EXTRA);
+    const scale = w / Stairs.C.FIELD_W;
+    return { v: v, gap: Math.round(availH - (v + EXTRA) * scale) };
+  };
+  const iphone14 = fits(390, 844 - 95 - 128 - 6);
+  eq(iphone14.v, 23, 'iPhone 14 直向要看 23 格（16 格的話下面會空掉 175px）');
+  ok(Math.abs(iphone14.gap) <= 13, '算完剩下的空白在半格以內（' + iphone14.gap + 'px）');
+  const pixel7 = fits(412, 915 - 88 - 118 - 6);
+  eq(pixel7.v, 24, 'Pixel 7 直向吃到上限 24 格（螢幕更長）');
+  const ipad = fits(744, 1133 - 72 - 114 - 6);
+  eq(ipad.v, 18, 'iPad mini 直向只要 18 格（本來就沒空多少）');
+  eq(Rules.viewHForBox(740, 390 - 40, EXTRA), C.VIEW_H,
+    '手機橫向算出來比預設淺，夾回 ' + C.VIEW_H + ' 格（橫向本來就是高度吃緊）');
+  eq(Rules.viewHForBox(0, 500, EXTRA), C.VIEW_H, '量不到寬度（畫面還沒顯示）就用預設值');
+  eq(Rules.viewHForBox(390, 0, EXTRA), C.VIEW_H, '量不到高度也一樣');
+}
+{
+  /* 樓梯要補到看得到的最下面：看得深就要多生，不然畫面下半截是空的 */
+  const deep = Rules.createMatch({ difficulty: 'normal', mode: 'solo',
+    players: [{ id: 'p1' }], viewH: 24 }, 'viewh-steps');
+  const base = Rules.createMatch({ difficulty: 'normal', mode: 'solo',
+    players: [{ id: 'p1' }] }, 'viewh-steps');
+  ok(deep.gen.depth > base.gen.depth, '開局就多生了樓梯（' +
+    base.gen.depth.toFixed(1) + ' → ' + deep.gen.depth.toFixed(1) + ' 格）');
+  ok(deep.steps.length > base.steps.length, '看得深的那一局開局的階梯比較多');
+}
+
+/* ---------------------------------------------------------- */
 console.log('\n────────────────────────────');
 console.log(pass + ' 項通過，' + fail + ' 項失敗');
 if (fail) {

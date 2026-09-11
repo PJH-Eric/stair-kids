@@ -272,6 +272,44 @@ group('心跳不能誤判（實測真的被誤判過）');
 }
 
 /* ---------------------------------------------------------- */
+group('全房統一的可見高度（死亡線只能有一條）');
+{
+  /* 手機直向的人會要求看得更深（app.js 的 wantViewH），但一局只能有一個死亡線，
+   * 不然兩邊等於在玩兩套規則。這裡驗「整房統一、取最深的那個」。 */
+  const hub = createHub();
+  const a = person('A', '甲'); a.viewH = 22;          /* 手機直向 */
+  const b = person('B', '乙');                        /* 沒回報（舊版客戶端）*/
+  const r = hub.createRoom(a, {}).room;
+  hub.join(r.id, b, 'player');
+  hub.setReady(r.id, 'A', true);
+  hub.setReady(r.id, 'B', true);
+  hub.start(r.id, 'A');
+  ok(r.match.viewH === 22, '取兩個人裡面最深的那個（22 格），直向那位才不會又多出一條空白');
+  const sa = hub.snapshot(r, { viewerId: 'A', full: true });
+  const sb = hub.snapshot(r, { viewerId: 'B', full: true });
+  ok(sa.viewH === 22 && sb.viewH === 22, '完整快照把死亡線一起送給兩邊（鏡像要用同一個值重建）');
+  ok(hub.snapshot(r, { viewerId: 'A' }).viewH === undefined,
+    '增量快照不重複送（整局不會變，送了只是浪費頻寬）');
+}
+{
+  /* 沒有人回報過就照預設值，舊版客戶端不會被這組改動影響 */
+  const { room } = playingRoom();
+  ok(room.match.viewH === Rules.C.VIEW_H, '沒人回報螢幕比例就用預設的 ' + Rules.C.VIEW_H + ' 格');
+}
+{
+  /* 觀戰者不算：他們不影響規則，人進人出也不該改到正在打的這一局 */
+  const hub = createHub();
+  const r = hub.createRoom(person('A'), {}).room;
+  hub.join(r.id, person('B'), 'player');
+  const spec = person('S'); spec.viewH = 24;
+  hub.join(r.id, spec, 'spectator');
+  hub.setReady(r.id, 'A', true);
+  hub.setReady(r.id, 'B', true);
+  hub.start(r.id, 'A');
+  ok(r.match.viewH === Rules.C.VIEW_H, '觀戰者的螢幕不影響上場兩人的死亡線');
+}
+
+/* ---------------------------------------------------------- */
 console.log('\n' + pass + ' 項通過，' + fail + ' 項失敗');
 if (fail) {
   console.log('\n沒過的項目：');

@@ -167,6 +167,9 @@
       S.client = Net.createClient({
         name: opt.nameOf ? opt.nameOf() : '',
         char: opt.charOf ? opt.charOf() : 'yuan',
+        /* 這台裝置想看幾格（手機直向比較深）。連上線的第一則 hello 就帶著，
+         * 免得第一次開局時伺服器還不知道，整房照預設值開。 */
+        viewH: opt.viewHOf ? opt.viewHOf() : 0,
         beforeStep: opt.beforeStep || null,
         send(msg) {
           if (socket.readyState === 1) socket.send(JSON.stringify(msg));
@@ -835,6 +838,10 @@
       visualOffset() { return S.client ? S.client.visualOffset() : { x: 0, y: 0 }; },
       alpha() { return S.client ? S.client.alpha() : 0; },
       get match() { return S.client ? S.client.match : null; },
+      /** 轉向之後螢幕想看的格數變了，趁還沒開局告訴伺服器（開局時全房統一成一個值） */
+      syncViewH(h) {
+        if (S.client) S.client.actions.setViewH(h);
+      },
       /** 名字或角色改了要告訴伺服器（房間卡片、名牌都要跟著換） */
       syncMe(name, char) {
         if (!S.client) return;

@@ -1121,6 +1121,48 @@ group('時間相關的機制：30Hz 迴圈、掉幀、量延遲、結算停留�
 }
 
 /* ---------------------------------------------------------- */
+group('可見高度走完整協定（手機直向的人要看得更深）');
+{
+  /* 直向的手機會回報「我想看 22 格」（app.js 的 wantViewH），
+   * 伺服器開局時把全房統一成一個值，再隨完整快照發回來 ——
+   * 鏡像少了這個值就會用預設的 16 格重建，畫面下緣跟伺服器的判定線就對不上了。 */
+  const w = createWorld({ lag: 80 });
+  const a = w.connect('甲', 'yuan', { viewH: 22 });     /* 手機直向 */
+  const b = w.connect('乙', 'mimi');                    /* 沒回報 */
+  w.advance(400);
+  a.actions.create('直向房', 'normal');
+  w.advance(400);
+  b.actions.join(a.state.room.id, 'player');
+  w.advance(400);
+  a.actions.ready(true); b.actions.ready(true);
+  w.advance(400);
+  a.actions.start();
+  w.advance(600);
+  const room = [...w.hub.rooms.values()][0];
+  ok(room.match.viewH === 22, 'hello 帶上去的 22 格有被伺服器收下');
+  ok(a.match && a.match.viewH === 22, '房主的鏡像用同一個死亡線重建');
+  ok(b.match && b.match.viewH === 22, '對手的鏡像也是同一個（兩邊同一套規則）');
+
+  /* 轉向：還在大廳可以改，開局之後就不准動了 */
+  b.actions.setViewH(24);
+  w.advance(400);
+  ok(room.match.viewH === 22, '對局中回報新的比例，不會動到正在打的這一局');
+  ok(room.members.get(b.person.id).viewH === 24, '但有記下來，下一局才算數');
+}
+{
+  /* 前端亂給不能變成規則漏洞：把死亡線丟到天邊就等於永遠摔不死 */
+  const w = createWorld({ lag: 0 });
+  const a = w.connect('甲', 'yuan', { viewH: 9999 });
+  w.advance(400);
+  a.actions.create('作弊房', 'normal');
+  w.advance(400);
+  ok(a.state.room && w.hub.rooms.size === 1, '房間開起來了');
+  const room = [...w.hub.rooms.values()][0];
+  ok(room.members.get(a.person.id).viewH === Rules.C.VIEW_H_MAX,
+    '超大的值被收到上限 ' + Rules.C.VIEW_H_MAX + ' 格（不能靠改前端把死亡線推到天邊）');
+}
+
+/* ---------------------------------------------------------- */
 console.log('\n' + pass + ' 項通過，' + fail + ' 項失敗');
 if (fail) {
   console.log('\n沒過的項目：');

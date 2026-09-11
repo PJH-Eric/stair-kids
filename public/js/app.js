@@ -71,6 +71,8 @@
      * 不然兩個人都會叫「小玩家」，對手欄根本分不出誰是誰 */
     nameOf: () => (store.nickname || '').trim(),
     charOf: () => G.char,
+    /* 這台裝置的螢幕想看幾格：伺服器開局時會把全房統一成一個值（死亡線只能有一條） */
+    viewHOf: () => wantViewH(),
     onNameChange: name => {
       store.nickname = name;
       Store.save(store);
@@ -237,6 +239,9 @@
       online.renderLobby();
     }
     if (name === 'room') online.renderRoom();
+    /* 進大廳、進房間都重報一次螢幕想看幾格：連線可能是上次留下來的（hello 早就送過了），
+     * 中間轉過向就會對不上。開局時伺服器就是拿這個值把全房統一。 */
+    if (name === 'lobby' || name === 'room') reportViewH();
     if (name !== 'game') {
       if (els.spectateTag) els.spectateTag.hidden = true;
       if (els.sideChat) els.sideChat.hidden = true;
@@ -450,7 +455,10 @@
     G.match = Rules.createMatch({
       difficulty: G.difficulty,
       mode: vs ? 'versus' : 'solo',
-      players: players
+      players: players,
+      /* 這一局看幾格（＝死亡線）在開局時就定下來，整局不再變 —— 轉向也不變，
+       * 不然沉到一半轉個方向就能把死亡線往下挪，那是漏洞不是功能。 */
+      viewH: wantViewH()
     }, seed);
     G.ai = vs ? Ai.create(G.difficulty, 'ai1', seed) : null;
 
@@ -1191,6 +1199,12 @@
     /* 轉向與縮放視窗都會改變按鈕的寬度（斷點會換字級），所以每次收邊都重量一次 */
     measureCorners();
     fitSideBar();
+    /* 先把上一次留下的高度上限放開再量，量到的才是「這一格真正有多少空間」。
+     * 不放開就量的話：收窄過的盒子會讓 scale 改由高度決定，算出來的 wantStageH
+     * 就永遠等於現在的高度，樓梯畫面再也長不回來 —— 換一局的可見高度時必中
+     * （上一局 16 格收成 446px，下一局想要 23 格也只會停在 446px）。 */
+    els.stage.style.maxHeight = '';
+    view.resize();
     const st = view.view;
     const box = els.canvas.getBoundingClientRect();
     /* 直向與窄螢幕不收（那些情況是寬度吃緊，場地本來就已經佔滿）；
@@ -1216,15 +1230,72 @@
      * 只在有觸控按鍵的裝置上收 —— 桌機沒有按鍵可以放，收掉只會在下面留一條空白。
      *
      * 收到哪裡：就收到「場地剛好放得下」（wantStageH）。
-     * 中間試過「一路長到方向鍵上緣」，想把那條帶狀空白吃掉 —— 那是錯的：
-     * 手機直向的場地寬度已經被螢幕寬度綁死（12 格鋪滿寬度，scale 由寬度決定），
-     * 多給的高度一格樓梯也長不出來，**全部都變成死亡線以下的深淵**，
-     * 實測深淵從畫面的 6.5% 漲到 16%（Eric 回報「深淵比例太多」）。
-     * 剩下的那條空白就留給方向鍵當操作區（.stage 的 border-bottom 會畫出分界）。 */
+     * 不可以收到「方向鍵上緣」：直向的場地寬度被螢幕寬度綁死（scale 由寬度決定），
+     * 多給的高度一格樓梯也長不出來，**全部都變成死亡線以下的深淵**
+     * （實測深淵從畫面的 6.5% 漲到 16%，Eric 回報「深淵比例太多」）。
+     *
+     * 那剩下的空白呢？靠 wantViewH()：開局時就照螢幕比例把「這一局看幾格」調深，
+     * wantStageH 自己就會長到方向鍵上緣，這裡不必也不該再多收一次。 */
     if (wantsPads() && box.height > st.wantStageH + 8) {
       els.stage.style.maxHeight = st.wantStageH + 'px';
     } else {
       els.stage.style.maxHeight = '';
+    }
+  }
+
+  /**
+   * 這台裝置這一局想看幾格（＝死亡線要放在哪）。
+   *
+   * 為什麼要有這個：手機直向的畫面是 1:2 的細長形，而場地是 16 格寬的近正方形，
+   * 縮放一定是寬度先到限制（scale ＝ 螢幕寬 / 16），所以「天花板 1.1 ＋ 可見 16 ＋ 深淵 1.2」
+   * 這 18.3 格算出來的樓梯畫面只有螢幕的 53%，方向鍵佔 15%，中間剩 21% 是誰都用不到的空白。
+   * 那塊空白沒辦法變成樓梯畫面（多給高度只會長出深淵，見 fitStage），
+   * 也不想拿去放大方向鍵（Eric 指定），唯一能把它變回「遊戲」的辦法就是**多看幾格**。
+   *
+   * 量而不是算：狀態列高度、safe-area、方向鍵大小都隨裝置與斷點變，抄死一定會對不上。
+   * 回傳值只是「想要」，真正的上下限由 rules.js 的 clampViewH 把關。
+   */
+  function wantViewH() {
+    const base = Rules.C.VIEW_H;
+    /* 桌機沒有方向鍵要擺，畫面本來就是高度吃緊，維持原本的視野 */
+    if (!wantsPads()) return base;
+    let portrait = false;
+    try { portrait = window.matchMedia('(orientation: portrait)').matches; } catch (e) { return base; }
+    if (!portrait) return base;               /* 橫向是高度先到限制，多看只會把畫面縮小 */
+    const st = view.view;
+    /* 還沒量過畫面（wantStageH 是 resize() 才算的）就先照預設值，不要拿 NaN 去猜 */
+    if (!st || !st.scale || !st.viewH || !st.wantStageH) return base;
+    return measureOnGameScreen(() => {
+      const box = els.stage.getBoundingClientRect();
+      const padTop = els.padLeft.getBoundingClientRect().top;
+      if (box.width < 240 || !(padTop > box.top)) return base;
+      /* 天花板＋深淵佔掉幾格：問 render.js 現在用的預算，不要在這裡再抄一份 */
+      const extra = st.wantStageH / st.scale - st.viewH;
+      /* 留 6px 不讓樓梯畫面的下緣跟按鍵黏在一起（.stage 還有 3px 的分隔線要畫）。
+       * 換算與夾上下限都在 rules.js（那是規則參數，前端只負責量） */
+      return Rules.viewHForBox(box.width, padTop - box.top - 6, extra);
+    });
+  }
+
+  /**
+   * 在「遊戲畫面是顯示中」的狀態下量一次尺寸。
+   * 隱藏中的 section 量出來全是 0，而這個值在大廳（要回報給伺服器）與
+   * 開局前（createMatch 的參數）都得知道 —— 那兩個時機遊戲畫面都還沒亮。
+   * 同一個 task 內開了再關，瀏覽器不會畫出來，使用者看不到閃動。
+   */
+  function measureOnGameScreen(fn) {
+    const scr = $('#screen-game');
+    if (!scr || !scr.classList) return fn();
+    const wasActive = scr.classList.contains('active');
+    const wasHidden = els.pads.classList.contains('hidden');
+    if (!wasActive) { scr.classList.add('active'); els.pads.classList.remove('hidden'); }
+    try {
+      return fn();
+    } finally {
+      if (!wasActive) {
+        scr.classList.remove('active');
+        els.pads.classList.toggle('hidden', wasHidden);
+      }
     }
   }
 
@@ -1233,9 +1304,11 @@
       reduceMotion: store.reduceMotion,
       colorAssist: store.colorAssist,
       depthGuide: store.depthGuide,
-      /* 一律用 18 格。手機橫向原本會縮成 14 格放大角色，但摔死的判定線就在 18 格，
-       * 看不到判定線就會死得莫名其妙，所以這裡不縮。 */
-      viewH: Rules.C.VIEW_H
+      /* 看幾格＝這一局開局時定下來的死亡線（rules.js 的 s.viewH）。
+       * 畫面一定要照這一局的值畫：畫得比死亡線淺會「看起來還在畫面裡卻死了」，
+       * 畫得比死亡線深則是把死亡線畫在畫面中間。還沒開局就先用預設值。
+       * 手機橫向原本會縮成 14 格放大角色，那會讓判定線跑到畫面外，所以不縮。 */
+      viewH: (G.match && G.match.viewH) || Rules.C.VIEW_H
     });
     /* 先量一次拿到「場地要多寬」，收邊，再量一次（收邊之後舞台變窄了）。
      * 兩次就會收斂：收到的寬度一定 ≥ 場地寬度，所以 scale 仍然由高度決定。 */
@@ -1503,11 +1576,20 @@
     view.resize();
     updateRotateTip();
     syncPads();
+    reportViewH();
     if (G.match) updateHud(true);
   });
   window.addEventListener('orientationchange', () => setTimeout(() => {
-    applyRenderOptions(); view.resize(); updateRotateTip();
+    applyRenderOptions(); view.resize(); updateRotateTip(); reportViewH();
   }, 120));
+
+  /** 轉向之後這台裝置想看的格數會變，趁還沒開局先告訴伺服器。
+   * 對局中（人在遊戲畫面上）不報：這一局的死亡線開局就定了，中途改等於改規則。
+   * 回到房間就要再報一次，下一局才照新的方向算。 */
+  function reportViewH() {
+    if (G.screen === 'game') return;
+    online.syncViewH(wantViewH());
+  }
   document.addEventListener('visibilitychange', () => {
     /* 線上模式不能靠切分頁暫停（伺服器照跑），所以只有單機才自動暫停 */
     if (G.mode === 'online') return;

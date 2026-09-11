@@ -36,6 +36,16 @@
                                   * 加大 VIEW_H 只是把死亡線往下延，天花板的壓迫完全沒變
                                   * （那是 CAMERA_LEAD 管的），所以難度曲線不受影響。 */
     VIEW_H_SHORT: 12,            /* 手機橫向縮短的可見高度（規劃書 §7.1） */
+    VIEW_H_MIN: 16,              /* 每一局可以帶自己的可見高度（createMatch 的 cfg.viewH），
+                                  * 但一定要夾在這個範圍裡。
+                                  * 下限就是 VIEW_H：再淺角色下方會看不到落點（見上面那段）。
+                                  * 上限 24：再深就等於把死亡線丟到天邊，沉下去幾乎一定救得回來，
+                                  * 「掉出畫面就摔死」這條規則會失去意義。
+                                  * 為什麼需要這個參數：手機直向的畫面是 1:2 的細長形，
+                                  * 而場地是 16 格寬（近正方形），寬度先到縮放限制之後
+                                  * 樓梯畫面只能佔螢幕的 53%，下面那 21% 是誰都用不到的空白。
+                                  * 多看幾格是唯一能把那塊變回「遊戲」的辦法（README §RWD）。 */
+    VIEW_H_MAX: 24,
     CAMERA_LEAD: 8.5,            /* 鏡頭跟在「最深存活者 − 8.5 格」。
                                   * ★ 這個值同時就是「頭頂到天花板的距離」（天花板永遠貼在 cameraTop，
                                   * 見 createMatch），所以它不是純鏡頭參數，是難度參數 ——
@@ -119,6 +129,34 @@
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   const EPS = 1e-9;
 
+  /** 這一局看得到幾格。舊版 server 送過來、或測試手寫的狀態沒有這個欄位，退回常數。 */
+  const viewHOf = s => (s && s.viewH) || C.VIEW_H;
+
+  /** 把外面要的可見高度收進合法範圍；沒給、給了鬼東西都退回預設的 VIEW_H。
+   * 取整數格：半格會讓死亡線落在階梯中間，網路上兩邊浮點數也容易對不齊。 */
+  function clampViewH(v) {
+    const n = Math.round(Number(v));
+    if (!Number.isFinite(n)) return C.VIEW_H;
+    return clamp(n, C.VIEW_H_MIN, C.VIEW_H_MAX);
+  }
+
+  /**
+   * 這個形狀的畫面想看幾格。
+   *
+   * 手機直向是寬度先到縮放限制（場地 FIELD_W 格一定要整個看得到），
+   * 所以「一格幾像素」就是 stageW / FIELD_W，剩下的就是把可用高度換算成格數。
+   *
+   * @param {number} stageW  樓梯畫面的寬度（px）
+   * @param {number} availH  樓梯畫面可以用的高度（px，扣掉狀態列與方向鍵之後）
+   * @param {number} extra   天花板＋深淵佔掉幾格（render.js 的高度預算，不要在這裡抄）
+   * @returns {number} 夾好上下限的整數格
+   */
+  function viewHForBox(stageW, availH, extra) {
+    const scale = Number(stageW) / C.FIELD_W;
+    if (!(scale > 0) || !(Number(availH) > 0)) return C.VIEW_H;
+    return clampViewH(Number(availH) / scale - (Number(extra) || 0));
+  }
+
   /* ---------- 建立一局 ---------- */
 
   function newPlayer(def, index, spawnX, diff) {
@@ -173,8 +211,13 @@
     const useSeed = seed != null ? String(seed) : (cfg.seed != null ? String(cfg.seed) : RNG.newSeed());
     const defs = (cfg.players && cfg.players.length ? cfg.players : [{ id: 'p1', name: '小玩家' }]).slice(0, 2);
 
+    /* 這一局看得到幾格。整局固定不變（開局算一次），而且一局之內所有人共用同一個值 ——
+     * 它就是死亡線，兩邊不一樣就等於兩套規則（線上由 server 決定後發給雙方，見 server.js）。
+     * 中途轉向不重算：轉向就換死亡線的話，沉到一半轉個方向就能活，那是漏洞不是功能。 */
+    const viewH = clampViewH(cfg.viewH);
+
     const gen = Stairs.createGen(useSeed, diff.id);
-    const steps = Stairs.advance(gen, C.VIEW_H + C.KEEP_BELOW);
+    const steps = Stairs.advance(gen, viewH + C.KEEP_BELOW);
 
     /* 出生點：一人挑戰站平台正中間；對戰左右分開站（規劃書 §7.3） */
     const mid = C.FIELD_W / 2;
@@ -190,6 +233,7 @@
       mode: mode,
       difficulty: diff.id,
       diff: diff,
+      viewH: viewH,                  /* 這一局的可見高度＝死亡線（見上面） */
       phase: 'countdown',            /* countdown｜playing｜over */
       countdown: mode === 'versus' ? C.COUNTDOWN_VERSUS : C.COUNTDOWN_SOLO,
       time: 0,                       /* 開始後經過的秒數（倒數不算） */
@@ -549,8 +593,10 @@
       p.sinking = Math.max(0, sink - C.SINK_WARN);
       if (p.sinking > 0 && before <= 0) events.push({ type: 'sinking', player: p.id });
       if (!s.diff.fallOut) continue;
-      /* 整個人（含頭頂）都到畫面下緣以外才算掉出去，不會有「看起來還在畫面裡卻死了」 */
-      if (p.y - C.PLAYER_H > s.cameraTop + C.VIEW_H) {
+      /* 整個人（含頭頂）都到畫面下緣以外才算掉出去，不會有「看起來還在畫面裡卻死了」。
+       * 用這一局的 s.viewH（不是常數）：手機直向看得比較深，死亡線就跟著往下，
+       * 畫面下緣與死亡線永遠是同一條線 —— 這正是這條規則講得通的前提。 */
+      if (p.y - C.PLAYER_H > s.cameraTop + viewHOf(s)) {
         p.hp = 0;
         p.alive = false;
         p.fell = true;
@@ -562,7 +608,7 @@
     }
 
     /* ---- 樓梯：往下補、把太上面的丟掉 ---- */
-    const need = s.cameraTop + C.VIEW_H + C.KEEP_BELOW;
+    const need = s.cameraTop + viewHOf(s) + C.KEEP_BELOW;
     if (s.gen.depth < need) {
       const fresh = Stairs.advance(s.gen, need);
       for (const st of fresh) { s.steps.push(st); s.newSteps.push(st); }
@@ -707,6 +753,7 @@
     STEP: C.STEP, STEP_MS: C.STEP_MS,
     C, KIND, DIFFICULTY, DIFFICULTY_LIST,
     createMatch, stepMatch, endMatch,
+    clampViewH, viewHForBox,
     makeStairs: Stairs.makeStairs,
     resolveLanding, resolvePush, applyCeiling, checkResult,
     damage, heal, scrollMultiplier, stepById, overlapsX, feetSpan,

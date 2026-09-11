@@ -62,7 +62,9 @@
 
     const st = {
       /* 身分 */
-      me: { id: null, name: opt.name || '', char: opt.char || 'yuan' },
+      /* viewH＝這台裝置想看幾格（手機直向會比較深，見 app.js 的 wantViewH）。
+       * 只是「想要」，真正的死亡線由伺服器開局時全房統一。 */
+      me: { id: null, name: opt.name || '', char: opt.char || 'yuan', viewH: opt.viewH || 0 },
       server: null,                 /* welcome 帶回來的伺服器設定 */
       /* 大廳與房間 */
       rooms: [],
@@ -106,7 +108,9 @@
 
     function out(msg) { if (send) send(msg); }
 
-    function hello() { out({ type: 'hello', name: st.me.name, char: st.me.char }); }
+    function hello() {
+      out({ type: 'hello', name: st.me.name, char: st.me.char, viewH: st.me.viewH });
+    }
 
     const actions = {
       rooms: () => out({ type: 'rooms' }),
@@ -128,6 +132,13 @@
         const msg = { type: 'invite:resolve', token: token };
         if (name != null) msg.name = name;
         out(msg);
+      },
+      /* 螢幕比例（轉向、切分割畫面）變了就重報一次。只在還沒開打時有意義：
+       * 開局之後這一局的死亡線已經定了，不會也不該再變。 */
+      setViewH: h => {
+        if (!h || h === st.me.viewH) return;
+        st.me.viewH = h;
+        out({ type: 'view', viewH: h });
       },
       rename: name => { st.me.name = name; out({ type: 'rename', name: name }); },
       setChar: ch => { st.me.char = ch; out({ type: 'char', char: ch }); },
@@ -225,7 +236,9 @@
       st.match = Rules.createMatch({
         difficulty: snap.difficulty,
         mode: 'versus',
-        players: (snap.meta || []).map(m => ({ id: m.id, name: m.name, char: m.char, kind: m.kind }))
+        players: (snap.meta || []).map(m => ({ id: m.id, name: m.name, char: m.char, kind: m.kind })),
+        /* 死亡線由伺服器決定（全房一個值），鏡像一定要用同一個才不會兩邊不同調 */
+        viewH: snap.viewH
       }, snap.seed);
       st.log.length = 0;
       st.snaps.length = 0;
