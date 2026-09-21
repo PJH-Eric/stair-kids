@@ -577,7 +577,14 @@ button.soon-item:active { transform: translateY(2px); }
 
 /* ---------- 觸控方向鍵 ---------- */
 
-.pads { position: absolute; inset: 0; pointer-events: none; z-index: 35; }
+.pads {
+  /* 方向鍵是整個遊戲畫面的固定操作層，不跟著 .stage 的高度或手機瀏覽器
+   * 動態工具列重新排版；固定在 viewport 才能確實落在螢幕底部。 */
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 35;
+}
 /* 方向鍵：拇指是橫著滑的，所以按鍵做成「寬 ＞ 高」，比正方形好按。
  * --pad-w／--pad-h 由各斷點決定，這裡只管長相。 */
 .pad {
