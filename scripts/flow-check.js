@@ -15,8 +15,8 @@
  *
  * 走的流程（使用者指定的那一串）：
  *   首頁 → 大廳 → 開房間 → 對手加入 → 兩人準備 → 開始 → 對戰 → 雙方死亡
- *   → 結算畫面（三顆按鈕）→ 再來一局 → 回到房間（按鈕跟原本開房間一樣）
- *   → 等對方準備好才能開始 → 第二局 → 結算 → 回到房間 → 第三局 → 回首頁
+ *   → 結算畫面（回房間）→ 雙方確認 → 等兩人準備好才能開始 → 第二局
+ *   → 結算 → 回房間 → 第三局 → 回房間 → 離開房間並收掉連線
  *   → 斷線退回大廳
  *
  * 執行：node scripts/flow-check.js  或  npm run test:flow
@@ -155,27 +155,28 @@ ok(theRoom().phase === 'result', '伺服器也進到結算階段', theRoom().pha
 ok(screenNow() === 'game', '結算蓋在遊戲畫面上（樓梯定格留在後面）', screenNow());
 ok(el('actors').children.length === 0, '結算時畫面上沒有殘留的角色',
   el('actors').children.length + ' 個');
-ok(el('btn-again').hidden === false && el('btn-again').textContent === '再來一局',
-  '結算有「再來一局」', el('btn-again').textContent);
-ok(el('btn-change-diff').hidden === false && el('btn-change-diff').textContent === '回到房間',
-  '結算有「回到房間」', el('btn-change-diff').textContent);
-ok(el('btn-result-home').textContent === '回首頁', '結算有「回首頁」',
+ok(el('btn-again').hidden === true, '線上結算隱藏「再玩一次」');
+ok(el('btn-change-diff').hidden === true, '線上結算隱藏「換難度」');
+ok(el('btn-result-home').textContent === '回房間', '線上結算顯示「回房間」',
   el('btn-result-home').textContent);
 
 /* ---------------------------------------------------------- */
-group('再來一局：回房間、自動準備好、等對方');
-el('btn-again').click();
-ok(w.until(() => screenNow() === 'room', 3000), '按「再來一局」馬上回到房間', screenNow());
+group('回房間：雙方確認後收局，不自動準備');
+el('btn-result-home').click();
+ok(w.until(() => screenNow() === 'room', 3000), '按「回房間」馬上回到房間', screenNow());
 ok(el('ov-result').hidden === true, '結算畫面收掉了，沒有殘留');
 foe.say({ type: 'result-done' });
 ok(w.until(() => theRoom().phase === 'lobby', 12000), '兩邊都看完結算，房間回到大廳階段',
   theRoom().phase);
-ok(w.until(() => mySeat() && mySeat().ready, 3000), '「再來一局」幫我自動按好準備');
+ok(mySeat() && mySeat().ready === false, '回房間不會自動幫我準備');
 ok(el('btn-ready').hidden === false && el('btn-start-online').hidden === false,
   '房間的按鈕跟原本開房間一樣（準備、開始都在）');
+el('btn-ready').click();
+ok(w.until(() => mySeat() && mySeat().ready, 3000), '回房後可以自行準備');
 ok(el('btn-start-online').disabled === true, '對方還沒準備好，開始鈕還是不能按');
 foe.say({ type: 'ready', ready: true });
-ok(w.until(() => el('btn-start-online').disabled === false, 3000), '對方準備好之後才可以開始');
+ok(w.until(() => el('btn-start-online').disabled === false, 3000), '對方準備好之後才可以開始',
+  JSON.stringify([...theRoom().members.values()].map(m => ({ name: m.name, ready: m.ready, connected: m.connected }))));
 
 el('btn-start-online').click();
 ok(w.until(() => screenNow() === 'game' && el('ov-result').hidden === true, 3000),
@@ -185,13 +186,13 @@ ok(w.until(() => el('actors').children.length === 2, 5000), '第二局也有兩�
 /* ---------------------------------------------------------- */
 group('第二局結算 → 回到房間 → 第三局');
 ok(w.until(() => el('ov-result').hidden === false, 120000), '第二局也跑得出結算');
-el('btn-change-diff').click();
-ok(w.until(() => screenNow() === 'room', 3000), '按「回到房間」回到房間', screenNow());
+el('btn-result-home').click();
+ok(w.until(() => screenNow() === 'room', 3000), '按「回房間」回到房間', screenNow());
 ok(el('ov-result').hidden === true, '結算收掉了');
 foe.say({ type: 'result-done' });
 ok(w.until(() => theRoom().phase === 'lobby', 12000), '房間回到大廳階段');
 ok(mySeat() && mySeat().ready === false,
-  '「回到房間」不會自動幫我準備（跟「再來一局」不一樣）');
+  '「回房間」不會自動幫我準備');
 el('btn-ready').click();
 foe.say({ type: 'ready', ready: true });
 ok(w.until(() => el('btn-start-online').disabled === false, 3000), '兩個人準備好，可以開第三局');
@@ -199,19 +200,24 @@ el('btn-start-online').click();
 ok(w.until(() => screenNow() === 'game', 3000), '第三局開打');
 
 /* ---------------------------------------------------------- */
-group('結算 → 回首頁：座位要放掉、連線要收掉');
+group('第三局結算 → 回房間 → 離開線上大廳');
 ok(w.until(() => el('ov-result').hidden === false, 120000), '第三局跑得出結算');
 const leavingId = myId();
 el('btn-result-home').click();
-w.advance(500);
-ok(screenNow() === 'home', '回到首頁', screenNow());
+ok(w.until(() => screenNow() === 'room', 3000), '結算按鈕回到房間', screenNow());
+const room1 = theRoom();
+el('btn-leave-room').click();
+ok(w.until(() => screenNow() === 'lobby', 3000), '離開房間回到線上大廳', screenNow());
+ok(w.until(() => !room1 || !room1.members.has(leavingId) || !room1.members.get(leavingId).connected, 3000),
+  '離開房間會釋放伺服器座位');
+el('btn-back').click(); w.advance(50);
+ok(screenNow() === 'online' && mySocket().readyState === 3,
+  '離開線上大廳會收掉連線', screenNow());
+el('btn-back').click(); w.advance(50);
+ok(screenNow() === 'home', '回到遊戲首頁', screenNow());
 ok(el('ov-result').hidden === true, '首頁不會殘留結算畫面');
 ok(el('lobby-home-link').hidden === false && el('btn-back').hidden === true,
-  '打完一局回到首頁，左上角也換回「回遊戲大廳」');
-ok(mySocket().readyState === 3, '離開線上區域會把連線收掉');
-const room1 = theRoom();
-ok(!room1 || !room1.members.has(leavingId) || !room1.members.get(leavingId).connected,
-  '伺服器那邊的座位放掉了');
+  '首頁的左上角換回「回遊戲大廳」');
 
 /* ---------------------------------------------------------- */
 group('連線斷掉：不要留在一間按什麼都沒反應的幽靈房間，但要自己連回去');

@@ -1092,17 +1092,14 @@
     if (saved.record || win) { sound.play('win'); view.burst('milestone', Rules.C.FIELD_W / 2, 0, 0); }
     else if (foe) sound.play('dead');
 
-    /* 結算的三顆按鈕。線上模式借同樣三顆，但意思不一樣：
-     *   再來一局 → 回房間並自動幫他按好準備（開局是伺服器的權限，要兩個人都準備好）
-     *   回到房間 → 不等結算停留跑完，馬上回房間
-     *   回首頁   → 離開房間、收掉連線
-     * 難度是房主在房間裡改的，所以線上沒有「換難度」。 */
-    els.again.hidden = false;
+    /* 線上結算只留一顆「回房間」按鈕；停留時間結束也會自動回房。
+     * 單機則提供再玩一次、換難度與回首頁。 */
+    els.again.hidden = online2;
     els.again.textContent = online2 ? '再來一局' : '再玩一次';
-    els.changeDiff.hidden = false;
+    els.changeDiff.hidden = online2;
     els.changeDiff.textContent = online2 ? '回到房間' : '換難度';
-    els.resultHome.textContent = '回首頁';
-    els.resultHome.classList.remove('primary');
+    els.resultHome.textContent = online2 ? '回房間' : '回首頁';
+    els.resultHome.classList.toggle('primary', online2);
 
     /* 這局統計（一人挑戰自動省略「被推開」） */
     const rows = [
@@ -1138,7 +1135,7 @@
     els.pads.classList.add('hidden');
     input.clear();
     if (G.raf) { cancelAnimationFrame(G.raf); G.raf = 0; }
-    els.again.focus();
+    (online2 ? els.resultHome : els.again).focus();
   }
 
   /* ================= 暫停選單（Esc；只有三顆） ================= */
@@ -1565,7 +1562,7 @@
     goto('setup');
   });
   els.resultHome.addEventListener('click', () => {
-    /* 線上按回首頁＝順手離開房間：goto 會通知伺服器把座位放掉，再收掉連線 */
+    if (els.again.hidden) { online.backToRoom(); return; }
     goto('home');
   });
   /* 左上角的「離開」。這顆原本沒有任何 listener —— index.html 上沒有 data-go，
@@ -1606,7 +1603,7 @@
     const tag = (document.activeElement && document.activeElement.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
     e.preventDefault();
-    els.again.click();
+    (els.again.hidden ? els.resultHome : els.again).click();
   });
 
   input.attach({ left: els.padLeft, right: els.padRight, pad: els.pads });

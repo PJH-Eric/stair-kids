@@ -126,8 +126,10 @@ const group = t => console.log('\n' + t);
   await D.fill('#invite-nickname', '邀請後的新暱稱');
   await tap(D, '#btn-invite-join'); await wait(900);
   ok(await screen(D) === 'screen-room', '確認暱稱後才加入邀請房間');
-  ok(await D.$$eval('#room-seats .seat b', ns => ns.some(n => n.textContent.indexOf('邀請後的新暱稱') >= 0)),
-    '邀請房間使用確認後的新暱稱');
+  const invitedMembers = await D.$$eval('#room-seats .seat b, #room-specs .spec span',
+    ns => ns.map(n => n.textContent.trim()));
+  ok(invitedMembers.some(name => name.indexOf('邀請後的新暱稱') >= 0),
+    '邀請房間使用確認後的新暱稱', JSON.stringify(invitedMembers));
   await tap(D, '#btn-leave-room'); await wait(700);
 
   group('準備好與開始');
@@ -177,10 +179,14 @@ const group = t => console.log('\n' + t);
   if (ended) {
     ok(await A.evaluate(() => document.querySelector('#btn-again').hidden), '線上結算沒有「再玩一次」');
     ok((await A.textContent('#btn-result-home')).trim() === '回房間', '按鈕是「回房間」不是「回首頁」');
+    ok(await B.evaluate(() => document.querySelector('#btn-again').hidden), '對手的線上結算也沒有「再玩一次」');
+    ok((await B.textContent('#btn-result-home')).trim() === '回房間', '對手結算按鈕也顯示「回房間」');
     const rows = await A.$$eval('#result-list li', ns => ns.map(n => n.textContent.trim()));
     ok(rows.some(r => r.indexOf('連線延遲') >= 0), '這局統計有連線延遲');
     ok(rows.some(r => r.indexOf('被推開') >= 0), '這局統計有被推開（對戰才有）');
     await shot(A, '線上-結算');
+    await tap(B, '#btn-result-home'); await wait(500);
+    ok((await screen(B)) === 'screen-room', '按「回房間」會立即離開結算');
     let back = false;
     for (let i = 0; i < 16 && !back; i++) {
       await wait(1000);
