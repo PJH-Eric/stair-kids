@@ -231,6 +231,7 @@
 
   function show(name) {
     G.screen = name;
+    if (window.NetworkLatency) window.NetworkLatency.setActive(name === 'game' && G.mode === 'online');
     $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
     /* 左上角是全站統一的「退出」位置：選單畫面是返回上一層，
      * 房間與遊戲中則是離開這間房／這一局。原本遊戲畫面完全沒有這顆，
@@ -1017,6 +1018,7 @@
       return foePlayer(G.match) ? '跟電腦對戰' : '單機一人挑戰';
     }
     const st = online.stats();
+    if (window.NetworkLatency) window.NetworkLatency.report(st && st.rtt);
     const ping = st && st.rtt ? '・延遲 ' + st.rtt + 'ms' : '';
     return (G.spectating ? '觀戰中' : '線上對戰') + ping;
   }
@@ -1030,6 +1032,7 @@
 
   function finish(result, meId) {
     const online2 = G.mode === 'online';
+    if (online2 && window.NetworkLatency) window.NetworkLatency.setActive(false);
     const watching = online2 && G.spectating;
     const me = result.players.find(p => p.id === (meId || G.meId)) || result.players[0];
     const foe = result.players.find(p => p !== me) || null;
