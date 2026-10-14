@@ -10,6 +10,7 @@
     nickname: '',
     char: 'yuan',
     difficulty: 'normal',
+    foeMythic: false,      /* 跟電腦對戰時是否選「神話」等級的電腦 */
     /* 設定彈窗（規劃書 §7.5） */
     bgm: true,
     bgmVol: 0.35,

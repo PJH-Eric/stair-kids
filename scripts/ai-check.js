@@ -170,6 +170,47 @@ for (const gameDiff of DIFFS) {
     L.map(l => fmt(r[l].spikeShare * 100, 1) + '%').join(' → '));
 }
 
+/* ---- 神話：只給電腦對手用的第五段，要明確強過困難 ---- */
+console.log('\n【神話】');
+{
+  const N = Number(process.env.MYTH_GAMES) || 20;
+  const h = runTier('hard', 'hard', N), m = runTier('hard', 'mythic', N);
+  const hn = runTier('normal', 'hard', N), mn = runTier('normal', 'mythic', N);
+  console.log('    困難遊戲：困難 ' + fmt(h.depth, 0) + ' m／神話 ' + fmt(m.depth, 0) + ' m；普通遊戲：困難 ' +
+    fmt(hn.depth, 0) + ' m／神話 ' + fmt(mn.depth, 0) + ' m');
+  ok(Ai.AI_LIST.join(',') === 'baby,easy,normal,hard,mythic', '電腦共五段（含神話），遊戲難度 LEVEL_LIST 仍是四段');
+  ok(m.depth > h.depth * 1.5, '困難遊戲：神話平均深度至少是困難的 1.5 倍');
+  ok(mn.depth > hn.depth && mn.deathRate <= hn.deathRate, '普通遊戲：神話比困難深，而且死得不比較多');
+  ok(m.spikeShare < h.spikeShare + 0.004 || m.depth > h.depth, '神話不會比困難更常踩刺（或深度明顯更好）');
+  /* 對打：神話打困難要大勝（左右位置各打一半，排除出生點優勢） */
+  let win = 0, games = 0;
+  for (let i = 0; i < 6; i++) for (const swap of [0, 1]) {
+    const ids = swap ? ['p2', 'p1'] : ['p1', 'p2'];
+    const seed = 'myth-vs-' + i;
+    const s = Rules.createMatch({ difficulty: 'normal', mode: 'versus',
+      players: [{ id: 'p1', kind: 'ai' }, { id: 'p2', kind: 'ai' }] }, seed);
+    const A = Ai.create('mythic', ids[0], seed), B = Ai.create('hard', ids[1], seed);
+    let t = 0;
+    while (s.phase !== 'over' && t < 150) {
+      const ca = A.read(s, Rules.STEP), cb = B.read(s, Rules.STEP);
+      const cmd = {}; cmd[ids[0]] = { dir: ca.dir }; cmd[ids[1]] = { dir: cb.dir };
+      Rules.stepMatch(s, cmd, Rules.STEP_MS); t += Rules.STEP;
+    }
+    if (s.phase !== 'over') Rules.endMatch(s, 'manual');
+    games++; if (s.result.winner === ids[0]) win++;
+  }
+  ok(win / games >= 0.8, '神話對打困難（雙方位置互換）勝率至少 80%（' + win + '/' + games + '）');
+  /* 不作弊：規劃用的模擬不會改動真實局面 */
+  const seed = 'myth-fair';
+  const s = Rules.createMatch({ difficulty: 'normal', mode: 'solo', players: [{ id: 'a', kind: 'ai', aiLevel: 'mythic' }] }, seed);
+  const ai = Ai.create('mythic', 'a', seed);
+  for (let i = 0; i < 400; i++) { const c = ai.read(s, Rules.STEP); Rules.stepMatch(s, { a: { dir: c.dir } }, Rules.STEP_MS); }
+  const snap = JSON.stringify({ hp: s.players[0].hp, x: s.players[0].x, y: s.players[0].y, t: s.time, n: s.steps.length, g: s.gen.depth });
+  for (let i = 0; i < 30; i++) ai.read(s, 0.2);
+  ok(snap === JSON.stringify({ hp: s.players[0].hp, x: s.players[0].x, y: s.players[0].y, t: s.time, n: s.steps.length, g: s.gen.depth }),
+    '神話在規劃時不會改動真實局面（含樓梯生成器）');
+}
+
 /* ---- AI 不作弊：只用得到跟真人一樣的輸入 ---- */
 console.log('\n【不作弊】');
 {

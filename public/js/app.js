@@ -14,6 +14,7 @@
     homeArt: $('#home-art'), homeRecords: $('#home-records'),
     nickname: $('#in-nickname'), charPicker: $('#char-picker'),
     diffPicker: $('#diff-picker'), diffNote: $('#diff-note'),
+    foeField: $('#foe-field'), foePicker: $('#foe-picker'), foeNote: $('#foe-note'),
     setupTitle: $('#setup-title'), setupHint: $('#setup-hint'), diffLabel: $('#diff-label'),
     vsAi: $('#btn-vs-ai'), start: $('#btn-start'),
     sideFoe: $('#side-foe'), hudFoeName: $('#hud-foe-name'), hudFoeLabel: $('#hud-foe-label'),
@@ -392,7 +393,7 @@
     els.setupHint.textContent = vs
       ? '兩個人在同一座樓梯上，會互相推擠。倒數 3 秒後開始，你一死就結束這局。'
       : '選一隻小朋友，挑一個難度，就可以開始無限往下跑。';
-    els.diffLabel.textContent = vs ? '難度（電腦對手用同一個難度）' : '難度';
+    els.diffLabel.textContent = vs ? '遊戲難度（雙方規則相同）' : '難度';
     els.start.textContent = vs ? '開始對戰' : '開始下樓梯';
     /* 從一個人玩切到對戰時，如果原本選的是幼幼班就退回普通 */
     if (vs && !Rules.DIFFICULTY[G.difficulty].versus) G.difficulty = 'normal';
@@ -413,7 +414,32 @@
         '<em>' + (r && r.depth ? '你最深 ' + r.depth + ' m' : '還沒玩過') + '</em></button>';
     }).join('');
     els.diffNote.textContent = diffNote(G.difficulty);
+    renderFoePicker(vs);
   }
+
+  /** 電腦對手強度：跟遊戲難度一樣，或是神話（只有對電腦才有；遊戲規則仍照上面選的難度） */
+  function renderFoePicker(vs) {
+    els.foeField.hidden = !vs;
+    if (!vs) return;
+    const myth = !!store.foeMythic;
+    const sameName = Rules.DIFFICULTY[G.difficulty].name;
+    els.foePicker.innerHTML =
+      '<button class="diff-opt" type="button" role="radio" data-foe="same" aria-checked="' + (!myth) + '">' +
+      '<strong>' + sameName + '</strong><small>跟遊戲難度一樣</small></button>' +
+      '<button class="diff-opt foe-myth" type="button" role="radio" data-foe="mythic" aria-checked="' + myth + '">' +
+      '<strong>神話</strong><small>幾乎不犯錯，會預判、會擠你</small></button>';
+    els.foeNote.textContent = myth
+      ? '神話電腦會往前預判落點、避開所有尖刺，還會把你擠向危險 —— 傷害、速度仍照「' + sameName + '」的規則。'
+      : '電腦的反應與失誤率跟「' + sameName + '」相同。';
+  }
+  els.foePicker.addEventListener('click', e => {
+    const btn = e.target.closest('[data-foe]');
+    if (!btn) return;
+    store.foeMythic = btn.dataset.foe === 'mythic';
+    Store.save(store);
+    sound.play('click');
+    renderSetup();
+  });
 
   els.charPicker.addEventListener('click', e => {
     const btn = e.target.closest('[data-char]');
@@ -460,6 +486,8 @@
     const seed = RNG.newSeed();
     const vs = G.mode === 'ai';
     const players = [{ id: 'p1', name: name, char: G.char, kind: 'human' }];
+    /* 電腦強度：預設跟遊戲難度一樣，也可以選只有電腦才有的「神話」 */
+    const foeLevel = vs && store.foeMythic ? 'mythic' : G.difficulty;
     if (vs) {
       /* 電腦對手：難度跟玩家共用同一個（規劃書 §1.7），角色挑一隻跟你不一樣的 */
       const foeChar = Characters.CHARACTERS.find(c => c.id !== G.char) || Characters.CHARACTERS[0];
@@ -468,10 +496,10 @@
       for (let i = 0; i < 12 && foeName === name; i++) foeName = Nicknames.random();
       players.push({
         id: 'ai1',
-        name: foeName + '（' + Rules.DIFFICULTY[G.difficulty].name + '）',
+        name: foeName + '（' + Ai.LEVELS[foeLevel].name + '）',
         char: foeChar.id,
         kind: 'ai',
-        aiLevel: G.difficulty
+        aiLevel: foeLevel
       });
     }
     G.match = Rules.createMatch({
@@ -482,7 +510,7 @@
        * 不然沉到一半轉個方向就能把死亡線往下挪，那是漏洞不是功能。 */
       viewH: wantViewH()
     }, seed);
-    G.ai = vs ? Ai.create(G.difficulty, 'ai1', seed) : null;
+    G.ai = vs ? Ai.create(foeLevel, 'ai1', seed) : null;
 
     G.paused = false;
     G.acc = 0;

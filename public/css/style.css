@@ -1413,6 +1413,10 @@ button.soon-item:active { transform: translateY(2px); }
 .diff-opt { display: flex; flex-direction: column; gap: 2px; align-items: stretch; text-align: center; }
 .diff-opt small { font-size: 12px; line-height: 1.45; }
 .diff-opt .diff-hurt { color: #A3364A; font-weight: 700; }
+.foe-picker { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.foe-myth strong { background: linear-gradient(90deg, #7A4DE0, #E0508F, #F2A23F); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.foe-myth[aria-checked="true"] { border-color: #8B5CF6; box-shadow: 0 0 0 3px rgba(139, 92, 246, .25), var(--shadow); }
+.foe-myth[aria-checked="true"] strong { color: transparent; }
 .diff-opt.on .diff-hurt { color: #C0392B; }
 .diff-opt em {
   font-style: normal;

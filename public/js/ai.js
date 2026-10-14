@@ -1,4 +1,4 @@
-/* ===== ai.js — 四段電腦對手 =====
+/* ===== ai.js — 電腦對手（四段 ＋ 神話） =====
  *
  * 規劃書 §5。AI 只輸出 { dir: -1 | 0 | 1 }，跟真人走同一個輸入管道，不作弊：
  *   - 只看得到 state.steps 裡「已經生成」的階梯（也就是畫面附近那一段），
@@ -61,9 +61,23 @@
       name: '困難', react: 0.08, lookahead: 5,
       avoid: { spike: 18, fake: 12, belt: 0.8 }, springUse: 4, wideBonus: 1.2,
       layerCost: -0.55, push: 1.0, mistake: 0.015, idleSlip: 0.1
+    },
+    /* 神話：只有「跟電腦對戰」才選得到的第五段，不是遊戲難度（物理、傷害、下捲速度
+     * 仍然看玩家選的遊戲難度）。比困難多了：每一格都重新決策（react 0.02）、
+     * 完全不失誤、看得更深、對刺與假階幾乎零容忍，並且會主動貼近對手把他往危險那邊擠。
+     * 一樣只輸出 -1／0／1，不改血量、不加速、不偷看還沒生成的階梯。 */
+    mythic: {
+      name: '神話', react: 0.08, lookahead: 8,
+      avoid: { spike: 40, fake: 26, belt: 1.0 }, springUse: 4, wideBonus: 1.5,
+      layerCost: -0.75, push: 2.2, mistake: 0, idleSlip: 0,
+      /* 神話獨有：往前「模擬」規則核心 plan 秒（假設對手維持現在的動作），
+       * 挑掉血最少、下得最深、能把對手擠進危險的那一串動作 */
+      plan: 0.8, planEvery: 0.1
     }
   };
+  /* LEVEL_LIST ＝ 跟遊戲難度一一對應的四段；AI_LIST ＝ 再加上只給電腦對手用的神話 */
   const LEVEL_LIST = ['baby', 'easy', 'normal', 'hard'];
+  const AI_LIST = LEVEL_LIST.concat(['mythic']);
 
   const EDGE = 0.22;      /* 落點至少要留這麼多重疊才算站得住 */
   const OUT = 0.55;       /* 要走出腳下這一階多少才會掉下去 */
@@ -98,7 +112,7 @@
       slip -= dtSec;
       if (slip > 0) return { dir: hold };      /* 失誤中：繼續做錯的事 */
       if (wait > 0) return { dir: hold };      /* 反應延遲：沿用上一個決定 */
-      wait = cfg.react;
+      wait = cfg.plan ? cfg.planEvery : cfg.react;
 
       /* 失誤：有時候乾脆不動（幼幼班常常撞牆停住），有時候往反方向 */
       if (rng.chance(cfg.mistake)) {
@@ -107,7 +121,7 @@
         return { dir: hold };
       }
 
-      hold = decide(s, me, cfg, rng);
+      hold = cfg.plan ? plan(s, me, cfg, rng) : decide(s, me, cfg, rng);
       return { dir: hold };
     }
 
@@ -210,10 +224,68 @@
     return d > 0 ? 1 : -1;
   }
 
+  /**
+   * 神話的決策：複製一份「只含已生成階梯」的局面，把規則核心往前跑 cfg.plan 秒，
+   * 每個候選動作（先 a 再 b 兩段）各評分一次，取最高分的第一個方向。
+   * 模擬用的是真正的 Rules.stepMatch，所以傷害、彈簧、假階崩解、推擠都算得準；
+   * 但它只看得到已經生成的階梯、也不會改動真實局面（不作弊）。
+   */
+  function cloneForSim(s) {
+    return {
+      seed: s.seed, mode: s.mode, difficulty: s.difficulty, diff: s.diff, viewH: s.viewH,
+      phase: s.phase, countdown: s.countdown, time: s.time, cameraTop: s.cameraTop,
+      scrollMul: s.scrollMul, scrollSpeed: s.scrollSpeed, leadDepth: s.leadDepth,
+      world: s.world, worldCycle: s.worldCycle, worldFade: s.worldFade,
+      players: JSON.parse(JSON.stringify(s.players)),
+      steps: JSON.parse(JSON.stringify(s.steps)),
+      gen: { depth: Infinity },            /* 不往下生新階梯：看不到未生成的東西 */
+      newSteps: [], goneSteps: [], result: null, endedBy: null
+    };
+  }
+
+  function plan(s, me, cfg, rng) {
+    const foe = s.players.find(p => p.id !== me.id) || null;
+    const foeDir = foe ? (foe.dir || 0) : 0;
+    const half = Math.max(1, Math.round(cfg.plan / 2 / C.STEP));
+    let best = null;
+    for (const a of [-1, 0, 1]) {
+      for (const b of [-1, 0, 1]) {
+        if (b === 0 && a !== 0) continue;           /* 先動再停意義不大，少算幾組 */
+        const sim = cloneForSim(s);
+        const mePl = sim.players.find(p => p.id === me.id);
+        const foePl = foe ? sim.players.find(p => p.id === foe.id) : null;
+        const hp0 = mePl.hp, fhp0 = foePl ? foePl.hp : 0;
+        let minHead = Infinity;
+        for (let i = 0; i < half * 2 && sim.phase !== 'over'; i++) {
+          const inp = {};
+          inp[me.id] = { dir: i < half ? a : b };
+          if (foe) inp[foe.id] = { dir: foeDir };
+          Rules.stepMatch(sim, inp, C.STEP_MS);
+          if (mePl.alive) minHead = Math.min(minHead, (mePl.y - C.PLAYER_H) - sim.cameraTop);
+        }
+        let score = 0;
+        if (!mePl.alive) score -= 1e6;
+        score -= (hp0 - mePl.hp) * 10;                      /* 掉的血 */
+        score += Math.min(mePl.y - me.y, 6) * 0.9;           /* 往下多深（封頂：沒階梯的空中不算進度） */
+        if (mePl.alive && mePl.sinking > 0) score -= 20 + mePl.sinking * 10;   /* 快沉出畫面 */
+        if (isFinite(minHead) && minHead < 1.2) score -= (1.2 - minHead) * 6;   /* 別被天花板頂 */
+        if (foePl) {
+          score += (fhp0 - foePl.hp) * cfg.push * 3;        /* 讓對手掉血 */
+          if (!foePl.alive) score += 5e4;
+        }
+        /* 站不穩（空中、沒踩任何階）就小扣一點：落地才算數 */
+        if (mePl.alive && !mePl.onStep) score -= 3;
+        score -= (a === 0 && b === 0 ? 0 : 0.02) + rng.range(0, 1e-3);
+        if (!best || score > best.score) best = { score: score, dir: a };
+      }
+    }
+    return best ? best.dir : 0;
+  }
+
   /** 沒有任何看得到的落點：往比較近的那一邊走出去，總比被天花板頂住好 */
   function edgeDir(cur, me) {
     return (cur.x1 - me.x) <= (me.x - cur.x0) ? 1 : -1;
   }
 
-  return { create, LEVELS, LEVEL_LIST, standable };
+  return { create, LEVELS, LEVEL_LIST, AI_LIST, standable };
 });
