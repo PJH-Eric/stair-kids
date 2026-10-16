@@ -465,6 +465,7 @@ function boot(opt) {
 
   const context = vm.createContext(win);
   const files = [
+    'js/analytics.js',
     'js/i18n.js', 'js/locales.js',
     'js/config.js', 'js/rng.js', 'js/stairs.js', 'js/rules.js', 'js/ai.js',
     'js/themes/characters.js', 'js/themes/scenes.js', 'js/themes/nicknames.js',
