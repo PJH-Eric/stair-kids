@@ -44,6 +44,9 @@ jobs:
         run: node scripts/inject-server-url.js
 
       - uses: actions/configure-pages@v5
+      - name: 驗證並注入 GA4 與 SEO
+        run: node tests/seo.js && node scripts/inject-seo.js
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public

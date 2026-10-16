@@ -175,7 +175,10 @@
         viewH: opt.viewHOf ? opt.viewHOf() : 0,
         beforeStep: opt.beforeStep || null,
         send(msg) {
-          if (socket.readyState === 1) socket.send(JSON.stringify(msg));
+          if (socket.readyState === 1) {
+            socket.send(JSON.stringify(msg));
+            if (root.GameAnalytics) root.GameAnalytics.roomRequest(msg);
+          }
         }
       });
 
@@ -188,6 +191,7 @@
       socket.onmessage = ev => {
         let msg = null;
         try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        if (root.GameAnalytics) root.GameAnalytics.roomResponse(msg.type, !!msg.room);
         S.client.receive(msg);
         afterMessage(msg);
       };

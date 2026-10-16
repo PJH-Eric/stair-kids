@@ -511,6 +511,7 @@
       viewH: wantViewH()
     }, seed);
     G.ai = vs ? Ai.create(foeLevel, 'ai1', seed) : null;
+    GameAnalytics.start({ mode: vs ? 'ai' : 'solo', difficulty: G.difficulty, players: players.length });
 
     G.paused = false;
     G.acc = 0;
@@ -541,6 +542,7 @@
     G.spectating = !!info.spectating;
     const s = online.match;
     if (!s) return;
+    if (!G.spectating) GameAnalytics.start({ mode: 'online', difficulty: s.difficulty, players: s.players.length }, s.seed);
     /* 觀戰沒有「我」，借一號位當主視角，HUD 才有東西可以顯示 */
     G.meId = G.spectating ? (s.players[0] && s.players[0].id) : info.meId;
     G.match = s;
@@ -1065,6 +1067,7 @@
     const me = result.players.find(p => p.id === (meId || G.meId)) || result.players[0];
     const foe = result.players.find(p => p !== me) || null;
     const win = foe ? result.winner === me.id : null;
+    if (!watching) GameAnalytics.end({ result: foe ? (result.winner == null ? 'draw' : (win ? 'win' : 'lose')) : 'complete' });
     /* 觀戰不是自己的成績，不寫進本機紀錄 */
     const saved = watching
       ? { record: false, best: (store.records[result.difficulty] || { depth: 0 }) }
