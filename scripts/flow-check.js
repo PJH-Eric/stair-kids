@@ -63,9 +63,12 @@ group('多語系啟動：載入真實核心、字典與語言切換鈕');
   ok(!!toggle, '啟動時建立語言切換鈕');
   ok(w.win.I18N.t('lang.switchTo') !== 'lang.switchTo', '載入真實翻譯字典');
   toggle.click();
+  ok(w.win.I18N.lang === 'zh-Hant', '點擊語言鈕只展開選單，不直接切換');
+  w.dom.body.querySelector('[data-language-option="en"]').click();
   ok(w.win.I18N.lang === 'en', '點擊語言鈕切換英文');
   ok(w.win.localStorage.getItem('game-island-lang') === 'en', '英文偏好寫入儲存');
   toggle.click();
+  w.dom.body.querySelector('[data-language-option="zh-Hant"]').click();
   ok(w.win.I18N.lang === 'zh-Hant', '再次點擊切回繁中');
 }
 
