@@ -6,6 +6,11 @@
 
   const $ = sel => document.querySelector(sel);
   const $$ = sel => [...document.querySelectorAll(sel)];
+  /* 多語系：所有使用者看得到的文字都走字典（locales.js） */
+  const T = (k, p) => I18N.t(k, p);
+  const diffName = id => T('diff.' + id);
+  /** 範圍文字：上下界一樣就只寫一個數字 */
+  const rangeText = r => (r[0] === r[1] ? String(r[0]) : T('fmt.range', { a: r[0], b: r[1] }));
 
   const els = {
     nav: $('#screen-nav'), back: $('#btn-back'), lobbyLink: $('#lobby-home-link'),
@@ -245,7 +250,8 @@
     if (els.lobbyLink) els.lobbyLink.hidden = !atHome;
     els.nav.hidden = !atHome && !BACK_TO[name] && name !== 'game';
     if (BACK_TO[name]) els.back.dataset.go = BACK_TO[name];
-    els.back.textContent = (name === 'game' || name === 'room') ? '← 離開房間' : '← 返回';
+    els.back.textContent = T((name === 'game' || name === 'room') ? 'nav.leave' : 'nav.back');
+    G.backName = name;
     document.body.classList.toggle('in-game', name === 'game');
     els.pads.classList.toggle('hidden', name !== 'game');
     if (name !== 'game' && els.ovResult) els.ovResult.hidden = true;
@@ -286,7 +292,7 @@
   }
 
   const currentName = () =>
-    (els.nickname.value || '').trim() || store.nickname || els.nickname.placeholder || '小玩家';
+    (els.nickname.value || '').trim() || store.nickname || els.nickname.placeholder || T('common.playerName');
 
   /**
    * 首頁「跟別人玩」上的線上人數。
@@ -307,7 +313,8 @@
         done = true;
         const n = d && Number(d.online) || 0;
         badge.hidden = n <= 0;
-        badge.textContent = '線上 ' + n + ' 人';
+        G.presence = n;
+        badge.textContent = T('home.online', { n: n });
       })
       .catch(give);
   }
@@ -326,23 +333,23 @@
     for (const id of Rules.DIFFICULTY_LIST) {
       const r = store.records[id];
       if (r && r.depth > 0) {
-        chips.push('<span class="rec-chip">' + Rules.DIFFICULTY[id].name +
+        chips.push('<span class="rec-chip">' + diffName(id) +
           '<b>' + r.depth + ' m</b></span>');
       }
     }
     if (store.bestWorld > 0) {
-      chips.push('<span class="rec-chip soft">去過<b>' + Scenes.sceneFor(store.bestWorld).name + '</b></span>');
+      chips.push('<span class="rec-chip soft">' + T('home.rec.visited', { name: Scenes.sceneFor(store.bestWorld).name }) + '</span>');
     }
     const fav = Store.favoriteChar(store);
-    if (fav) chips.push('<span class="rec-chip soft">常用<b>' + charOf(fav).name + '</b></span>');
+    if (fav) chips.push('<span class="rec-chip soft">' + T('home.rec.fav', { name: charOf(fav).name }) + '</span>');
     const vs = store.versus || {};
     const on = vs.online || { win: 0, lose: 0 };
     if (on.win + on.lose > 0) {
-      chips.push('<span class="rec-chip soft">線上<b>' + on.win + ' 勝 ' + on.lose + ' 敗</b></span>');
+      chips.push('<span class="rec-chip soft">' + T('home.rec.online', { w: on.win, l: on.lose }) + '</span>');
     }
     els.homeRecords.innerHTML = chips.length
       ? chips.join('')
-      : '<span class="rec-chip soft">還沒有紀錄，挑一個難度開始跑吧</span>';
+      : '<span class="rec-chip soft">' + T('home.rec.none') + '</span>';
   }
 
   /* ================= 一個人玩：選角色與難度 ================= */
@@ -352,32 +359,31 @@
     const d = Rules.DIFFICULTY[id];
     if (!d) return '';
     if (d.ceilInterval == null) {
-      return '很慢、不會出刺階與假階，被雲朵頂到也不扣血，' + d.hp +
-        ' 顆愛心，想結束就按右上角「結束這局」。';
+      return T('diff.note.baby', { hp: d.hp });
     }
     const near = Rules.spikeDamageRange(d, 0);
     const far = Rules.spikeDamageRange(d, Rules.C.SPIKE_DEEP_WORLDS);
     const deep = Rules.C.SPIKE_DEEP_WORLDS * Rules.C.MILESTONE;
-    return d.hp + ' 顆愛心；被刺到一次扣 ' + near[0] + '～' + near[1] + ' 顆，' +
-      deep + ' m 之後變成 ' + far[0] + '～' + far[1] + ' 顆。' +
-      '下捲每秒 ' + d.scrollBase + ' 格，每 ' + d.accelEvery + ' 秒加快 ' +
-      Math.round(d.accelRate * 100) + '%（最多 ' + d.scrollCap + ' 倍）。' +
-      '刺階 ' + Math.round(d.spikeRate * 100) + '%、假階 ' + Math.round(d.fakeRate * 100) + '%。';
+    return T('diff.note', {
+      hp: d.hp, near: rangeText(near), far: rangeText(far), deep: deep,
+      speed: d.scrollBase, every: d.accelEvery, rate: Math.round(d.accelRate * 100), cap: d.scrollCap,
+      spike: Math.round(d.spikeRate * 100), fake: Math.round(d.fakeRate * 100)
+    });
   }
 
   /** 難度卡上的兩行數字：三段的差別要用眼睛就看得出來 */
   function diffCardLines(id) {
     const d = Rules.DIFFICULTY[id];
     if (d.ceilInterval == null) {
-      return ['<small>' + d.hp + ' 顆愛心</small>',
-        '<small>速度 ' + d.scrollBase + ' 格/秒</small>',
-        '<small class="diff-hurt">不會死，沒有刺</small>'];
+      return ['<small>' + T('diff.hp', { n: d.hp }) + '</small>',
+        '<small>' + T('diff.speed', { n: d.scrollBase }) + '</small>',
+        '<small class="diff-hurt">' + T('diff.safe') + '</small>'];
     }
     const near = Rules.spikeDamageRange(d, 0);
     /* 一行放一件事，卡片才不會在窄一點的螢幕上把「格/秒」折成兩行 */
-    return ['<small>' + d.hp + ' 顆愛心</small>',
-      '<small>速度 ' + d.scrollBase + ' 格/秒</small>',
-      '<small class="diff-hurt">刺一次 −' + (near[0] === near[1] ? near[0] : near[0] + '～' + near[1]) + ' 顆</small>'];
+    return ['<small>' + T('diff.hp', { n: d.hp }) + '</small>',
+      '<small>' + T('diff.speed', { n: d.scrollBase }) + '</small>',
+      '<small class="diff-hurt">' + T('diff.spike', { n: rangeText(near) }) + '</small>'];
   }
 
   /** 對戰不開放幼幼班：不會死就分不出勝負（規劃書 §0.2） */
@@ -389,12 +395,10 @@
 
   function renderSetup() {
     const vs = G.mode === 'ai';
-    els.setupTitle.textContent = vs ? '跟電腦對戰' : '一個人玩';
-    els.setupHint.textContent = vs
-      ? '兩個人在同一座樓梯上，會互相推擠。倒數 3 秒後開始，你一死就結束這局。'
-      : '選一隻小朋友，挑一個難度，就可以開始無限往下跑。';
-    els.diffLabel.textContent = vs ? '遊戲難度（雙方規則相同）' : '難度';
-    els.start.textContent = vs ? '開始對戰' : '開始下樓梯';
+    els.setupTitle.textContent = T(vs ? 'setup.title.ai' : 'setup.title.solo');
+    els.setupHint.textContent = T(vs ? 'setup.hint.ai' : 'setup.hint.solo');
+    els.diffLabel.textContent = T(vs ? 'setup.diff.vs' : 'setup.diff');
+    els.start.textContent = T(vs ? 'setup.start.ai' : 'setup.start.solo');
     /* 從一個人玩切到對戰時，如果原本選的是幼幼班就退回普通 */
     if (vs && !Rules.DIFFICULTY[G.difficulty].versus) G.difficulty = 'normal';
 
@@ -409,9 +413,9 @@
       const d = Rules.DIFFICULTY[id];
       const r = store.records[id];
       return '<button class="diff-opt" type="button" role="radio" data-diff="' + id + '" aria-checked="' +
-        (id === G.difficulty) + '"><strong>' + d.name + '</strong>' +
+        (id === G.difficulty) + '"><strong>' + diffName(id) + '</strong>' +
         diffCardLines(id).join('') +
-        '<em>' + (r && r.depth ? '你最深 ' + r.depth + ' m' : '還沒玩過') + '</em></button>';
+        '<em>' + (r && r.depth ? T('diff.best', { n: r.depth }) : T('diff.unplayed')) + '</em></button>';
     }).join('');
     els.diffNote.textContent = diffNote(G.difficulty);
     renderFoePicker(vs);
@@ -422,15 +426,13 @@
     els.foeField.hidden = !vs;
     if (!vs) return;
     const myth = !!store.foeMythic;
-    const sameName = Rules.DIFFICULTY[G.difficulty].name;
+    const sameName = diffName(G.difficulty);
     els.foePicker.innerHTML =
       '<button class="diff-opt" type="button" role="radio" data-foe="same" aria-checked="' + (!myth) + '">' +
-      '<strong>' + sameName + '</strong><small>跟遊戲難度一樣</small></button>' +
+      '<strong>' + sameName + '</strong><small>' + T('foe.same') + '</small></button>' +
       '<button class="diff-opt foe-myth" type="button" role="radio" data-foe="mythic" aria-checked="' + myth + '">' +
-      '<strong>神話</strong><small>幾乎不犯錯，會預判、會擠你</small></button>';
-    els.foeNote.textContent = myth
-      ? '神話電腦會往前預判落點、避開所有尖刺，還會把你擠向危險 —— 傷害、速度仍照「' + sameName + '」的規則。'
-      : '電腦的反應與失誤率跟「' + sameName + '」相同。';
+      '<strong>' + T('diff.mythic') + '</strong><small>' + T('foe.mythic.desc') + '</small></button>';
+    els.foeNote.textContent = T(myth ? 'foe.note.mythic' : 'foe.note.same', { name: sameName });
   }
   els.foePicker.addEventListener('click', e => {
     const btn = e.target.closest('[data-foe]');
@@ -468,15 +470,13 @@
     const first = !store.seenHelp;
     els.countdownTip.hidden = !first;
     if (!first) return;
-    els.countdownTip.textContent = wantsPads()
-      ? '用下面兩顆按鍵左右移動，沒有跳'
-      : '用 ← → 左右移動，沒有跳';
+    els.countdownTip.textContent = T(wantsPads() ? 'hud.tip.pads' : 'hud.tip.keys');
     store.seenHelp = true;
     Store.save(store);
   }
 
   function startMatch() {
-    const name = (els.nickname.value || '').trim() || els.nickname.placeholder || '小玩家';
+    const name = (els.nickname.value || '').trim() || els.nickname.placeholder || T('common.playerName');
     store.nickname = name;
     store.char = G.char;
     store.difficulty = G.difficulty;
@@ -496,7 +496,7 @@
       for (let i = 0; i < 12 && foeName === name; i++) foeName = Nicknames.random();
       players.push({
         id: 'ai1',
-        name: foeName + '（' + Ai.LEVELS[foeLevel].name + '）',
+        name: T('ai.name', { name: foeName, level: diffName(foeLevel) }),
         char: foeChar.id,
         kind: 'ai',
         aiLevel: foeLevel
@@ -821,7 +821,7 @@
         }
         case 'milestone': {
           sound.play('milestone');
-          els.milestoneText.textContent = e.meters + ' m！' + Scenes.sceneFor(e.world).name;
+          els.milestoneText.textContent = T('hud.milestone', { m: e.meters, scene: Scenes.sceneFor(e.world).name });
           els.milestone.hidden = false;
           G.milestoneTimer = 1.4;
           /* 慶祝的彩帶噴在「我」身上（觀戰沒有我，就噴在主視角那一位）——
@@ -897,13 +897,13 @@
     const compact = s.diff.hpAsNumber || narrowHud();
     if (p.id === G.meId) {
       els.hudHp.innerHTML = SvgUI.hearts(hp, p.hpMax, compact);
-      els.hudHp.setAttribute('aria-label', '血量 ' + hp + '/' + p.hpMax);
+      els.hudHp.setAttribute('aria-label', T('hud.hpAria', { a: hp, b: p.hpMax }));
       return 'me';
     }
     const foe = foePlayer(s);
     if (!foe || foe.id !== p.id) return null;
     els.hudFoeHp.innerHTML = SvgUI.hearts(hp, p.hpMax, compact);
-    els.hudFoeHp.setAttribute('aria-label', '血量 ' + hp + '/' + p.hpMax);
+    els.hudFoeHp.setAttribute('aria-label', T('hud.hpAria', { a: hp, b: p.hpMax }));
     return 'foe';
   }
 
@@ -963,7 +963,7 @@
     const compact = s.diff.hpAsNumber || narrowHud();
     if (force || p.hp !== hudCache.hp || compact !== hudCache.compact) {
       els.hudHp.innerHTML = SvgUI.hearts(p.hp, p.hpMax, compact);
-      els.hudHp.setAttribute('aria-label', '血量 ' + p.hp + '/' + p.hpMax);
+      els.hudHp.setAttribute('aria-label', T('hud.hpAria', { a: p.hp, b: p.hpMax }));
       hudCache.hp = p.hp;
       hudCache.compact = compact;
       if (G.healPulse) {
@@ -981,18 +981,18 @@
     if (force || s.world !== hudCache.world || compact !== hudCache.compactWorld) {
       const sc = Scenes.sceneFor(s.world);
       /* 直向只放世界名稱，「（第 N 層）」擠不下也不重要 */
-      els.hudWorld.textContent = compact ? sc.name : sc.name + '（第 ' + (s.world + 1) + ' 層）';
+      els.hudWorld.textContent = compact ? sc.name : sc.name + T('hud.worldLayer', { n: s.world + 1 });
       hudCache.world = s.world;
       hudCache.compactWorld = compact;
     }
     const nextAt = (s.world + 1) * Rules.C.MILESTONE;
     const left = Math.max(0, Math.ceil(nextAt - p.best));
-    els.hudNext.textContent = '下一層還有 ' + left + ' m';
+    els.hudNext.textContent = T('hud.next', { n: left });
     if (els.liveSpikes) {
       els.liveSpikes.textContent = p.stats.spikes;
       els.liveSprings.textContent = p.stats.springs;
       els.liveFakes.textContent = p.stats.fakes;
-      els.liveCeil.textContent = p.stats.ceilingSeconds.toFixed(1) + ' 秒';
+      els.liveCeil.textContent = T('fmt.sec', { n: p.stats.ceilingSeconds.toFixed(1) });
     }
     /* 線上模式順便把延遲寫在同一行，連線變差看得出來 */
     if (G.mode === 'online') {
@@ -1009,12 +1009,12 @@
       els.hudFoeDepth.textContent = Math.floor(foe.best);
       if (force || foe.id !== hudCache.foeId || foe.hp !== hudCache.foeHp || compact !== hudCache.compact) {
         els.hudFoeHp.innerHTML = SvgUI.hearts(foe.hp, foe.hpMax, compact);
-        els.hudFoeHp.setAttribute('aria-label', '血量 ' + foe.hp + '/' + foe.hpMax);
+        els.hudFoeHp.setAttribute('aria-label', T('hud.hpAria', { a: foe.hp, b: foe.hpMax }));
         hudCache.foeHp = foe.hp;
         hudCache.foeId = foe.id;
       }
-      if (force) els.hudFoeName.textContent = foe.name + (foe.alive ? '' : '（淘汰）');
-      if (!foe.alive) els.hudFoeName.textContent = foe.name + '（淘汰）';
+      if (force) els.hudFoeName.textContent = foe.name + (foe.alive ? '' : T('hud.out'));
+      if (!foe.alive) els.hudFoeName.textContent = foe.name + T('hud.out');
     } else {
       hudCache.foeHp = -1;
       hudCache.foeId = null;
@@ -1022,11 +1022,11 @@
     if (force) {
       els.sideFoe.hidden = !foe;
       /* 觀戰的人沒有「對手」，兩個都是別人 */
-      if (els.hudFoeLabel) els.hudFoeLabel.textContent = G.spectating ? '另一位' : '對手';
-      els.hudDiff.textContent = s.diff.name;
+      if (els.hudFoeLabel) els.hudFoeLabel.textContent = T(G.spectating ? 'hud.other' : 'hud.foe');
+      els.hudDiff.textContent = diffName(s.difficulty);
       els.hudNet.textContent = netLabel();
       const rec = store.records[s.difficulty];
-      els.hudBest.textContent = rec && rec.depth ? '本機最深 ' + rec.depth + ' m' : '還沒有紀錄';
+      els.hudBest.textContent = rec && rec.depth ? T('hud.best', { n: rec.depth }) : T('hud.noBest');
       els.hudHpRow.hidden = false;
       els.hudName.textContent = p.name;
       els.hudAvatar.innerHTML = Render.kidAvatarSvg(charOf(p.char), 50);
@@ -1043,12 +1043,12 @@
 
   function netLabel() {
     if (G.mode !== 'online') {
-      return foePlayer(G.match) ? '跟電腦對戰' : '單機一人挑戰';
+      return T(foePlayer(G.match) ? 'hud.net.ai' : 'hud.net.solo');
     }
     const st = online.stats();
     if (window.NetworkLatency) window.NetworkLatency.report(st && st.rtt);
-    const ping = st && st.rtt ? '・延遲 ' + st.rtt + 'ms' : '';
-    return (G.spectating ? '觀戰中' : '線上對戰') + ping;
+    const ping = st && st.rtt ? T('hud.net.ping', { n: st.rtt }) : '';
+    return T(G.spectating ? 'hud.net.spec' : 'hud.net.online') + ping;
   }
 
   /* ================= 結算 ================= */
@@ -1077,84 +1077,101 @@
       });
     if (!watching) store = Store.load();
 
+    G.resultView = { result: result, me: me, foe: foe, win: win, saved: saved, watching: watching, online2: online2 };
+    paintResult();
+    if (saved.record || win) { sound.play('win'); view.burst('milestone', Rules.C.FIELD_W / 2, 0, 0); }
+    else if (foe) sound.play('dead');
+    finishUi();
+  }
+
+  /** 結算畫面上所有文字（語言切換時會重畫一次） */
+  function paintResult() {
+    const v = G.resultView;
+    if (!v) return;
+    const result = v.result, me = v.me, foe = v.foe, win = v.win, saved = v.saved;
+    const watching = v.watching, online2 = v.online2;
     els.resultTitle.textContent = watching
-      ? (result.draw ? '平手！' : (result.players.find(p => p.id === result.winner) || me).name + ' 贏了')
+      ? (result.draw ? T('res.draw') : T('res.win', { name: (result.players.find(p => p.id === result.winner) || me).name }))
       : foe
-      ? (result.draw ? '平手！' : win ? '你贏了！' : '你輸了')
-      : result.endedBy === 'manual' ? '這局結束'
-      : result.endedBy === 'fell' ? '摔下去了'
-      : '沒血了';
+      ? (result.draw ? T('res.draw') : win ? T('res.youWin') : T('res.youLose'))
+      : result.endedBy === 'manual' ? T('res.over')
+      : result.endedBy === 'fell' ? T('res.fell')
+      : T('res.dead');
 
     /* 對戰：勝方的大頭貼放大，下面各一行數據（規劃書 §7.6） */
     const line = (p, tag) =>
-      '<div class="result-line' + (tag ? ' ' + tag : '') + '">' + p.name +
-      ' 下到 <b>' + p.meters + ' m</b>　撐了 ' + fmtTime(p.survived) +
-      (p.fell ? '（摔下去）' : p.alive ? '' : '（沒血了）') + '</div>';
+      '<div class="result-line' + (tag ? ' ' + tag : '') + '">' +
+      T('res.line', {
+        name: p.name, m: p.meters, t: fmtTime(p.survived),
+        tag: p.fell ? T('res.tag.fell') : p.alive ? '' : T('res.tag.dead')
+      }) + '</div>';
+    const subLine = () => T('res.sub', { diff: diffName(result.difficulty), scene: Scenes.sceneFor(me.world).name });
     if (foe) {
       const champ = result.draw ? me : (win ? me : foe);
       const other = champ === me ? foe : me;
       els.resultHero.innerHTML =
         Render.kidFullSvg(charOf(champ.char), 118) +
         line(champ, 'champ') + line(other) +
-        '<div class="result-line">' + Rules.DIFFICULTY[result.difficulty].name +
-        '・最深到 ' + Scenes.sceneFor(me.world).name +
-        (foe && foe.forfeit ? '　（' + foe.name + ' 斷線判輸）' : '') +
-        (me.forfeit ? '　（你斷線判輸）' : '') + '</div>';
+        '<div class="result-line">' + subLine() +
+        (foe && foe.forfeit ? T('res.forfeitFoe', { name: foe.name }) : '') +
+        (me.forfeit ? T('res.forfeitMe') : '') + '</div>';
     } else {
       els.resultHero.innerHTML =
         Render.kidFullSvg(charOf(me.char), 132) +
         line(me) +
-        '<div class="result-line">' + Rules.DIFFICULTY[result.difficulty].name +
-        '・最深到 ' + Scenes.sceneFor(me.world).name + '</div>';
+        '<div class="result-line">' + subLine() + '</div>';
     }
     els.resultNew.hidden = !saved.record;
     if (!saved.record && !watching && saved.best && saved.best.depth > me.meters) {
       /* 沒破紀錄就講差多少 —— 比只說「沒破」有動力得多 */
       els.resultNew.hidden = false;
-      els.resultNew.textContent = '離你的紀錄還差 ' + (saved.best.depth - me.meters) + ' m';
+      els.resultNew.textContent = T('res.near', { n: saved.best.depth - me.meters });
       els.resultNew.classList.add('near');
     } else {
-      els.resultNew.textContent = '破紀錄了！';
+      els.resultNew.textContent = T('res.new');
       els.resultNew.classList.remove('near');
     }
-    if (saved.record || win) { sound.play('win'); view.burst('milestone', Rules.C.FIELD_W / 2, 0, 0); }
-    else if (foe) sound.play('dead');
 
     /* 線上結算只留一顆「回房間」按鈕；停留時間結束也會自動回房。
      * 單機則提供再玩一次、換難度與回首頁。 */
     els.again.hidden = online2;
-    els.again.textContent = online2 ? '再來一局' : '再玩一次';
+    els.again.textContent = T(online2 ? 'res.rematch' : 'res.again');
     els.changeDiff.hidden = online2;
-    els.changeDiff.textContent = online2 ? '回到房間' : '換難度';
-    els.resultHome.textContent = online2 ? '回房間' : '回首頁';
+    els.changeDiff.textContent = T(online2 ? 'res.toRoom' : 'res.changeDiff');
+    els.resultHome.textContent = T(online2 ? 'res.toRoom2' : 'res.home');
     els.resultHome.classList.toggle('primary', online2);
 
     /* 這局統計（一人挑戰自動省略「被推開」） */
     const rows = [
-      ['踩到刺', me.stats.spikes + ' 次'],
-      ['被天花板頂住', me.stats.ceilingSeconds.toFixed(1) + ' 秒'],
-      ['踩到彈簧', me.stats.springs + ' 次'],
-      ['踩破假階', me.stats.fakes + ' 次'],
-      ['回復血量', me.stats.heals + ' 顆'],
-      ['到達最深世界', Scenes.sceneFor(me.stats.deepestWorld).name],
-      ['本機最深', saved.best.depth + ' m']
+      [T('res.spikes'), T('fmt.times', { n: me.stats.spikes })],
+      [T('res.ceil'), T('fmt.sec', { n: me.stats.ceilingSeconds.toFixed(1) })],
+      [T('res.springs'), T('fmt.times', { n: me.stats.springs })],
+      [T('res.fakes'), T('fmt.times', { n: me.stats.fakes })],
+      [T('res.heals'), T('fmt.hearts', { n: me.stats.heals })],
+      [T('res.deepest'), Scenes.sceneFor(me.stats.deepestWorld).name],
+      [T('res.best'), saved.best.depth + ' m']
     ];
-    if (result.mode === 'versus') rows.splice(4, 0, ['被推開', me.stats.pushes + ' 次']);
-    if (foe) rows.push(['對手最深', foe.meters + ' m']);
+    if (result.mode === 'versus') rows.splice(4, 0, [T('res.pushes'), T('fmt.times', { n: me.stats.pushes })]);
+    if (foe) rows.push([T('res.foeBest'), foe.meters + ' m']);
     if (online2) {
       const st = online.stats();
-      if (st) rows.push(['連線延遲', st.rtt + ' ms']);
+      if (st) rows.push([T('res.ping'), st.rtt + ' ms']);
     }
-    if (watching) rows.unshift(['你的身分', '觀戰']);
+    if (watching) rows.unshift([T('res.role'), T('res.spectator')]);
     els.resultList.innerHTML = rows.map(r =>
       '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('');
+  }
 
+  /** 結算的非文字部分：收起觸控鍵、停動畫、焦點 */
+  function finishUi() {
+    const result = G.resultView.result;
+    const online2 = G.resultView.online2;
     els.finishBtn.hidden = true;
     measureCorners();
     /* 側欄的「本機最深」要跟著更新，不然會停在這局開始前的值 */
     if (els.hudBest) {
       const rec = store.records[result.difficulty];
-      els.hudBest.textContent = rec && rec.depth ? '本機最深 ' + rec.depth + ' m' : '還沒有紀錄';
+      els.hudBest.textContent = rec && rec.depth ? T('hud.best', { n: rec.depth }) : T('hud.noBest');
     }
     /* 結算會立刻停止動畫，沒有下一幀可讓渲染器依 alive 清理，所以先清掉畫面角色。 */
     view.clearActors();
@@ -1168,6 +1185,13 @@
 
   /* ================= 暫停選單（Esc；只有三顆） ================= */
 
+  /** 暫停選單的標題與「回首頁」按鈕文字（線上與單機不同；語言切換時也會重畫） */
+  function paintPause() {
+    const online2 = G.mode === 'online';
+    if (els.pauseTitle) els.pauseTitle.textContent = T(online2 ? 'pause.menu' : 'pause.title');
+    els.goHome.textContent = T(online2 ? 'pause.leave' : 'pause.home');
+  }
+
   function togglePause(on) {
     const s = G.match;
     if (!s || s.phase === 'over' || G.screen !== 'game') return;
@@ -1179,14 +1203,12 @@
       G.menu = on == null ? !G.menu : !!on;
       G.paused = false;
       els.pause.hidden = !G.menu;
-      if (els.pauseTitle) els.pauseTitle.textContent = '選單（線上對戰不會暫停）';
+      paintPause();
       els.restart.hidden = true;
-      els.goHome.textContent = '離開房間（算輸）';
       return;
     }
-    if (els.pauseTitle) els.pauseTitle.textContent = '暫停中';
+    paintPause();
     els.restart.hidden = false;
-    els.goHome.textContent = '回首頁';
     G.paused = on == null ? !G.paused : !!on;
     els.pause.hidden = !G.paused;
     if (G.paused) { input.clear(); els.resume.focus(); } else { G.last = 0; }
@@ -1420,7 +1442,7 @@
     clearArmed = false;
     clearTimeout(clearTimer);
     if (!els.setClear) return;
-    els.setClear.textContent = '清除本機紀錄';
+    els.setClear.textContent = T('set.clear');
     els.setClear.classList.remove('danger-armed');
   }
 
@@ -1462,16 +1484,16 @@
     /* 清紀錄是不可逆的，所以第一下只是「舉手」，要再按一次才真的清 */
     if (!clearArmed) {
       clearArmed = true;
-      els.setClear.textContent = '再按一次就真的清除';
+      els.setClear.textContent = T('set.clear.again');
       els.setClear.classList.add('danger-armed');
-      els.setMsg.textContent = '紀錄清掉就回不來了，確定的話再按一次。';
+      els.setMsg.textContent = T('set.clear.warn');
       clearTimeout(clearTimer);
       clearTimer = setTimeout(disarmClear, 5000);
       return;
     }
     disarmClear();
     store = Store.clearRecords(store);
-    els.setMsg.textContent = '本機紀錄已清除。';
+    els.setMsg.textContent = T('set.clear.done');
     renderHomeRecords();
     if (G.screen === 'setup') renderSetup();
   });
@@ -1479,25 +1501,20 @@
     store = Store.resetSettings(store);
     syncSettingsUi();
     pushSettings();
-    els.setMsg.textContent = '設定已恢復預設（紀錄保留）。';
+    els.setMsg.textContent = T('set.reset.done');
   });
 
   /* ================= 怎麼玩：靜態圖文 ================= */
 
   function renderHelp() {
-    const steps = [
-      ['normal', '普通階', '站著不動，最安全的落腳點。'],
-      ['belt', '輸送帶', '會把你帶著走（每秒 3 格）。可以逆著走，但只剩每秒 3 格，很慢。'],
-      ['spring', '彈簧跳床', '踩到會往上彈一段，可以救命，也可能把你彈回天花板。'],
-      ['spike', '刺階', '踩到會扣愛心（依難度與玩到多深，一次 1～5 顆），之後有 0.6 秒無敵閃爍。'],
-      ['fake', '假階', '踩到 0.25 秒後就崩掉，只能當短暫落腳點。']
-    ];
-    els.helpSteps.innerHTML = steps.map(s =>
-      '<li>' + SvgUI.stepIcon(s[0]) + '<div><b>' + s[1] + '</b><span>' + s[2] + '</span></div></li>').join('');
+    const steps = ['normal', 'belt', 'spring', 'spike', 'fake'];
+    els.helpSteps.innerHTML = steps.map(id =>
+      '<li>' + SvgUI.stepIcon(id) + '<div><b>' + T('help.step.' + id) + '</b><span>' +
+      T('help.step.' + id + '.d') + '</span></div></li>').join('');
 
     els.helpCeiling.innerHTML =
-      '<figure>' + SvgUI.ceilingIcon(false) + '<figcaption>簡單／普通／困難：尖刺天花板，被頂住會持續扣血。</figcaption></figure>' +
-      '<figure>' + SvgUI.ceilingIcon(true) + '<figcaption>幼幼班：軟綿綿的雲朵，被頂到只會被輕輕推回來，不扣血。</figcaption></figure>';
+      '<figure>' + SvgUI.ceilingIcon(false) + '<figcaption>' + T('help.ceil.spike') + '</figcaption></figure>' +
+      '<figure>' + SvgUI.ceilingIcon(true) + '<figcaption>' + T('help.ceil.cloud') + '</figcaption></figure>';
 
     els.helpDiff.innerHTML = Rules.DIFFICULTY_LIST.map(id => {
       const d = Rules.DIFFICULTY[id];
@@ -1505,13 +1522,16 @@
       const near = Rules.spikeDamageRange(d, 0);
       const far = Rules.spikeDamageRange(d, Rules.C.SPIKE_DEEP_WORLDS);
       const hurt = d.ceilInterval == null
-        ? '不會扣血'
-        : d.hp + ' 顆愛心，被刺到一次扣 ' + near[0] + '～' + near[1] + ' 顆（' +
-          (Rules.C.SPIKE_DEEP_WORLDS * Rules.C.MILESTONE) + ' m 之後 ' + far[0] + '～' + far[1] +
-          ' 顆），被天花板頂住每 ' + d.ceilInterval + ' 秒扣一次';
-      return '<li><b>' + d.name + '</b>：下捲每秒 ' + d.scrollBase + ' 格、每 ' + d.accelEvery +
-        ' 秒加快 ' + Math.round(d.accelRate * 100) + '%（最多 ' + d.scrollCap + ' 倍）、' + hurt +
-        '、刺階 ' + Math.round(d.spikeRate * 100) + '%、假階 ' + Math.round(d.fakeRate * 100) + '%。</li>';
+        ? T('help.diff.noHurt')
+        : T('help.diff.hurt', {
+          hp: d.hp, near: rangeText(near), far: rangeText(far),
+          deep: Rules.C.SPIKE_DEEP_WORLDS * Rules.C.MILESTONE, every: d.ceilInterval
+        });
+      return '<li>' + T('help.diff.line', {
+        name: diffName(id), speed: d.scrollBase, every: d.accelEvery,
+        rate: Math.round(d.accelRate * 100), cap: d.scrollCap, hurt: hurt,
+        spike: Math.round(d.spikeRate * 100), fake: Math.round(d.fakeRate * 100)
+      }) + '</li>';
     }).join('');
   }
 
@@ -1679,6 +1699,42 @@
     online.syncMe((store.nickname || '').trim(), G.char);
   });
 
+  /* ================= 多語系 ================= */
+
+  /** 切換語言：把目前畫面上由 JS 組出來的文字全部重畫一次（靜態 HTML 由 i18n 核心處理） */
+  function relang() {
+    els.back.textContent = T((G.backName === 'game' || G.backName === 'room') ? 'nav.leave' : 'nav.back');
+    if (els.lobbyLink) els.lobbyLink.href = I18N.withLang(LOBBY_URL);
+    renderHomeArt();
+    renderHomeRecords();
+    if (G.presence > 0 && els.homeOnline) els.homeOnline.textContent = T('home.online', { n: G.presence });
+    renderHelp();
+    if (G.screen === 'setup') renderSetup();
+    online.relang();
+    if (G.match) {
+      updateHud(true);
+      G.netInfo = null;
+      els.hudNet.textContent = netLabel();
+      const rec = store.records[G.match.difficulty];
+      if (els.hudBest) els.hudBest.textContent = rec && rec.depth ? T('hud.best', { n: rec.depth }) : T('hud.noBest');
+      if (els.pause && !els.pause.hidden) paintPause();
+      if (els.ovResult && !els.ovResult.hidden) paintResult();
+    }
+    if (els.countdownTip && !els.countdownTip.hidden) {
+      els.countdownTip.textContent = T(wantsPads() ? 'hud.tip.pads' : 'hud.tip.keys');
+    }
+    disarmClear();
+    if (els.setMsg) els.setMsg.textContent = '';
+    if (window.NetworkLatency && window.NetworkLatency.relang) window.NetworkLatency.relang();
+    measureCorners();
+    if (G.screen === 'game') { view.resize(); fitSideBar(); }
+  }
+  const LOBBY_URL = els.lobbyLink ? els.lobbyLink.getAttribute('href') : '';
+  /* 語言切換鈕固定放在設定鈕旁（右上角工具列） */
+  I18N.mountToggle({ after: els.settingsBtn });
+  I18N.onChange(relang);
+  if (els.lobbyLink) els.lobbyLink.href = I18N.withLang(LOBBY_URL);
+
   /* ================= 起手 ================= */
 
   renderHomeArt();
@@ -1696,7 +1752,7 @@
   /* 網址帶 ?invite=xxx（朋友貼給你的連結）→ 先到大廳確認暱稱，再加入那間房。
    * token 有效性由伺服器驗，無效會回一句看得懂的話。 */
   if (online.takeInviteFromUrl()) {
-    toast('收到房間邀請，先確認暱稱再加入。');
+    toast(T('invite.toast'));
     show('lobby');
   }
 })();

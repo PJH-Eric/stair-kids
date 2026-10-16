@@ -153,6 +153,29 @@ b { font-weight: 700; }
   background: linear-gradient(180deg, #FFF6E6 0%, #FFE2BC 100%);
 }
 
+/* 語言切換鈕：放在設定鈕旁邊，跟設定鈕同尺寸、同風格（EN／中） */
+.lang-toggle {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  border-radius: 14px;
+  border: 2px solid var(--line);
+  background: linear-gradient(180deg, #fff 0%, #FFF3E2 100%);
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .08);
+}
+.lang-toggle:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, .08); }
+.lang-toggle:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
 /* ---------- 大按鈕（立體：漸層＋內外陰影＋按壓位移） ---------- */
 
 .big-btn {
@@ -964,6 +987,7 @@ button.soon-item:active { transform: translateY(2px); }
   body.in-game .corner-tools { top: calc(4px + var(--safe-t)); }
   body.in-game .corner-tools .icon-btn { height: 40px; border-radius: 12px; }
   body.in-game #btn-settings { width: 40px; }
+  body.in-game .corner-tools .lang-toggle { width: 40px; height: 40px; border-radius: 12px; font-size: 13px; }
   body.in-game .corner-tools .icon-btn svg { width: 22px; height: 22px; }
   body.in-game .nav-btn { min-height: 40px; font-size: 13px; padding-left: 10px; padding-right: 10px; }
 }
@@ -1553,3 +1577,7 @@ button.soon-item:active { transform: translateY(2px); }
   .spec { min-height: 40px; }
   .mini-btn.danger.tiny { min-height: 38px; }
 }
+
+.char-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.char-opt { min-width: 0; overflow-wrap: anywhere; }
+@media(max-width:360px) { .char-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

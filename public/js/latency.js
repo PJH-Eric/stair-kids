@@ -200,8 +200,10 @@
     const quality = ms === null ? 'unknown' : ms <= 30 ? 'good' : ms < 100 ? 'warn' : 'bad';
     el.classList.add('is-' + quality);
     el.querySelector('.latency-meter__value').textContent = ms === null ? '--' : String(ms);
-    el.setAttribute('aria-label', ms === null ? '連線延遲，等待回應' : '連線延遲 ' + ms + ' 毫秒');
-    el.title = ms === null ? '連線延遲：等待回應' : '連線延遲：' + ms + ' ms';
+    // 文字走多語系字典（沒載入 I18N 的專案退回中文）
+    const tr = function (key, fallback, params) { return root.I18N ? root.I18N.t(key, params) : fallback; };
+    el.setAttribute('aria-label', ms === null ? tr('lat.wait', '連線延遲，等待回應') : tr('lat.aria', '連線延遲 ' + ms + ' 毫秒', { n: ms }));
+    el.title = ms === null ? tr('lat.titleWait', '連線延遲：等待回應') : tr('lat.title', '連線延遲：' + ms + ' ms', { n: ms });
     dock();
   }
 
@@ -261,7 +263,7 @@
 
   root.addEventListener('resize', function () { dock(true); });
 
-  root.NetworkLatency = { setActive, setProbe, report, bindSocketIo };
+  root.NetworkLatency = { setActive, setProbe, report, bindSocketIo, relang: function () { if (meter) render(); } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensureMeter, { once: true });
   else ensureMeter();
 })(window);

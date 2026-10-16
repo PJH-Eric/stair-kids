@@ -10,10 +10,20 @@
   const ANIMAL = ['小熊', '小兔', '小雞', '小貓', '小狗', '小企鵝', '小青蛙', '小熊貓',
     '小刺蝟', '小海豹', '小松鼠', '小恐龍'];
 
+  /** 英文語系用字典裡的英文詞庫（瀏覽器才有 I18N；伺服器與測試一律用中文詞庫） */
+  function pool() {
+    const I = root.I18N;
+    if (I && I.lang === 'en') {
+      return { adj: I.t('nick.adj').split(','), animal: I.t('nick.animal').split(','), sep: ' ' };
+    }
+    return { adj: ADJ, animal: ANIMAL, sep: '' };
+  }
+
   /** 用亂數函式（預設 Math.random）組一個暱稱 */
   function random(rand) {
     const r = rand || Math.random;
-    return ADJ[Math.floor(r() * ADJ.length)] + ANIMAL[Math.floor(r() * ANIMAL.length)];
+    const p = pool();
+    return p.adj[Math.floor(r() * p.adj.length)] + p.sep + p.animal[Math.floor(r() * p.animal.length)];
   }
 
   const api = { ADJ, ANIMAL, random, COUNT: ADJ.length * ANIMAL.length };

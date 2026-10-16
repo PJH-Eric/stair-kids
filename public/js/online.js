@@ -18,6 +18,9 @@
 
   /* 對局中保留自由輸入與短語；輸入框聚焦時，input.js 會讓文字輸入優先。 */
   const PHRASES = ['加油！', '小心刺！', '厲害！', '等我一下', '再來一局', '哈哈哈'];
+  /* 多語系：I18N／ServerText 不在的環境（單元測試）退回原字串 */
+  const T = (k, p) => (root.I18N ? root.I18N.t(k, p) : k);
+  const SRV = x => (root.ServerText ? root.ServerText.translate(x) : x);
 
   /* 結算至少留在畫面上多久（毫秒）。
    * 伺服器的結算停留是 10 秒（rooms.js 的 RESULT_MS），正常情況下結算一結束就播，
@@ -47,6 +50,7 @@
   function create(opt) {
     opt = opt || {};
     const notice = (t, k) => { if (opt.onNotice) opt.onNotice(t, k); };
+    const statusText = {};
 
     const els = {
       lobbyStatus: $('#lobby-status'),
@@ -123,12 +127,11 @@
 
     function client() { return S.client; }
 
-    function setStatus(next, text) {
+    function setStatus(next, key) {
       S.status = next;
+      S.statusKey = key || '';
       if (els.lobbyStatus) {
-        els.lobbyStatus.textContent = text || ({
-          offline: '沒有連線', connecting: '連線中…', online: '已連線', error: '連不上伺服器'
-        })[next];
+        els.lobbyStatus.textContent = T(key || ('lobby.status.' + next));
         els.lobbyStatus.dataset.state = next;
       }
       if (els.btnReconnect) els.btnReconnect.hidden = next === 'online' || next === 'connecting';
@@ -141,7 +144,7 @@
       if (S.status === 'connecting') { if (then) S.afterConnect = then; return; }
       const url = wsUrl(opt.serverUrl);
       if (!url) {
-        setStatus('error', '這個網頁沒有設定伺服器位置，只能玩單機');
+        setStatus('error', 'lobby.noServer');
         return;
       }
       S.afterConnect = then || null;
@@ -159,7 +162,7 @@
       clearTimeout(S.wakeTimer);
       S.wakeTimer = setTimeout(() => {
         if (S.status === 'connecting') {
-          setStatus('connecting', '喚醒伺服器中…（免費方案會休眠，第一次要等 30～60 秒）');
+          setStatus('connecting', 'lobby.waking');
         }
       }, 3000);
 
@@ -204,8 +207,8 @@
          * 伺服器那邊「等人」的房間會留 60 秒（rooms.js 的 EMPTY_GRACE_MS），
          * 所以切回來通常還回得去 —— 回不去（房間真的收掉了）會收到錯誤訊息。 */
         if (lostRoom && !S.inMatch) S.wantRoom = lostRoom;
-        if (S.inMatch) notice('連線斷了，這局判輸', 'bad');
-        else if (wasOnline && wasInRoom) notice('連線斷了，正在回到房間…', 'bad');
+        if (S.inMatch) notice(T('net.lost.match'), 'bad');
+        else if (wasOnline && wasInRoom) notice(T('net.lost.room'), 'bad');
         S.inMatch = false;
         S.resultShown = false;
         S.resultAt = 0;
@@ -255,13 +258,13 @@
       if (msg.type === 'rooms') { renderLobby(); return; }
       if (msg.type === 'error') {
         S.inviteSubmitting = false;
-        notice(msg.text, 'bad');
+        notice(SRV(msg.text), 'bad');
         renderLobby();
         renderRoom();
         return;
       }
-      if (msg.type === 'notice') { notice(msg.text); return; }
-      if (msg.type === 'kicked') { notice('你被房主請出房間了', 'bad'); leaveToLobby(); return; }
+      if (msg.type === 'notice') { notice(SRV(msg.text)); return; }
+      if (msg.type === 'kicked') { notice(T('net.kicked'), 'bad'); leaveToLobby(); return; }
       if (msg.type === 'left') { leaveToLobby(); return; }
       if (msg.type === 'invite') { renderRoom(); return; }
 
@@ -411,8 +414,8 @@
         if (invite) {
           if (els.inviteJoinRoom) {
             els.inviteJoinRoom.textContent = invite.roomId
-              ? '房號 ' + invite.roomId + '，請確認暱稱後加入'
-              : '請確認暱稱後加入邀請房間';
+              ? T('invite.room', { id: invite.roomId })
+              : T('invite.roomNoId');
           }
           if (els.inviteNickname && document.activeElement !== els.inviteNickname) {
             els.inviteNickname.value = currentName();
@@ -421,9 +424,9 @@
             !c || S.inviteSubmitting;
           if (els.inviteJoinHint) {
             els.inviteJoinHint.textContent = S.inviteSubmitting
-              ? '正在加入房間…'
-              : S.status === 'online' ? '可以修改暱稱，確認後才會加入。'
-              : '等待連線中…';
+              ? T('invite.joining')
+              : S.status === 'online' ? T('invite.canEdit')
+              : T('invite.waitConn');
           }
         }
       }
@@ -432,18 +435,19 @@
       els.lobbyList.innerHTML = rooms.map(r => {
         const full = r.players >= r.seats;
         const playing = r.phase !== 'lobby';
-        const label = playing ? '對局中' : full ? '席位已滿' : '等人';
-        const act = playing || full ? '觀戰' : '加入';
+        const label = playing ? T('lobby.tag.playing') : full ? T('lobby.tag.full') : T('lobby.tag.waiting');
+        const act = playing || full ? T('lobby.act.watch') : T('lobby.act.join');
         /* 整張卡都可以點（手指按整張卡比按右邊那顆小按鈕容易得多）。
          * 裡面那顆按鈕留著當視覺提示，也留給鍵盤操作 —— 點按鈕時
          * closest('[data-join]') 會先命中按鈕，行為一樣。 */
         return '<li class="room-item" data-join="' + esc(r.id) + '" ' +
           'data-role="' + (playing || full ? 'spectator' : 'player') + '">' +
           '<div class="room-item-main">' +
-            '<b>' + esc(r.name) + '</b>' +
-            '<span class="room-meta">' + esc(r.difficultyName) + '　' +
-              r.players + '/' + r.seats + ' 人' +
-              (r.spectators ? '　觀戰 ' + r.spectators : '') + '</span>' +
+            '<b>' + esc(SRV(r.name)) + '</b>' +
+            '<span class="room-meta">' + esc(T('lobby.meta', {
+              diff: root.ServerText ? root.ServerText.diffLabel(r.difficultyName) : r.difficultyName,
+              players: r.players, seats: r.seats, spectators: r.spectators
+            })) + '</span>' +
           '</div>' +
           '<span class="room-tag' + (playing ? ' hot' : full ? ' full' : '') + '">' + label + '</span>' +
           '<button class="mini-btn go" type="button" data-join="' + esc(r.id) + '" ' +
@@ -457,16 +461,16 @@
 
     function seatCard(m, room, iAmHost) {
       const tags = [];
-      if (m.host) tags.push('<span class="pill host">房主</span>');
-      if (!m.connected) tags.push('<span class="pill off">離線</span>');
-      if (m.ready) tags.push('<span class="pill ready">準備好</span>');
+      if (m.host) tags.push('<span class="pill host">' + T('room.pill.host') + '</span>');
+      if (!m.connected) tags.push('<span class="pill off">' + T('room.pill.off') + '</span>');
+      if (m.ready) tags.push('<span class="pill ready">' + T('room.pill.ready') + '</span>');
       return '<li class="seat' + (m.ready ? ' is-ready' : '') + (m.connected ? '' : ' is-off') + '">' +
         '<div class="seat-face">' + Render.kidAvatarSvg(Characters.byId(m.char), 56) + '</div>' +
-        '<div class="seat-body"><b>' + esc(m.name) + (m.id === myId() ? '（你）' : '') + '</b>' +
-          '<div class="seat-tags">' + (tags.join('') || '<span class="pill wait">還沒準備</span>') + '</div>' +
+        '<div class="seat-body"><b>' + esc(m.name) + (m.id === myId() ? T('room.you') : '') + '</b>' +
+          '<div class="seat-tags">' + (tags.join('') || '<span class="pill wait">' + T('room.pill.wait') + '</span>') + '</div>' +
         '</div>' +
         (iAmHost && m.id !== myId()
-          ? '<button class="mini-btn danger" type="button" data-kick="' + esc(m.id) + '">請他離開</button>'
+          ? '<button class="mini-btn danger" type="button" data-kick="' + esc(m.id) + '">' + T('room.kick') + '</button>'
           : '') +
       '</li>';
     }
@@ -477,7 +481,7 @@
       if (!els.roomSeats) return;
       if (!room) {
         els.roomSeats.innerHTML = '';
-        if (els.roomTitle) els.roomTitle.textContent = '房間';
+        if (els.roomTitle) els.roomTitle.textContent = T('room.title');
         if (els.roomIdentity) els.roomIdentity.hidden = true;
         return;
       }
@@ -486,13 +490,13 @@
       const specs = room.members.filter(m => m.role === 'spectator');
       const me = room.members.find(m => m.id === myId());
 
-      if (els.roomTitle) els.roomTitle.textContent = room.name;
+      if (els.roomTitle) els.roomTitle.textContent = SRV(room.name);
       if (els.roomDiff) {
         els.roomDiff.innerHTML = Rules.DIFFICULTY_LIST
           .filter(id => Rules.DIFFICULTY[id].versus)
           .map(id => '<button class="diff-btn' + (room.difficulty === id ? ' on' : '') +
             '" type="button" data-diff="' + id + '"' + (iAmHost && room.phase === 'lobby' ? '' : ' disabled') +
-            '>' + Rules.DIFFICULTY[id].name + '</button>').join('');
+            '>' + T('diff.' + id) + '</button>').join('');
       }
       if (els.roomIdentity) els.roomIdentity.hidden = !me;
       if (els.roomNickname && me && document.activeElement !== els.roomNickname) {
@@ -500,8 +504,8 @@
       }
 
       const empty = '<li class="seat is-empty"><div class="seat-face"></div>' +
-        '<div class="seat-body"><b>等人進來…</b>' +
-        '<div class="seat-tags"><span class="pill wait">空位</span></div></div></li>';
+        '<div class="seat-body"><b>' + T('room.emptySeat') + '</b>' +
+        '<div class="seat-tags"><span class="pill wait">' + T('room.pill.open') + '</span></div></div></li>';
       els.roomSeats.innerHTML = seats.map(m => seatCard(m, room, iAmHost)).join('') +
         (seats.length < room.seats ? empty : '');
 
@@ -510,9 +514,9 @@
         els.roomSpecs.innerHTML = specs.map(m =>
           '<li class="spec' + (m.connected ? '' : ' is-off') + '">' +
             Render.kidAvatarSvg(Characters.byId(m.char), 28) +
-            '<span>' + esc(m.name) + (m.id === myId() ? '（你）' : '') + '</span>' +
+            '<span>' + esc(m.name) + (m.id === myId() ? T('room.you') : '') + '</span>' +
             (iAmHost && m.id !== myId()
-              ? '<button class="mini-btn danger tiny" type="button" data-kick="' + esc(m.id) + '">請他離開</button>'
+              ? '<button class="mini-btn danger tiny" type="button" data-kick="' + esc(m.id) + '">' + T('room.kick') + '</button>'
               : '') +
           '</li>').join('');
       }
@@ -520,7 +524,7 @@
       const amPlayer = me && me.role === 'player';
       if (els.btnReady) {
         els.btnReady.hidden = !amPlayer || room.phase !== 'lobby';
-        els.btnReady.textContent = me && me.ready ? '取消準備' : '我準備好了';
+        els.btnReady.textContent = me && me.ready ? T('room.unready') : T('room.ready');
         els.btnReady.classList.toggle('primary', !(me && me.ready));
       }
       if (els.btnStart) {
@@ -535,14 +539,14 @@
       }
       if (els.roomHint) {
         els.roomHint.textContent =
-          room.phase === 'playing' ? '對局進行中'
+          room.phase === 'playing' ? T('room.hint.playing')
           : room.phase === 'result'
-            ? (S.wantRematch ? '已經按了再來一局，回到房間就會自動幫你準備好'
-              : '結算中，等一下就回房間')
-          : !amPlayer ? '你在觀戰。席位空出來就可以搶（先按先得）'
-          : seats.length < room.seats ? '等另一個人進來，或用邀請連結叫朋友'
-          : room.canStart ? '兩個人都準備好了，房主可以開始'
-          : '兩個人都按「我準備好了」才能開始';
+            ? (S.wantRematch ? T('room.hint.rematch')
+              : T('room.hint.result'))
+          : !amPlayer ? T('room.hint.spectating')
+          : seats.length < room.seats ? T('room.hint.waitOther')
+          : room.canStart ? T('room.hint.canStart')
+          : T('room.hint.needReady');
       }
       renderChat();
     }
@@ -563,7 +567,7 @@
 
     function chatHtml(lines) {
       return lines.map(l => l.sys
-        ? '<li class="chat-sys">' + esc(l.text) + '</li>'
+        ? '<li class="chat-sys">' + esc(SRV(l.text)) + '</li>'
         : '<li class="chat-line' + (l.role === 'spectator' ? ' spec' : '') + '">' +
             '<b>' + esc(l.who) + '</b>' + esc(l.text) + '</li>').join('');
     }
@@ -584,8 +588,10 @@
     }
 
     function renderPhrases() {
-      const html = PHRASES.map(t =>
-        '<button class="mini-btn phrase" type="button" data-say="' + esc(t) + '">' + esc(t) + '</button>').join('');
+      const html = PHRASES.map((zh, i) => {
+        const t = T('chat.p' + i);
+        return '<button class="mini-btn phrase" type="button" data-say="' + esc(t) + '">' + esc(t) + '</button>';
+      }).join('');
       if (els.chatPhrases) els.chatPhrases.innerHTML = html;
       if (els.gameChatPhrases) els.gameChatPhrases.innerHTML = html;
     }
@@ -594,16 +600,16 @@
       const c = S.client;
       const name = cleanName(els.roomNickname && els.roomNickname.value);
       if (!name) {
-        notice('暱稱不能空白', 'bad');
+        notice(T('net.nameEmpty'), 'bad');
         return false;
       }
       if (!c || S.status !== 'online') {
-        notice('目前還沒有連線，暱稱稍後再試', 'bad');
+        notice(T('net.noConn'), 'bad');
         return false;
       }
       if (name !== c.state.me.name) c.actions.rename(name);
       rememberName(name);
-      if (els.roomNicknameHint) els.roomNicknameHint.textContent = '已套用，房間成員會看到新的暱稱。';
+      if (els.roomNicknameHint) els.roomNicknameHint.textContent = T('room.nick.applied');
       renderRoom();
       renderLobby();
       return true;
@@ -615,11 +621,11 @@
       const name = cleanName(els.inviteNickname && els.inviteNickname.value);
       if (!invite) return false;
       if (!name) {
-        notice('暱稱不能空白', 'bad');
+        notice(T('net.nameEmpty'), 'bad');
         return false;
       }
       if (!c || S.status !== 'online') {
-        notice('正在連線，請稍等一下再加入', 'bad');
+        notice(T('net.connecting'), 'bad');
         return false;
       }
       rememberName(name);
@@ -696,12 +702,12 @@
         const v = els.inviteLink ? els.inviteLink.value : '';
         if (!v) return;
         /* clipboard 在非 https 會被擋，所以留 fallback：選起來讓使用者自己複製 */
-        const done = () => notice('邀請連結複製好了，貼給朋友就可以進來');
+        const done = () => notice(T('invite.copied'));
         if (root.navigator && root.navigator.clipboard && root.navigator.clipboard.writeText) {
           root.navigator.clipboard.writeText(v).then(done, () => { els.inviteLink.select(); });
         } else {
           els.inviteLink.select();
-          notice('已經選起來了，按 Ctrl+C 複製');
+          notice(T('invite.selected'));
         }
       });
 
@@ -825,6 +831,11 @@
       PHRASES,
       connect, disconnect, client, rematch, backToRoom,
       renderLobby, renderRoom, renderChat,
+      /** 語言切換：重畫大廳、房間、短語與連線狀態文字（不動連線與房間狀態） */
+      relang() {
+        setStatus(S.status, S.statusKey);
+        renderLobby(); renderRoom(); renderPhrases();
+      },
       takeInviteFromUrl,
       get status() { return S.status; },
       get inMatch() { return S.inMatch; },

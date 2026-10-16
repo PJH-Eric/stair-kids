@@ -198,7 +198,7 @@
         case 'kicked':
           st.room = null;
           st.match = null;
-          if (msg.type === 'kicked') st.notice = '你被房主請出房間了';
+          if (msg.type === 'kicked') st.notice = '你被房主請出房間了';   /* 中文原文；前端顯示前由 ServerText 翻譯 */
           break;
         case 'invite':
           if (st.room) st.room.invite = msg.token || null;

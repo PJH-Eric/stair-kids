@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-i18n-title="meta.title">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#FFE0BF">
 <title>小朋友下樓梯</title>
+<meta name="description" data-i18n-content="meta.desc" content="小朋友下樓梯 - 可愛小朋友無限往下跑的經典下樓梯遊戲（五種階梯、四段難度、六套世界）">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23FFE0BF'/%3E%3Crect x='4' y='11' width='13' height='4' rx='2' fill='%23C87A32'/%3E%3Crect x='13' y='19' width='15' height='4' rx='2' fill='%23C87A32'/%3E%3Ccircle cx='9' cy='6' r='4' fill='%23FFD2AE'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/latency.css?v=20261002c">
@@ -13,30 +14,30 @@
 
 <!-- ===== 右上角固定按鈕（設定；幼幼班進行中會多一顆「結束這局」） ===== -->
 <div class="corner-tools">
-  <button id="btn-finish" class="icon-btn finish-btn" type="button" hidden>結束這局</button>
-  <button id="btn-settings" class="icon-btn" type="button" aria-label="設定" title="設定"></button>
+  <button id="btn-finish" class="icon-btn finish-btn" type="button" data-i18n="nav.finish" hidden>結束這局</button>
+  <button id="btn-settings" class="icon-btn" type="button" aria-label="設定" title="設定" data-i18n-attr="aria-label=nav.settings;title=nav.settings"></button>
 </div>
 
 <!-- 左上角固定的「退出」位置：首頁是回遊戲大廳（跳出這個遊戲），其他畫面是返回上一層。
      同一個位置只會有一顆，不會互相疊到。大廳網址跟其他遊戲專案一致（GitHub Pages）。 -->
-<nav id="screen-nav" class="screen-nav" aria-label="畫面導覽">
+<nav id="screen-nav" class="screen-nav" aria-label="畫面導覽" data-i18n-attr="aria-label=nav.label">
   <a id="lobby-home-link" class="nav-btn lobby-home-link" href="https://pjh-eric.github.io/game-lobby/"
-     aria-label="回遊戲大廳" hidden>← 回遊戲大廳</a>
+     aria-label="回遊戲大廳" data-i18n-attr="aria-label=nav.lobbyAria" data-i18n="nav.lobby" hidden>← 回遊戲大廳</a>
   <button id="btn-back" class="nav-btn" type="button">← 返回</button>
 </nav>
 
 <!-- ============ 首頁 ============ -->
 <section id="screen-home" class="screen active">
   <div class="home-art" id="home-art"></div>
-  <h1 class="title">小朋友下樓梯</h1>
-  <p class="subtitle">一直往下跑，別被上面的天花板追到</p>
-  <p class="home-keys">只有 <span class="kbd">←</span> <span class="kbd">→</span> 兩個方向（或 <span class="kbd">A</span> <span class="kbd">D</span>），沒有跳</p>
+  <h1 class="title" data-i18n="home.title">小朋友下樓梯</h1>
+  <p class="subtitle" data-i18n="home.subtitle">一直往下跑，別被上面的天花板追到</p>
+  <p class="home-keys" data-i18n-html="home.keys">只有 <span class="kbd">←</span> <span class="kbd">→</span> 兩個方向（或 <span class="kbd">A</span> <span class="kbd">D</span>），沒有跳</p>
   <div class="home-buttons">
-    <button class="big-btn primary" type="button" data-go="setup">一個人玩</button>
+    <button class="big-btn primary" type="button" data-go="setup" data-i18n="home.solo">一個人玩</button>
     <button class="big-btn" type="button" data-go="online">
-      跟別人玩<span class="btn-badge" id="home-online" hidden></span>
+      <span data-i18n="home.versus">跟別人玩</span><span class="btn-badge" id="home-online" hidden></span>
     </button>
-    <button class="big-btn ghost" type="button" data-go="help">怎麼玩</button>
+    <button class="big-btn ghost" type="button" data-go="help" data-i18n="home.help">怎麼玩</button>
   </div>
   <div class="home-records" id="home-records"></div>
 </section>
@@ -48,24 +49,24 @@
     <p class="hint" id="setup-hint">選一隻小朋友，挑一個難度，就可以開始無限往下跑。</p>
 
     <label class="field">
-      <span>你的名字</span>
-      <input id="in-nickname" type="text" maxlength="8" placeholder="小玩家">
+      <span data-i18n="setup.name">你的名字</span>
+      <input id="in-nickname" type="text" maxlength="14" placeholder="小玩家" data-i18n-attr="placeholder=common.playerName">
     </label>
 
     <div class="field">
-      <span>選一隻小朋友</span>
-      <div id="char-picker" class="char-picker" role="radiogroup" aria-label="選一隻小朋友"></div>
+      <span data-i18n="setup.pick">選一隻小朋友</span>
+      <div id="char-picker" class="char-picker" role="radiogroup" aria-label="選一隻小朋友" data-i18n-attr="aria-label=setup.pick"></div>
     </div>
 
     <div class="field">
       <span id="diff-label">難度</span>
-      <div id="diff-picker" class="diff-picker" role="radiogroup" aria-label="難度"></div>
+      <div id="diff-picker" class="diff-picker" role="radiogroup" aria-label="難度" data-i18n-attr="aria-label=setup.diff"></div>
       <p class="diff-note" id="diff-note"></p>
     </div>
 
     <div class="field" id="foe-field" hidden>
-      <span>電腦對手強度</span>
-      <div id="foe-picker" class="diff-picker foe-picker" role="radiogroup" aria-label="電腦對手強度"></div>
+      <span data-i18n="setup.foe">電腦對手強度</span>
+      <div id="foe-picker" class="diff-picker foe-picker" role="radiogroup" aria-label="電腦對手強度" data-i18n-attr="aria-label=setup.foe"></div>
       <p class="diff-note" id="foe-note"></p>
     </div>
 
@@ -78,26 +79,26 @@
 <!-- ============ 跟別人玩（M1／M2 才開放） ============ -->
 <section id="screen-online" class="screen">
   <div class="panel">
-    <h2>跟別人玩</h2>
+    <h2 data-i18n="online.title">跟別人玩</h2>
     <div class="soon-list">
       <button class="soon-item live" type="button" id="btn-vs-ai">
         <div>
-          <h3>跟電腦對戰</h3>
-          <p>同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段。玩家一死就結束。不用連線。</p>
+          <h3 data-i18n="online.ai.title">跟電腦對戰</h3>
+          <p data-i18n="online.ai.desc">同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段。玩家一死就結束。不用連線。</p>
         </div>
-        <span class="badge go">開始</span>
+        <span class="badge go" data-i18n="online.go">開始</span>
       </button>
       <button class="soon-item live" type="button" data-go="lobby">
         <div>
-          <h3>線上大廳</h3>
-          <p>公開房間列表、快速加入、邀請連結、觀戰與聊天室。1v1，兩個人都死才結算，一斷線就判輸。</p>
+          <h3 data-i18n="online.lobby.title">線上大廳</h3>
+          <p data-i18n="online.lobby.desc">公開房間列表、快速加入、邀請連結、觀戰與聊天室。1v1，兩個人都死才結算，一斷線就判輸。</p>
         </div>
-        <span class="badge go">進大廳</span>
+        <span class="badge go" data-i18n="online.enter">進大廳</span>
       </button>
     </div>
-    <p class="hint">幼幼班不開放對戰 —— 不會死就分不出勝負。</p>
+    <p class="hint" data-i18n="online.babyNote">幼幼班不開放對戰 —— 不會死就分不出勝負。</p>
     <div class="panel-actions">
-      <button class="big-btn ghost" type="button" data-go="setup">一個人玩</button>
+      <button class="big-btn ghost" type="button" data-go="setup" data-i18n="home.solo">一個人玩</button>
     </div>
   </div>
 </section>
@@ -106,44 +107,44 @@
 <section id="screen-lobby" class="screen">
   <div class="panel wide">
     <div class="lobby-head">
-      <h2>線上大廳</h2>
+      <h2 data-i18n="lobby.title">線上大廳</h2>
       <div class="lobby-me" id="lobby-me"></div>
     </div>
 
     <div class="lobby-bar">
       <span class="net-state" id="lobby-status" data-state="offline">沒有連線</span>
-      <button id="btn-reconnect" class="mini-btn" type="button" hidden>重新連線</button>
+      <button id="btn-reconnect" class="mini-btn" type="button" data-i18n="lobby.reconnect" hidden>重新連線</button>
       <span class="grow"></span>
-      <button id="btn-refresh" class="mini-btn" type="button">重新整理</button>
+      <button id="btn-refresh" class="mini-btn" type="button" data-i18n="lobby.refresh">重新整理</button>
     </div>
 
     <div class="invite-join-card" id="invite-join" hidden>
       <div class="invite-join-copy">
-        <strong>你收到房間邀請</strong>
+        <strong data-i18n="invite.title">你收到房間邀請</strong>
         <span id="invite-join-room">請先確認暱稱，再加入房間</span>
       </div>
       <form class="invite-join-form" id="invite-join-form" autocomplete="off">
         <label class="field">
-          <span>進房暱稱</span>
-          <input id="invite-nickname" type="text" maxlength="8" autocomplete="nickname" placeholder="小玩家">
+          <span data-i18n="invite.nick">進房暱稱</span>
+          <input id="invite-nickname" type="text" maxlength="14" autocomplete="nickname" placeholder="小玩家" data-i18n-attr="placeholder=common.playerName">
         </label>
-        <button id="btn-invite-join" class="big-btn primary" type="submit">確認加入房間</button>
+        <button id="btn-invite-join" class="big-btn primary" type="submit" data-i18n="invite.join">確認加入房間</button>
       </form>
       <p class="hint tiny" id="invite-join-hint" role="status"></p>
     </div>
 
     <div class="lobby-actions">
-      <button id="btn-quick" class="big-btn primary" type="button">快速加入</button>
-      <button id="btn-create" class="big-btn" type="button">開一間新房</button>
+      <button id="btn-quick" class="big-btn primary" type="button" data-i18n="lobby.quick">快速加入</button>
+      <button id="btn-create" class="big-btn" type="button" data-i18n="lobby.create">開一間新房</button>
     </div>
-    <p class="hint">快速加入會幫你找一間還在等人的房；沒有的話就自己開一間等別人進來。</p>
+    <p class="hint" data-i18n="lobby.hint">快速加入會幫你找一間還在等人的房；沒有的話就自己開一間等別人進來。</p>
 
     <div class="field">
-      <span>房間列表</span>
+      <span data-i18n="lobby.rooms">房間列表</span>
       <ul class="room-list" id="lobby-list"></ul>
       <div class="empty-card" id="lobby-empty" hidden>
-        <b>現在沒有人開房</b>
-        <span>按上面的「開一間新房」自己開一間等人，或用邀請連結叫朋友進來。</span>
+        <b data-i18n="lobby.empty.title">現在沒有人開房</b>
+        <span data-i18n="lobby.empty.body">按上面的「開一間新房」自己開一間等人，或用邀請連結叫朋友進來。</span>
       </div>
     </div>
 
@@ -155,22 +156,22 @@
   <div class="panel wide room-panel">
     <div class="lobby-head">
       <h2 id="room-title">房間</h2>
-      <div class="room-diff" id="room-diff" role="group" aria-label="難度"></div>
+      <div class="room-diff" id="room-diff" role="group" aria-label="難度" data-i18n-attr="aria-label=room.diff"></div>
     </div>
 
     <form class="room-identity" id="room-identity" hidden autocomplete="off">
       <label class="field">
-        <span>房內暱稱</span>
-        <input id="room-nickname" type="text" maxlength="8" autocomplete="nickname" placeholder="小玩家">
+        <span data-i18n="room.nick">房內暱稱</span>
+        <input id="room-nickname" type="text" maxlength="14" autocomplete="nickname" placeholder="小玩家" data-i18n-attr="placeholder=common.playerName">
       </label>
-      <button id="btn-room-nickname" class="mini-btn" type="submit">套用暱稱</button>
-      <span class="hint tiny" id="room-nickname-hint" role="status">房間內可以隨時修改，其他人會即時看到。</span>
+      <button id="btn-room-nickname" class="mini-btn" type="submit" data-i18n="room.nick.apply">套用暱稱</button>
+      <span class="hint tiny" id="room-nickname-hint" role="status" data-i18n="room.nick.hint">房間內可以隨時修改，其他人會即時看到。</span>
     </form>
 
     <ul class="seat-list" id="room-seats"></ul>
 
     <div class="field" id="room-specs-block" hidden>
-      <span>觀戰中</span>
+      <span data-i18n="room.watching">觀戰中</span>
       <ul class="spec-list" id="room-specs"></ul>
     </div>
 
@@ -178,27 +179,27 @@
 
     <div class="room-actions">
       <button id="btn-ready" class="big-btn primary" type="button">我準備好了</button>
-      <button id="btn-start-online" class="big-btn" type="button" hidden>開始這局</button>
-      <button id="btn-take-seat" class="big-btn" type="button" hidden>搶一個位子</button>
-      <button id="btn-leave-room" class="big-btn ghost" type="button">離開房間</button>
+      <button id="btn-start-online" class="big-btn" type="button" data-i18n="room.start" hidden>開始這局</button>
+      <button id="btn-take-seat" class="big-btn" type="button" data-i18n="room.seat" hidden>搶一個位子</button>
+      <button id="btn-leave-room" class="big-btn ghost" type="button" data-i18n="room.leave">離開房間</button>
     </div>
 
     <div class="invite-row">
-      <button id="btn-invite" class="mini-btn" type="button" hidden>產生邀請連結</button>
+      <button id="btn-invite" class="mini-btn" type="button" data-i18n="invite.make" hidden>產生邀請連結</button>
       <div class="invite-box" id="invite-box" hidden>
-        <input id="invite-link" type="text" readonly aria-label="邀請連結">
-        <button id="btn-invite-copy" class="mini-btn" type="button">複製</button>
-        <button id="btn-invite-revoke" class="mini-btn danger" type="button">撤銷</button>
+        <input id="invite-link" type="text" readonly aria-label="邀請連結" data-i18n-attr="aria-label=invite.link">
+        <button id="btn-invite-copy" class="mini-btn" type="button" data-i18n="invite.copy">複製</button>
+        <button id="btn-invite-revoke" class="mini-btn danger" type="button" data-i18n="invite.revoke">撤銷</button>
       </div>
     </div>
 
     <div class="chat">
-      <div class="side-label block-label">聊天室</div>
+      <div class="side-label block-label" data-i18n="chat.title">聊天室</div>
       <ul class="chat-list" id="chat-list"></ul>
       <div class="chat-phrases" id="chat-phrases"></div>
       <form class="chat-form" id="chat-form" autocomplete="off">
-        <input id="chat-input" type="text" maxlength="60" placeholder="說點什麼…（最多 60 字）">
-        <button class="mini-btn go" type="submit">送出</button>
+        <input id="chat-input" type="text" maxlength="60" placeholder="說點什麼…（最多 60 字）" data-i18n-attr="placeholder=chat.ph">
+        <button class="mini-btn go" type="submit" data-i18n="chat.send">送出</button>
       </form>
     </div>
   </div>
@@ -207,52 +208,52 @@
 <!-- ============ 怎麼玩（靜態圖文說明） ============ -->
 <section id="screen-help" class="screen">
   <div class="panel help">
-    <h2>怎麼玩</h2>
+    <h2 data-i18n="help.title">怎麼玩</h2>
 
     <section class="help-block">
-      <h3>目標</h3>
-      <p>只有左右兩個方向，沒有跳。一直往下踩階梯，<b>下得越深分數越高</b>（1 格 = 1 公尺）。
+      <h3 data-i18n="help.goal.h">目標</h3>
+      <p data-i18n-html="help.goal.p">只有左右兩個方向，沒有跳。一直往下踩階梯，<b>下得越深分數越高</b>（1 格 = 1 公尺）。
         畫面上緣的天花板會一直追下來，越玩越快。</p>
     </section>
 
     <section class="help-block">
-      <h3>操作</h3>
+      <h3 data-i18n="help.ctrl.h">操作</h3>
       <div class="help-keys">
-        <div><span class="kbd">←</span><span class="kbd">→</span> 或 <span class="kbd">A</span><span class="kbd">D</span> 左右移動</div>
-        <div><span class="kbd">Esc</span> 暫停選單（繼續／重新開始／回首頁）</div>
-        <div>手機平板：<b>直向</b>遊戲畫面下面兩顆大按鍵（左鍵在左、右鍵在右）；<b>橫向</b>兩顆都在左下。</div>
+        <div data-i18n-html="help.ctrl.keys"><span class="kbd">←</span><span class="kbd">→</span> 或 <span class="kbd">A</span><span class="kbd">D</span> 左右移動</div>
+        <div data-i18n-html="help.ctrl.esc"><span class="kbd">Esc</span> 暫停選單（繼續／重新開始／回首頁）</div>
+        <div data-i18n-html="help.ctrl.touch">手機平板：<b>直向</b>遊戲畫面下面兩顆大按鍵（左鍵在左、右鍵在右）；<b>橫向</b>兩顆都在左下。</div>
       </div>
     </section>
 
     <section class="help-block">
-      <h3>五種階梯</h3>
+      <h3 data-i18n="help.steps.h">五種階梯</h3>
       <ul class="help-steps" id="help-steps"></ul>
     </section>
 
     <section class="help-block">
-      <h3>天花板</h3>
+      <h3 data-i18n="help.ceil.h">天花板</h3>
       <div class="help-ceiling" id="help-ceiling"></div>
     </section>
 
     <section class="help-block">
-      <h3>難度</h3>
+      <h3 data-i18n="help.diff.h">難度</h3>
       <ul class="help-diff" id="help-diff"></ul>
     </section>
 
     <section class="help-block">
-      <h3>回血</h3>
-      <p>踩到<b>不是刺</b>的階梯就回 1 顆愛心。所以一直穩穩往下踩是可以撐很久的，
+      <h3 data-i18n="help.heal.h">回血</h3>
+      <p data-i18n-html="help.heal.p">踩到<b>不是刺</b>的階梯就回 1 顆愛心。所以一直穩穩往下踩是可以撐很久的，
         但刺一次就扣好幾顆，回血追不上 —— 少踩到刺比踩得快更重要。</p>
     </section>
 
     <section class="help-block">
-      <h3>跟別人玩</h3>
-      <p><b>跟電腦對戰</b>：同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段，玩家一死就結束。</p>
-      <p><b>線上 1v1</b>：進大廳可以快速加入、開房或用邀請連結叫朋友。兩個人共用同一座樓梯，
+      <h3 data-i18n="help.vs.h">跟別人玩</h3>
+      <p data-i18n-html="help.vs.ai"><b>跟電腦對戰</b>：同一座樓梯、會互相推擠，電腦有簡單／普通／困難三段，玩家一死就結束。</p>
+      <p data-i18n-html="help.vs.online"><b>線上 1v1</b>：進大廳可以快速加入、開房或用邀請連結叫朋友。兩個人共用同一座樓梯，
         <b>會互相推擠</b>，可以把對手推去撞刺或推上輸送帶。
         <b>兩個人都死了才結算</b>，比誰下得深；一樣深就比誰撐得久。
         <b>一斷線就判輸</b>，不暫停也不給寬限秒數 —— 對手可以照常玩完。</p>
-      <p><b>觀戰</b>：房間席位滿了會自動安排觀戰，看得到兩個人的深度與血量；
+      <p data-i18n-html="help.vs.spec"><b>觀戰</b>：房間席位滿了會自動安排觀戰，看得到兩個人的深度與血量；
         席位一空出來就可以搶（先按先得）。對局中可以用<b>快速短語</b>聊天（打字會被方向鍵吃掉，所以只給短語）。</p>
     </section>
   </div>
@@ -270,15 +271,15 @@
       </div>
 
       <div class="side-row side-depth">
-        <span class="side-label">深度</span>
+        <span class="side-label" data-i18n="hud.depth">深度</span>
         <strong id="hud-depth">0</strong><span class="unit">m</span>
       </div>
       <div class="side-row" id="hud-hp-row">
-        <span class="side-label">血量</span>
+        <span class="side-label" data-i18n="hud.hp">血量</span>
         <span id="hud-hp"></span>
       </div>
       <div class="side-row" id="hud-diff-row">
-        <span class="side-label">難度</span>
+        <span class="side-label" data-i18n="hud.diff">難度</span>
         <span id="hud-diff">普通</span>
         <span class="chip" id="hud-speed">×1.0</span>
       </div>
@@ -286,7 +287,7 @@
       <!-- 世界進度：直接畫成一條進度條，比「還有幾公尺」好讀 -->
       <div class="side-block" id="side-world">
         <div class="side-row">
-          <span class="side-label">世界</span>
+          <span class="side-label" data-i18n="hud.world">世界</span>
           <span id="hud-world">幼稚園</span>
         </div>
         <div class="world-bar"><i id="hud-world-fill"></i></div>
@@ -296,41 +297,41 @@
       <!-- 對手（對戰才顯示）。只給數字，不顯示領先／落後差距（規劃書 §0.3） -->
       <div class="side-block side-foe" id="side-foe" hidden>
         <div class="side-row">
-          <span class="side-label" id="hud-foe-label">對手</span>
+          <span class="side-label" id="hud-foe-label" data-i18n="hud.foe">對手</span>
           <span id="hud-foe-name"></span>
         </div>
         <div class="side-row side-depth small-depth">
-          <span class="side-label">深度</span>
+          <span class="side-label" data-i18n="hud.depth">深度</span>
           <strong id="hud-foe-depth">0</strong><span class="unit">m</span>
         </div>
         <div class="side-row">
-          <span class="side-label">血量</span>
+          <span class="side-label" data-i18n="hud.hp">血量</span>
           <span id="hud-foe-hp"></span>
         </div>
       </div>
 
       <!-- 這局的即時統計。桌機／橫向才顯示，順便把左欄的空白填起來。 -->
       <div class="side-block side-live" id="side-live">
-        <div class="side-label block-label">這局</div>
+        <div class="side-label block-label" data-i18n="hud.live">這局</div>
         <ul class="live-list">
-          <li><span>踩到刺</span><b id="live-spikes">0</b></li>
-          <li><span>踩到彈簧</span><b id="live-springs">0</b></li>
-          <li><span>踩破假階</span><b id="live-fakes">0</b></li>
-          <li><span>被刺頂到</span><b id="live-ceil">0.0 秒</b></li>
+          <li><span data-i18n="hud.spikes">踩到刺</span><b id="live-spikes">0</b></li>
+          <li><span data-i18n="hud.springs">踩到彈簧</span><b id="live-springs">0</b></li>
+          <li><span data-i18n="hud.fakes">踩破假階</span><b id="live-fakes">0</b></li>
+          <li><span data-i18n="hud.ceil">被刺頂到</span><b id="live-ceil">0.0 秒</b></li>
         </ul>
       </div>
 
       <!-- 對局中的聊天：最後幾行、自由輸入與快速短語 -->
       <div class="side-block side-chat" id="side-chat" hidden>
-        <div class="side-label block-label">聊天</div>
+        <div class="side-label block-label" data-i18n="chat.short">聊天</div>
         <ul class="chat-list mini" id="game-chat-list"></ul>
         <div class="chat-phrases mini" id="game-chat-phrases"></div>
         <form class="chat-form mini" id="game-chat-form" autocomplete="off">
-          <input id="game-chat-input" type="text" maxlength="60" placeholder="打字聊天…">
-          <button class="mini-btn go" type="submit">送出</button>
+          <input id="game-chat-input" type="text" maxlength="60" placeholder="打字聊天…" data-i18n-attr="placeholder=chat.ph.game">
+          <button class="mini-btn go" type="submit" data-i18n="chat.send">送出</button>
         </form>
         <!-- 打字的時候方向鍵會被輸入框吃掉，一定要講清楚怎麼回到遊戲 -->
-        <p class="chat-typing" id="game-chat-typing" role="status">打字中：方向鍵停用，送出或按 Esc 回到遊戲</p>
+        <p class="chat-typing" id="game-chat-typing" role="status" data-i18n="chat.typing">打字中：方向鍵停用，送出或按 Esc 回到遊戲</p>
       </div>
 
       <div class="side-foot">
@@ -347,7 +348,7 @@
       <div class="hurt-flash" id="overlay-hurt" aria-hidden="true"></div>
       <!-- 這一下扣了幾顆愛心（傷害是 1～5 隨機，要讓玩家看得到數字） -->
       <div class="dmg-pop" id="dmg-pop" hidden aria-hidden="true"></div>
-      <div class="spectate-tag" id="spectate-tag" hidden>觀戰中</div>
+      <div class="spectate-tag" id="spectate-tag" hidden data-i18n="hud.spectate">觀戰中</div>
       <div class="overlay countdown" id="overlay-countdown" hidden>
         <span id="countdown-num">3</span>
         <!-- 第一次玩才出現：小朋友最需要知道「只有左右、沒有跳」 -->
@@ -355,8 +356,8 @@
       </div>
       <div class="overlay milestone" id="overlay-milestone" hidden><span id="milestone-text"></span></div>
       <div class="rotate-tip" id="rotate-tip" hidden>
-        <span>轉成直向比較好玩</span>
-        <button type="button" class="mini-btn" id="rotate-close">知道了</button>
+        <span data-i18n="hud.rotate">轉成直向比較好玩</span>
+        <button type="button" class="mini-btn" id="rotate-close" data-i18n="hud.gotIt">知道了</button>
       </div>
 
       <!-- 結算：跟打地鼠一樣直接蓋在畫面上，不換路由，樓梯定格留在後面 -->
@@ -366,7 +367,7 @@
           <div class="result-hero" id="result-hero"></div>
           <p class="result-new" id="result-new" hidden>破紀錄了！</p>
           <div class="result-stats">
-            <h3>這局統計</h3>
+            <h3 data-i18n="res.stats">這局統計</h3>
             <ul id="result-list"></ul>
           </div>
           <div class="ov-btns">
@@ -381,8 +382,8 @@
 
   <!-- 觸控：橫向兩顆都在左下；直向左鍵左下、右鍵右下 -->
   <div class="pads" id="pads">
-    <button class="pad pad-left" id="pad-left" type="button" aria-label="往左"></button>
-    <button class="pad pad-right" id="pad-right" type="button" aria-label="往右"></button>
+    <button class="pad pad-left" id="pad-left" type="button" aria-label="往左" data-i18n-attr="aria-label=pad.left"></button>
+    <button class="pad pad-right" id="pad-right" type="button" aria-label="往右" data-i18n-attr="aria-label=pad.right"></button>
   </div>
 </section>
 
@@ -390,8 +391,8 @@
 <div class="overlay-full" id="overlay-pause" hidden>
   <div class="pause-card">
     <h2 id="pause-title">暫停中</h2>
-    <button id="btn-resume" class="big-btn primary" type="button">繼續</button>
-    <button id="btn-restart" class="big-btn" type="button">重新開始</button>
+    <button id="btn-resume" class="big-btn primary" type="button" data-i18n="pause.resume">繼續</button>
+    <button id="btn-restart" class="big-btn" type="button" data-i18n="pause.restart">重新開始</button>
     <button id="btn-home" class="big-btn ghost" type="button">回首頁</button>
   </div>
 </div>
@@ -407,50 +408,50 @@
     <div class="modal-head">
       <span class="modal-badge" id="settings-badge" aria-hidden="true"></span>
       <div class="modal-titles">
-        <h2 id="settings-title">設定</h2>
-        <p class="modal-sub">改完馬上生效，只記在這台裝置上</p>
+        <h2 id="settings-title" data-i18n="set.title">設定</h2>
+        <p class="modal-sub" data-i18n="set.sub">改完馬上生效，只記在這台裝置上</p>
       </div>
-      <button id="btn-settings-close" class="icon-btn plain" type="button" aria-label="關閉設定"></button>
+      <button id="btn-settings-close" class="icon-btn plain" type="button" aria-label="關閉設定" data-i18n-attr="aria-label=set.close"></button>
     </div>
 
     <div class="modal-body">
       <!-- 分成四組（聲音／手感／看得清楚／資料）：找一個設定只要先掃四個標題，
            比原本六條平鋪的長句子快得多，每一條也才放得下一行說明 -->
       <section class="set-group" aria-labelledby="set-g-sound">
-        <h3 class="set-group-title" id="set-g-sound"><span class="set-group-icon" data-set-icon="sound" aria-hidden="true"></span>聲音</h3>
+        <h3 class="set-group-title" id="set-g-sound"><span class="set-group-icon" data-set-icon="sound" aria-hidden="true"></span><span data-i18n="set.g.sound">聲音</span></h3>
         <div class="set-card">
           <label class="set-row" for="set-bgm">
-            <span class="set-text"><b>背景音樂</b><small>一邊跑一邊有輕快的旋律</small></span>
+            <span class="set-text"><b data-i18n="set.bgm">背景音樂</b><small data-i18n="set.bgm.d">一邊跑一邊有輕快的旋律</small></span>
             <input class="switch-input" type="checkbox" id="set-bgm">
             <span class="switch" aria-hidden="true"></span>
           </label>
           <!-- 音量條獨立一行：跟開關擠在同一行的話，手機上兩邊都太窄、也不好拖 -->
           <div class="set-slider" id="row-bgm-vol">
-            <input type="range" id="set-bgm-vol" min="0" max="100" step="5" aria-label="背景音樂音量">
+            <input type="range" id="set-bgm-vol" min="0" max="100" step="5" aria-label="背景音樂音量" data-i18n-attr="aria-label=set.bgm.vol">
             <b class="vol-num" id="set-bgm-num">35%</b>
           </div>
           <label class="set-row" for="set-sfx">
-            <span class="set-text"><b>音效</b><small>踩到階梯、彈跳、受傷的提示音</small></span>
+            <span class="set-text"><b data-i18n="set.sfx">音效</b><small data-i18n="set.sfx.d">踩到階梯、彈跳、受傷的提示音</small></span>
             <input class="switch-input" type="checkbox" id="set-sfx">
             <span class="switch" aria-hidden="true"></span>
           </label>
           <div class="set-slider" id="row-sfx-vol">
-            <input type="range" id="set-sfx-vol" min="0" max="100" step="5" aria-label="音效音量">
+            <input type="range" id="set-sfx-vol" min="0" max="100" step="5" aria-label="音效音量" data-i18n-attr="aria-label=set.sfx.vol">
             <b class="vol-num" id="set-sfx-num">60%</b>
           </div>
         </div>
       </section>
 
       <section class="set-group" aria-labelledby="set-g-feel">
-        <h3 class="set-group-title" id="set-g-feel"><span class="set-group-icon" data-set-icon="feel" aria-hidden="true"></span>手感</h3>
+        <h3 class="set-group-title" id="set-g-feel"><span class="set-group-icon" data-set-icon="feel" aria-hidden="true"></span><span data-i18n="set.g.feel">手感</span></h3>
         <div class="set-card">
           <label class="set-row" for="set-vibrate">
-            <span class="set-text"><b>震動</b><small>受傷、快掉出去時震一下（手機、平板）</small></span>
+            <span class="set-text"><b data-i18n="set.vibrate">震動</b><small data-i18n="set.vibrate.d">受傷、快掉出去時震一下（手機、平板）</small></span>
             <input class="switch-input" type="checkbox" id="set-vibrate">
             <span class="switch" aria-hidden="true"></span>
           </label>
           <label class="set-row" for="set-motion">
-            <span class="set-text"><b>減少動態</b><small>關掉鏡頭震動與粒子，畫面比較不晃</small></span>
+            <span class="set-text"><b data-i18n="set.motion">減少動態</b><small data-i18n="set.motion.d">關掉鏡頭震動與粒子，畫面比較不晃</small></span>
             <input class="switch-input" type="checkbox" id="set-motion">
             <span class="switch" aria-hidden="true"></span>
           </label>
@@ -458,15 +459,15 @@
       </section>
 
       <section class="set-group" aria-labelledby="set-g-see">
-        <h3 class="set-group-title" id="set-g-see"><span class="set-group-icon" data-set-icon="see" aria-hidden="true"></span>看得清楚</h3>
+        <h3 class="set-group-title" id="set-g-see"><span class="set-group-icon" data-set-icon="see" aria-hidden="true"></span><span data-i18n="set.g.see">看得清楚</span></h3>
         <div class="set-card">
           <label class="set-row" for="set-color">
-            <span class="set-text"><b>色彩輔助</b><small>五種階梯加強形狀差異與外框</small></span>
+            <span class="set-text"><b data-i18n="set.color">色彩輔助</b><small data-i18n="set.color.d">五種階梯加強形狀差異與外框</small></span>
             <input class="switch-input" type="checkbox" id="set-color">
             <span class="switch" aria-hidden="true"></span>
           </label>
           <label class="set-row" for="set-guide">
-            <span class="set-text"><b>深度輔助線</b><small>每 10 公尺畫一條，看得出跑多深</small></span>
+            <span class="set-text"><b data-i18n="set.guide">深度輔助線</b><small data-i18n="set.guide.d">每 10 公尺畫一條，看得出跑多深</small></span>
             <input class="switch-input" type="checkbox" id="set-guide">
             <span class="switch" aria-hidden="true"></span>
           </label>
@@ -474,21 +475,23 @@
       </section>
 
       <section class="set-group" aria-labelledby="set-g-data">
-        <h3 class="set-group-title" id="set-g-data"><span class="set-group-icon" data-set-icon="data" aria-hidden="true"></span>這台裝置上的資料</h3>
+        <h3 class="set-group-title" id="set-g-data"><span class="set-group-icon" data-set-icon="data" aria-hidden="true"></span><span data-i18n="set.g.data">這台裝置上的資料</span></h3>
         <div class="set-card set-card-actions">
-          <button id="set-reset" class="big-btn ghost" type="button">恢復預設設定</button>
-          <button id="set-clear" class="big-btn ghost" type="button">清除本機紀錄</button>
+          <button id="set-reset" class="big-btn ghost" type="button" data-i18n="set.reset">恢復預設設定</button>
+          <button id="set-clear" class="big-btn ghost" type="button" data-i18n="set.clear">清除本機紀錄</button>
         </div>
         <p class="hint tiny" id="set-msg" role="status"></p>
       </section>
     </div>
 
     <div class="modal-foot">
-      <button id="set-done" class="big-btn primary" type="button">完成</button>
+      <button id="set-done" class="big-btn primary" type="button" data-i18n="set.done">完成</button>
     </div>
   </div>
 </div>
 
+<script src="js/i18n.js"></script>
+<script src="js/locales.js"></script>
 <script src="js/config.js"></script>
 <script src="js/rng.js"></script>
 <script src="js/stairs.js"></script>
@@ -497,6 +500,7 @@
 <script src="js/themes/characters.js"></script>
 <script src="js/themes/scenes.js"></script>
 <script src="js/themes/nicknames.js"></script>
+<script src="js/localize.js"></script>
 <script src="js/svgui.js"></script>
 <script src="js/render.js"></script>
 <script src="js/input.js"></script>

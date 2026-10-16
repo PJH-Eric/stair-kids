@@ -180,7 +180,8 @@
       '<rect x="' + s.x + '" y="' + s.y + '" width="' + s.w + '" height="14" rx="5" fill="#D89B57"/>' +
       '<rect x="' + (s.x + 3) + '" y="' + (s.y + 2) + '" width="' + (s.w - 6) + '" height="4" rx="2" fill="rgba(255,255,255,.5)"/>'
     ).join('');
-    return '<svg viewBox="0 0 320 240" class="home-art-svg" aria-label="小朋友站在樓梯口往下看">' +
+    return '<svg viewBox="0 0 320 240" class="home-art-svg" aria-label="' +
+      (root.I18N ? root.I18N.t('home.art') : '小朋友站在樓梯口往下看') + '">' +
       '<defs><linearGradient id="ha-sky" x1="0" y1="0" x2="0" y2="1">' +
       '<stop offset="0" stop-color="#FFF6E0"/><stop offset="100%" stop-color="#FFD9B0"/></linearGradient></defs>' +
       '<rect width="320" height="240" rx="18" fill="url(#ha-sky)"/>' +
