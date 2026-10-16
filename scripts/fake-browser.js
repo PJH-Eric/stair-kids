@@ -122,6 +122,7 @@ function makeEl(activeRef) {
     }
 
     appendChild(child) {
+      if (child.parentNode) child.parentNode.removeChild(child);
       child.parentNode = this;
       this.children.push(child);
       return child;
@@ -399,6 +400,10 @@ function boot(opt) {
     dispatch(type, extra) {
       const ev = Object.assign({ type: type, preventDefault() {}, stopPropagation() {} }, extra || {});
       for (const fn of (doc.listeners.get(type) || []).slice()) fn(ev);
+    },
+    dispatchEvent(ev) {
+      for (const fn of (doc.listeners.get(ev.type) || []).slice()) fn(ev);
+      return true;
     }
   };
 
@@ -435,6 +440,12 @@ function boot(opt) {
     WebSocket: FakeSocket,
     URL: URL,
     URLSearchParams: URLSearchParams,
+    getComputedStyle: el => ({ position: el.style.position || 'static', visibility: el.hidden ? 'hidden' : 'visible' }),
+    // 假 DOM 不計算版面；實際位置與重排由瀏覽器測試負責。
+    MutationObserver: class { observe() {} disconnect() {} },
+    CustomEvent: class {
+      constructor(type, options) { this.type = type; this.detail = options && options.detail; }
+    },
     console: console,
     /* 首頁的「現在有幾個人在玩」是加分資訊，測試裡一律當成拿不到 */
     fetch: () => Promise.reject(new Error('fake-browser 沒有 HTTP')),
@@ -454,8 +465,10 @@ function boot(opt) {
 
   const context = vm.createContext(win);
   const files = [
+    'js/i18n.js', 'js/locales.js',
     'js/config.js', 'js/rng.js', 'js/stairs.js', 'js/rules.js', 'js/ai.js',
     'js/themes/characters.js', 'js/themes/scenes.js', 'js/themes/nicknames.js',
+    'js/localize.js',
     'js/svgui.js', 'js/render.js', 'js/input.js', 'js/audio.js', 'js/storage.js',
     'js/net.js', 'js/online.js', 'js/app.js'
   ];

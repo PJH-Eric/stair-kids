@@ -57,6 +57,18 @@ const mySeat = () => {
   return r && id ? r.members.get(id) : null;
 };
 
+group('多語系啟動：載入真實核心、字典與語言切換鈕');
+{
+  const toggle = w.dom.body.querySelector('#b-lang');
+  ok(!!toggle, '啟動時建立語言切換鈕');
+  ok(w.win.I18N.t('lang.switchTo') !== 'lang.switchTo', '載入真實翻譯字典');
+  toggle.click();
+  ok(w.win.I18N.lang === 'en', '點擊語言鈕切換英文');
+  ok(w.win.localStorage.getItem('game-island-lang') === 'en', '英文偏好寫入儲存');
+  toggle.click();
+  ok(w.win.I18N.lang === 'zh-Hant', '再次點擊切回繁中');
+}
+
 /* ---------------------------------------------------------- */
 group('開場：首頁 → 大廳 → 開房間');
 w.advance(200);
