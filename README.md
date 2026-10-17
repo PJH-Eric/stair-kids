@@ -89,7 +89,7 @@ npm run test:e2e                                            # 三到五個瀏覽
   清除本機紀錄、恢復預設。焦點鎖定、Esc 關閉、重進保留。
 - **本機紀錄** `localStorage`：各難度最深深度與日期、最深世界、常用角色、上次的暱稱與角色。
 - **RWD**：桌機寬版／平板直橫／手機直橫都驗過，資訊欄在左邊且刻意小，直向壓成上方薄狀態列。
-- **伺服器** `server.js`：零依賴，靜態檔案 ＋ `/health` ＋ `/api/presence` ＋ 自寫 WebSocket（`lib/ws.js`）
+- **伺服器** `server.js`：零依賴，靜態檔案 ＋ `/health` ＋ 自寫 WebSocket（`lib/ws.js`）
   的最小端點，M2 才接上房間迴圈。
 
 ## M1 做完了什麼
@@ -263,7 +263,7 @@ M0 的做法：實作在 `stairs.js`，`rules.js` 直接轉出 `Rules.makeStairs
 - `lib/match-loop.js`：固定 30Hz 權威迴圈、快照增量廣播、每秒心跳掃描。時鐘與送出動作都是注入的，所以驗收可以用假時鐘跑。
 - `lib/protocol.js`：客戶端能做的每一件事。客戶端只送 `{ seq, dir, ct }`，永遠不送座標與血量。
 - `public/js/net.js`：本地預測 → 收到快照覆蓋權威狀態 → 用輸入紀錄重演回「現在」→ 對手延遲 100ms 內插。
-- `server.js`：從 M0 骨架換成完整房間伺服器，`/health`、`/api/presence`、`/api/rooms` 回真實數字。
+- `server.js`：從 M0 骨架換成完整房間伺服器，`/health`、`/api/rooms` 回真實數字。
 
 ### 一個關鍵修正：本地模擬必須「超前跑」
 
@@ -471,13 +471,13 @@ M4 清單裡的多數項目其實在 M0 就做掉了（設定彈窗、教學頁�
   矮螢幕或放大字體時超出的部分會**看不見也點不到**（Playwright 就是這樣抓到的）。
 - **部署準備**：`render.yaml`（healthCheckPath `/health`）、
   `.github/workflows/pages.yml`（建置時跑 `npm run verify` 再注入 `GAME_SERVER_URL`）、
-  `scripts/inject-server-url.js` 都在 M0 就備好了，這一輪只確認 `/health`、`/api/presence`、
+  `scripts/inject-server-url.js` 都在 M0 就備好了，這一輪只確認 `/health`、
   `/api/rooms` 回的是真實數字（e2e 有驗）。
 
 ### 加進既有 `game-lobby`（已經加好了）
 
-`game-lobby/config/games.json` 已經有 `id: stair-kids` 這張卡（`localPort: 3060`、
-`presenceUrl` 指到 Render 上的 `/api/presence`），首頁左上角也有一顆回大廳的連結
+`game-lobby/config/games.json` 已經有 `id: stair-kids` 這張卡（`localPort: 3060`），
+首頁左上角也有一顆回大廳的連結
 （見下面的「回遊戲大廳」那一節）。下面這段是當初的規格，留著當格式參考 ——
 實際那張卡的欄位以 `games.json` 為準（多了 `eyebrow`、`icon`、`accent`、`modes` 等）：
 
@@ -487,18 +487,10 @@ M4 清單裡的多數項目其實在 M0 就做掉了（設定彈窗、教學頁�
   "name": "小朋友下樓梯",
   "desc": "一直往下踩樓梯，別被上面的天花板追到。可以跟電腦打，也可以線上 1v1。",
   "localPort": 3060,
-  "presenceUrl": "/api/presence",
   "healthUrl": "/health",
   "badge": "新遊戲",
   "tags": ["單機", "AI 對戰", "線上 1v1", "反應"]
 }
-```
-
-`/api/presence` 回的格式（跟 bubble-battle 一致）：
-
-```json
-{ "gameId": "stair-kids", "online": 7, "players": 2, "spectators": 1,
-  "lobby": 4, "rooms": 1, "updatedAt": "2026-09-08T12:34:56.789Z" }
 ```
 
 ---
@@ -875,7 +867,7 @@ Apple 建議 44 px、Android 建議 48 dp，而小朋友的手指更按不準。
 
 ```
 stair-kids/
-├─ server.js                HTTP ＋ /health ＋ /api/presence ＋ /api/rooms ＋ WebSocket
+├─ server.js                HTTP ＋ /health ＋ /api/rooms ＋ WebSocket
 ├─ lib/
 │  ├─ ws.js                 自寫 WebSocket（RFC 6455），含網路層 ping/pong 的存活時間
 │  ├─ rooms.js              房間、席位、觀戰、搶位、邀請、聊天（純邏輯，不碰 socket）

@@ -121,21 +121,6 @@ const server = http.createServer((req, res) => {
   /* 給前端跨網域用（GitHub Pages 前端 ＋ Render 伺服器的組合） */
   res.setHeader('Access-Control-Allow-Origin', ALLOW_ORIGIN);
 
-  /* 給遊戲大廳問「現在有幾個人在玩」 */
-  if (url === '/api/presence') {
-    const c = counts();
-    json(res, 200, {
-      gameId: GAME_ID,
-      online: people.size,
-      players: c.players,
-      spectators: c.spectators,
-      lobby: io.lobbyIds().length,
-      rooms: hub.rooms.size,
-      updatedAt: new Date().toISOString()
-    });
-    return;
-  }
-
   /* 大廳／前端要先看得到有哪些房間才決定要不要連 WebSocket */
   if (url === '/api/rooms') {
     json(res, 200, { rooms: hub.listRooms(), seats: hub.CONST.SEATS });

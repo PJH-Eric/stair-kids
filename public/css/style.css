@@ -1402,21 +1402,6 @@ button.soon-item:active { transform: translateY(2px); }
 }
 .home-keys .kbd { margin: 0; }
 
-/* 按鈕上的小徽章（線上現在有幾個人） */
-.btn-badge {
-  display: inline-block;
-  margin-left: 8px;
-  vertical-align: 2px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #2F7A44;
-  background: #DFF3E0;
-  border: 2px solid #8CC79A;
-  border-radius: 999px;
-  padding: 0 8px;
-}
-.btn-badge[hidden] { display: none !important; }
-
 /* 首頁紀錄：一行字改成一顆一顆的小標籤 */
 .home-records { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 460px; }
 .rec-chip {

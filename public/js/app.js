@@ -57,7 +57,6 @@
     setBgmNum: $('#set-bgm-num'), setSfxNum: $('#set-sfx-num'),
     setBgmRow: $('#row-bgm-vol'), setSfxRow: $('#row-sfx-vol'),
     settingsBadge: $('#settings-badge'),
-    homeOnline: $('#home-online'),
     helpSteps: $('#help-steps'), helpCeiling: $('#help-ceiling'), helpDiff: $('#help-diff')
   };
 
@@ -258,7 +257,7 @@
     syncPads();
     els.finishBtn.hidden = true;
     measureCorners();
-    if (name === 'home') { renderHomeRecords(); refreshPresence(); }
+    if (name === 'home') renderHomeRecords();
     if (name === 'setup') renderSetup();
     /* 進遊戲畫面才量得到真正的尺寸（隱藏中的 section 量出來是 0），所以在這裡重新收邊 */
     if (name === 'game') { blurTyping(); applyRenderOptions(); updateRotateTip(); }
@@ -293,31 +292,6 @@
 
   const currentName = () =>
     (els.nickname.value || '').trim() || store.nickname || els.nickname.placeholder || T('common.playerName');
-
-  /**
-   * 首頁「跟別人玩」上的線上人數。
-   * 只是加分資訊，所以失敗一律安靜收掉（沒設 server、伺服器在睡、離線都算正常）。
-   */
-  function refreshPresence() {
-    const badge = els.homeOnline;
-    if (!badge) return;
-    const base = (self.Config && Config.serverUrl) || '';
-    if (!base) { badge.hidden = true; return; }
-    let done = false;
-    const give = () => { if (!done) { done = true; badge.hidden = true; } };
-    setTimeout(give, 4000);                      /* 伺服器在睡就不要一直等 */
-    fetch(base + '/api/presence', { cache: 'no-store' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (done) return;
-        done = true;
-        const n = d && Number(d.online) || 0;
-        badge.hidden = n <= 0;
-        G.presence = n;
-        badge.textContent = T('home.online', { n: n });
-      })
-      .catch(give);
-  }
 
   /* ================= 首頁 ================= */
 
@@ -1710,7 +1684,6 @@
     if (els.lobbyLink) els.lobbyLink.href = I18N.withLang(LOBBY_URL);
     renderHomeArt();
     renderHomeRecords();
-    if (G.presence > 0 && els.homeOnline) els.homeOnline.textContent = T('home.online', { n: G.presence });
     renderHelp();
     if (G.screen === 'setup') renderSetup();
     online.relang();
