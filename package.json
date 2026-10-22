@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/localization.js && node tests/verify.js",
+    "test": "node tests/analytics.js && node tests/localization.js && node tests/verify.js",
     "test:stairs": "node scripts/stairs-check.js",
     "test:match": "node scripts/match-check.js",
     "test:ai": "node scripts/ai-check.js",
@@ -22,7 +22,8 @@
     "test:smooth": "node scripts/smooth-check.js",
     "test:audio": "node scripts/audio-check.js",
     "test:e2e": "node scripts/e2e-online.js",
-    "test:localization": "node tests/localization.js"
+    "test:localization": "node tests/localization.js",
+    "test:analytics": "node tests/analytics.js"
   },
   "engines": {
     "node": ">=18"
