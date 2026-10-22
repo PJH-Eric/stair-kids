@@ -6,5 +6,8 @@
   "lobbyUrl": "https://pjh-eric.github.io/game-lobby/",
   "googleSiteVerification": "",
   "genre": "動作",
-  "players": "1-2"
+  "players": "1-2",
+  "iconUrl": "https://pjh-eric.github.io/stair-kids/favicon-96.png",
+  "ogImage": "https://pjh-eric.github.io/stair-kids/og-image.png",
+  "ogImageAlt": "小朋友下樓梯遊戲圖示"
 }
