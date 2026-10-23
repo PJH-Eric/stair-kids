@@ -1,0 +1,38 @@
+{
+  "zh-Hant": {
+    "name": "小朋友下樓梯",
+    "summary": "一直往下踩到新的階梯，別被追上來的天花板頂到，也別掉出畫面外。",
+    "modes": [
+      "幼幼班",
+      "單機挑戰",
+      "電腦對戰",
+      "線上房間",
+      "觀戰"
+    ],
+    "controls": "只有左右兩個方向（← → 或 A D），沒有跳"
+  },
+  "zh-Hans": {
+    "name": "小朋友下楼梯",
+    "summary": "一直往下踩到新的阶梯，别被追上来的天花板顶到，也别掉出画面外。",
+    "modes": [
+      "幼幼班",
+      "单机挑战",
+      "电脑对战",
+      "线上房间",
+      "观战"
+    ],
+    "controls": "只有左右两个方向（← → 或 A D），没有跳"
+  },
+  "en": {
+    "name": "Stair Kids",
+    "summary": "Keep stepping down onto new stairs. Do not get squished by the ceiling or fall off the screen.",
+    "modes": [
+      "Little Kids Mode",
+      "Solo Challenge",
+      "vs Computer",
+      "Online Room",
+      "Spectate"
+    ],
+    "controls": "Only two directions (← → or A D). No jumping"
+  }
+}
