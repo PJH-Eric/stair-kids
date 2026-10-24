@@ -1092,7 +1092,7 @@
       '<div class="result-line' + (tag ? ' ' + tag : '') + '">' +
       T('res.line', {
         name: p.name, m: p.meters, t: fmtTime(p.survived),
-        tag: p.fell ? T('res.tag.fell') : p.alive ? '' : T('res.tag.dead')
+        tag: p.forfeit ? T('res.tag.forfeit') : p.fell ? T('res.tag.fell') : p.alive ? '' : T('res.tag.dead')
       }) + '</div>';
     const subLine = () => T('res.sub', { diff: diffName(result.difficulty), scene: Scenes.sceneFor(me.world).name });
     if (foe) {

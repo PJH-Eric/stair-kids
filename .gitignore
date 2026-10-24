@@ -4,3 +4,21 @@ node_modules/
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# 可重新產生的測試截圖、暫存與快取
+/screenshots/
+/shots/
+/.shots/
+/test-results/
+/playwright-report/
+/coverage/
+/.cache/
+/.pytest_cache/
+**/__pycache__/
+*.pyc
+*.log
+*.tmp
+*.bak
+*.tsbuildinfo
+/tmp/
+/temp/
