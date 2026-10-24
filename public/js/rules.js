@@ -177,6 +177,7 @@
       depth: 0,
       best: 0,
       onStep: 'L0-0',
+      onPlayer: null,                  /* 腳下支撐自己的玩家 id；與 onStep 互斥 */
       state: 'idle',                   /* idle｜walk｜fall｜spring｜spike｜ceiling｜stun */
       invuln: 0,
       ceilAccum: 0,
@@ -283,13 +284,28 @@
     return hit;
   }
 
-  /** 玩家推擠（純函式，對戰唯一的互動；規劃書 §2） */
+  /** 玩家從上方落到頭頂。相對掃掠同時考慮下面的人移動，避免高速穿頭。 */
+  function resolveHeadLanding(players, previousY, p, fromY, toY) {
+    let hit = null;
+    for (const other of players) {
+      if (other === p || !other.alive || other.onPlayer === p.id) continue;
+      if (Math.abs(p.x - other.x) >= C.PLAYER_W - EPS) continue;
+      const oldTop = previousY.get(other.id) - C.PLAYER_H;
+      const top = other.y - C.PLAYER_H;
+      if (fromY > oldTop + EPS || toY < top - EPS) continue;
+      if (toY - fromY < top - oldTop - EPS) continue;
+      if (!hit || top < hit.depth) hit = { player: other, depth: top };
+    }
+    return hit;
+  }
+
+  /** 玩家側面推擠（規劃書 §2） */
   function resolvePush(a, b) {
     if (!a.alive || !b.alive) return false;
     const dx = b.x - a.x;
     const overlapX = C.PLAYER_W - Math.abs(dx);
     if (overlapX <= 0) return false;
-    /* 垂直沒有交疊就不是同一個高度，不推（所以不會互踩、不會疊人） */
+    /* 垂直沒有交疊就不推；站在頭頂時腳底與頭頂恰好相接。 */
     const aTop = a.y - C.PLAYER_H, bTop = b.y - C.PLAYER_H;
     if (a.y <= bTop + EPS || b.y <= aTop + EPS) return false;
 
@@ -469,8 +485,14 @@
       }
     }
 
+    /* 先算下面的人，頭頂才能使用本 tick 的落地／彈起位置。
+     * 不改 players 的順序，保留玩家編號、勝負與網路快照的排列。 */
+    const previousY = new Map(s.players.map(p => [p.id, p.y]));
+    const movingPlayers = s.players.slice().sort((a, b) => b.y - a.y || a.index - b.index);
+
     /* ---- 每位玩家：水平移動 → 垂直移動 → 落地 ---- */
-    for (const p of s.players) {
+    for (const p of movingPlayers) {
+      p.onPlayer = null;
       if (!p.alive) { p.invuln = Math.max(0, p.invuln - dt); continue; }
       p.aliveTime += dt;
       p.invuln = Math.max(0, p.invuln - dt);
@@ -504,8 +526,17 @@
         const fromY = p.y;
         p.vy = Math.min(C.MAX_FALL, p.vy + C.GRAVITY * dt);
         const toY = p.y + p.vy * dt;
+        const head = resolveHeadLanding(s.players, previousY, p, fromY, toY);
+        const hit = p.vy > 0 ? resolveLanding(s.steps, p.x, fromY, toY) : null;
+        if (head && (!hit || head.depth < hit.depth - EPS)) {
+          p.y = head.depth;
+          p.vy = head.player.vy;
+          p.onStep = null;
+          p.onPlayer = head.player.id;
+          p.state = p.dir ? 'walk' : 'idle';
+          continue;
+        }
         if (p.vy > 0) {
-          const hit = resolveLanding(s.steps, p.x, fromY, toY);
           if (hit) {
             p.y = hit.depth;
             p.vy = 0;
@@ -522,7 +553,7 @@
       }
     }
 
-    /* ---- 推擠（對戰唯一的互動；一人挑戰只有一個角色，跑不到） ---- */
+    /* ---- 側面推擠（一人挑戰只有一個角色，跑不到） ---- */
     if (s.players.length > 1) {
       const a = s.players[0], b = s.players[1];
       const pushed = resolvePush(a, b);
@@ -554,6 +585,7 @@
       if (!p.alive) continue;
       const pressed = applyCeiling(s, p, s.cameraTop, s.diff, dt, events);
       if (!pressed) continue;
+      p.onPlayer = null;
       p.state = 'ceiling';
       /* 被推到腳下那一階以下 → 離開階梯開始往下掉（推力大於階梯） */
       const g = p.onStep ? stepById(s, p.onStep) : null;

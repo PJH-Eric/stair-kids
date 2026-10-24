@@ -500,7 +500,92 @@ group('天花板');
 }
 
 /* ---------------------------------------------------------- */
-group('推擠（對戰唯一的互動）');
+group('踩在別人頭上');
+{
+  const makeStack = (opt) => sandbox(Object.assign({
+    players: [{ id: 'p1' }, { id: 'p2' }],
+    steps: [wide(4, 0, C.FIELD_W)],
+    at: [{ x: 6, y: 1.9, vy: C.MAX_FALL }, { x: 6, y: 4, onStep: 'T0' }]
+  }, opt));
+  const tick = (s, inputs) => Rules.stepMatch(s, inputs || {}, C.STEP_MS);
+  const s = makeStack();
+  const [top, bottom] = s.players;
+  top.hp--;
+  const hp = top.hp;
+  const events = tick(s).events;
+  near(top.y, bottom.y - C.PLAYER_H, 1e-9, '高速落下能踩住頭頂');
+  eq(top.onPlayer, bottom.id, '記住腳下支撐的玩家');
+  eq(top.onStep, null, '頭頂支撐與階梯互斥');
+  eq(top.x, bottom.x, '踩頭不會被水平推開');
+  eq(top.hp, hp, '踩頭不扣血也不回血');
+  ok(!events.some(e => e.type === 'push' || e.type === 'heal'), '踩頭不觸發推擠或回血事件');
+  for (let i = 0; i < 60; i++) tick(s);
+  near(top.y, bottom.y - C.PLAYER_H, 1e-9, '連續一秒能穩定站在頭上');
+  eq(top.stats.pushes, 0, '站在頭頂不累加推擠統計');
+
+  const reversed = makeStack();
+  reversed.players.reverse();
+  tick(reversed);
+  near(reversed.players[1].y, top.y, 1e-9, '交換玩家陣列順序不影響踩頭');
+
+  bottom.x = 9;
+  tick(s);
+  eq(top.onPlayer, null, '下面的人走開後解除支撐');
+  ok(top.y > 2 && top.vy > 0, '失去支撐後繼續下落');
+
+  const walking = makeStack();
+  tick(walking);
+  for (let i = 0; i < 16; i++) tick(walking, { p1: { dir: 1 } });
+  eq(walking.players[0].onPlayer, null, '上面的人可以主動走離頭頂');
+  ok(walking.players[0].y > 2, '走離頭頂後正常下落');
+
+  const dead = makeStack();
+  tick(dead);
+  dead.players[1].alive = false;
+  tick(dead);
+  eq(dead.players[0].onPlayer, null, '淘汰的玩家不再提供支撐');
+
+  const falling = makeStack({ steps: [], at: [
+    { x: 6, y: 2, vy: 8 }, { x: 6, y: 4, vy: 8 }
+  ] });
+  for (let i = 0; i < 20; i++) tick(falling);
+  near(falling.players[0].y, falling.players[1].y - C.PLAYER_H, 1e-9,
+    '兩人一起下落時仍可站在頭上');
+  eq(falling.players[0].vy, falling.players[1].vy, '下落時繼承下面玩家的垂直速度');
+
+  const rising = makeStack({ steps: [], at: [
+    { x: 6, y: 2, vy: 0 }, { x: 6, y: 4, vy: -C.SPRING_VY }
+  ] });
+  for (let i = 0; i < 10; i++) tick(rising);
+  near(rising.players[0].y, rising.players[1].y - C.PLAYER_H, 1e-9,
+    '下面玩家彈起時能托起頭頂玩家');
+
+  const upwards = makeStack({ steps: [], at: [
+    { x: 6, y: 1.9, vy: -C.SPRING_VY }, { x: 6, y: 4, vy: 0 }
+  ] });
+  tick(upwards);
+  eq(upwards.players[0].onPlayer, null, '往上遠離頭頂時不會吸附');
+
+  const platform = makeStack({ steps: [wide(1.95, 0, C.FIELD_W), wide(4, 0, C.FIELD_W)],
+    at: [{ x: 6, y: 1.9, vy: C.MAX_FALL }, { x: 6, y: 4, onStep: 'T1' }] });
+  tick(platform);
+  eq(platform.players[0].onStep, 'T0', '頭頂上方有階梯時先踩階梯');
+  eq(platform.players[0].onPlayer, null, '階梯阻隔時不能隔著階梯踩頭');
+
+  const spring = makeStack({ steps: [wide(2.1, 0, C.FIELD_W, { kind: 'spring' }),
+    wide(4, 0, C.FIELD_W)],
+    at: [{ x: 6, y: 1.9, vy: C.MAX_FALL }, { x: 6, y: 4, onStep: 'T1' }] });
+  tick(spring);
+  eq(spring.players[0].onPlayer, 'p2', '頭頂在彈簧上方時先踩頭');
+  eq(spring.players[0].stats.springs, 0, '先踩頭不會誤觸下方彈簧');
+
+  const ceiling = makeStack({ cameraTop: 0.1 });
+  tick(ceiling);
+  eq(ceiling.players[0].onPlayer, null, '撞天花板後解除頭頂支撐');
+  ok(ceiling.players[0].vy >= C.CEIL_PUSH, '踩頭不能擋住天花板向下推力');
+}
+
+group('側面推擠');
 {
   const a = { id: 'a', index: 0, x: 6.0, y: 5, alive: true };
   const b = { id: 'b', index: 1, x: 6.6, y: 5, alive: true };
@@ -519,7 +604,7 @@ group('推擠（對戰唯一的互動）');
 {
   const a = { id: 'a', index: 0, x: 6, y: 5, alive: true };
   const b = { id: 'b', index: 1, x: 6, y: 5 - C.PLAYER_H - 0.1, alive: true };
-  eq(Rules.resolvePush(a, b), false, '垂直沒有交疊就不推（所以不會互踩頭、不會疊人）');
+  eq(Rules.resolvePush(a, b), false, '垂直沒有交疊就不推，頭頂接觸也不水平推開');
 }
 {
   const a = { id: 'a', index: 0, x: 6, y: 5, alive: true };

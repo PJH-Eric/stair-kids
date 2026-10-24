@@ -735,6 +735,18 @@
       if (offset && p.id === G.meId) { shown.x += offset.x; shown.y += offset.y; }
       return shown;
     });
+    if (localOnly) {
+      /* 自己與對手使用不同的內插時間軸。疊人時以畫面上的支撐者為準，
+       * 否則一起下落會出現半幀的穿頭或懸空；只改畫面，不動權威座標。 */
+      view.players = view.players.map(p => {
+        if (!p.alive || !p.onPlayer) return p;
+        const support = view.players.find(other => other.id === p.onPlayer && other.alive);
+        if (!support) return p;
+        const shown = Object.create(p);
+        shown.y = support.y - Rules.C.PLAYER_H;
+        return shown;
+      });
+    }
     return view;
   }
 

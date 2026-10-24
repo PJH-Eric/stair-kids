@@ -831,6 +831,8 @@ group('沒按方向鍵的時候不能自己滑（跟單機比）');
   const base = (() => {
     const prev = { players: {}, ready: false };
     const snap = s => {
+      /* 畫面內插還包含上一 tick；剛離開輸送帶的那幀仍有帶動位移。 */
+      prev.usable = usable(s, s.players[0], s.players[1]);
       for (const p of s.players) {
         let e = prev.players[p.id];
         if (!e) e = prev.players[p.id] = { x: p.x, y: p.y };
@@ -861,7 +863,8 @@ group('沒按方向鍵的時候不能自己滑（跟單機比）');
       if (!prev.ready || s.phase !== 'playing') continue;
       const me = s.players[0], foe = s.players[1];
       rows.push({
-        dir: dir, x: lerp3(prev.players.p1.x, me.x, acc / STEP_MS), ok: usable(s, me, foe)
+        dir: dir, x: lerp3(prev.players.p1.x, me.x, acc / STEP_MS),
+        ok: prev.usable && usable(s, me, foe)
       });
     }
     return slideStats(rows);
@@ -1160,6 +1163,33 @@ group('可見高度走完整協定（手機直向的人要看得更深）');
   const room = [...w.hub.rooms.values()][0];
   ok(room.members.get(a.person.id).viewH === Rules.C.VIEW_H_MAX,
     '超大的值被收到上限 ' + Rules.C.VIEW_H_MAX + ' 格（不能靠改前端把死亡線推到天邊）');
+}
+
+group('頭頂站立的快照與延遲同步');
+for (const lag of [0, 80, 200]) {
+  const { w, a, b } = startedMatch({ lag });
+  const room = [...w.hub.rooms.values()][0];
+  const m = room.match;
+  m.phase = 'playing';
+  m.countdown = 0;
+  m.steps = [{ id: 'head-floor', depth: 4, x0: 0, x1: Rules.C.FIELD_W, kind: 'normal' }];
+  m.gen.depth = 1e9;
+  Object.assign(m.players[0], { x: 6, y: 1.9, vy: Rules.C.MAX_FALL, onStep: null });
+  Object.assign(m.players[1], { x: 6, y: 4, vy: 0, onStep: 'head-floor' });
+  w.loop.forgetRoomFull(room.id);
+  w.advance(1000);
+  const [top, bottom] = m.players;
+  ok(top.onPlayer === bottom.id, lag + 'ms：伺服器能穩定站在頭上');
+  const snap = w.hub.snapshot(room, { viewerId: a.person.id, full: true });
+  ok(snap.players[0].onPlayer === bottom.id, lag + 'ms：快照包含頭頂支撐');
+  for (const c of [a, b]) {
+    const ct = c.match.players[0], cb = c.match.players[1];
+    ok(ct.onPlayer === cb.id && Math.abs(ct.y - (cb.y - Rules.C.PLAYER_H)) < 1e-6,
+      lag + 'ms：' + c.person.id + ' 客戶端重演保持腳底貼住頭頂');
+    const foe = c.match.players.find(p => p.id !== c.person.id);
+    ok(Math.abs(foe.viewY - foe.y) < 1e-6,
+      lag + 'ms：' + c.person.id + ' 接觸時畫面使用同一時間位置');
+  }
 }
 
 /* ---------------------------------------------------------- */

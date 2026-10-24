@@ -129,4 +129,19 @@ assert.equal(actorSvg.children.length, 1, '存活玩家會被畫出來');
 render.draw(stateWith(false), scene, charOf, 0, 0);
 assert.equal(actorSvg.children.length, 0, '死亡玩家會在下一幀立即從畫面移除');
 
+const stacked = stateWith(true);
+stacked.players.push(Object.assign({}, stacked.players[0], {
+  id: 'B', name: '乙', y: stacked.players[0].y - Rules.C.PLAYER_H, onPlayer: 'A'
+}));
+render.draw(stacked, scene, charOf, 0, 0);
+const lowerName = actorSvg.children[0].children[1];
+const upperName = actorSvg.children[1].children[1];
+assert.ok(Number(lowerName.attributes.get('y')) > render.view.scale * Rules.C.PLAYER_H,
+  '托著別人時暱稱移到腳下，不遮住上面玩家');
+assert.equal(upperName.attributes.get('y'), '-6', '上面玩家的暱稱仍在頭頂');
+stacked.players[1].onPlayer = null;
+render.draw(stacked, scene, charOf, 0, 0);
+assert.equal(lowerName.attributes.get('y'), '-6', '解除支撐後暱稱回到頭頂');
+
 console.log('✓ 角色死亡後立即從畫面移除');
+console.log('✓ 疊人暱稱避開上面玩家並在分開後復原');

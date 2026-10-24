@@ -313,6 +313,7 @@
         p.fell = sp.fell; p.forfeit = sp.forfeit;
         p.invuln = sp.invuln; p.sinking = sp.sinking;
         p.onStep = sp.onStep;
+        p.onPlayer = sp.onPlayer || null;
         if (sp.ceilHits != null) p.ceilHits = sp.ceilHits;
         if (sp.ceilCool != null) p.ceilCool = sp.ceilCool;
       }
@@ -585,6 +586,8 @@
      * （靠近的過程中圖自己追上來），不會有接觸瞬間彈一下的問題。
      */
     function contactWeight(me, foe) {
+      /* 疊人時共用當下的預測位置，避免延遲內插讓腳底陷入頭頂。 */
+      if (me.onPlayer === foe.id || foe.onPlayer === me.id) return 1;
       const W = Rules.C.PLAYER_W, H = Rules.C.PLAYER_H;
       /* 垂直的判斷要跟規則核心一致：resolvePush 只要「高度有交疊」就會把兩個人
        * 分開，也就是 dy < PLAYER_H 都算擠在一起。之前這裡從 0.6H 就開始淡出，

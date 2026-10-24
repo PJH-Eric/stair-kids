@@ -1018,7 +1018,9 @@
         poseKid(a.inner, pose, time, { face: a.mirror, turn: a.turn });
         a.g.setAttribute('opacity', (p.invuln > 0 && Math.floor(time * 14) % 2) ? '0.45' : '1');
         a.label.setAttribute('x', (view.scale * pw / 2).toFixed(1));
-        a.label.setAttribute('y', '-6');
+        /* 托著另一位玩家時，暱稱放在腳下，避免遮住頭頂玩家的腳。 */
+        const supporting = state.players.some(other => other.alive && other.onPlayer === p.id);
+        a.label.setAttribute('y', supporting ? (view.scale * ph + 18).toFixed(1) : '-6');
         a.label.setAttribute('font-size', Math.max(10, Math.min(16, view.scale * 0.42)).toFixed(1));
         a.label.style.display = state.players.length > 1 ? '' : 'none';
       }

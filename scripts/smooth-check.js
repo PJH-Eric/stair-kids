@@ -272,6 +272,15 @@ group('按著方向鍵走：畫面上要順順地走，不會被往回拉');
   const w = boot({ lag: 80, seed: 41, frameMs: 1000 / 60 });
   const foe = startMatch(w, opt);
   ok(!!foe, '開得起來');
+  /* 這裡驗側面推擠與放手停止，使用平坦普通階，隔離踩頭、輸送帶及
+   * 天花板造成的合法位移。踩頭同步由 netcode-check 另行驗證。 */
+  const room = w.theRoom();
+  room.match.steps = [{ id: 'push-floor', depth: 0, x0: 0, x1: C.FIELD_W, kind: 'normal' }];
+  room.match.gen.depth = 1e9;
+  room.match.diff = Object.assign({}, room.match.diff, { scrollBase: 0 });
+  w.win.Rules.DIFFICULTY.normal.scrollBase = 0;
+  for (const p of room.match.players) p.onStep = 'push-floor';
+  w.loop.sendSnapshot(room, w.myPerson().id, true);
   const mine = myName(w);
   w.advance(4000, opt);                                  /* 過倒數 */
 
@@ -400,6 +409,34 @@ group('按著方向鍵走：畫面上要順順地走，不會被往回拉');
 }
 
 /* ---------------------------------------------------------- */
+group('一起下落時畫面上的腳底保持貼住頭頂');
+{
+  const opt = { frameMs: 1000 / 60 };
+  const w = boot({ lag: 80, seed: 42, frameMs: 1000 / 60 });
+  startMatch(w, opt);
+  w.advance(4000, opt);
+  const room = w.theRoom();
+  const m = room.match;
+  m.steps = [];
+  m.gen.depth = 1e9;
+  m.cameraTop = -4;
+  Object.assign(m.players[0], { x: 7, y: 2, vy: 5, onStep: null, onPlayer: m.players[1].id });
+  Object.assign(m.players[1], { x: 7, y: 4, vy: 5, onStep: null, onPlayer: null });
+  w.loop.sendSnapshot(room, w.myPerson().id, true);
+  w.advance(200, opt);
+  const frames = sample(w, 350, opt);
+  let worstGap = 0, count = 0;
+  for (const actors of frames) {
+    if (actors.length !== 2) continue;
+    const [top, bottom] = actors;
+    const gap = (bottom.y - top.y) / top.scale;
+    worstGap = Math.max(worstGap, Math.abs(gap - C.PLAYER_H));
+    count++;
+  }
+  ok(count > 15, '下落疊人畫面取樣夠多', count + ' 幀');
+  ok(worstGap < 0.02, '兩套內插時間軸不會造成穿頭或懸空', worstGap.toFixed(4) + ' 格');
+}
+
 group('結算畫面只會出現一次（不會閃）');
 {
   const opt = { frameMs: 1000 / 60 };
