@@ -473,7 +473,7 @@
         '<div class="seat-body"><b>' + esc(m.name) + (m.id === myId() ? T('room.you') : '') + '</b>' +
           '<div class="seat-tags">' + (tags.join('') || '<span class="pill wait">' + T('room.pill.wait') + '</span>') + '</div>' +
         '</div>' +
-        (iAmHost && m.id !== myId()
+        (iAmHost && m.id !== myId() && room.phase !== 'playing'
           ? '<button class="mini-btn danger" type="button" data-kick="' + esc(m.id) + '">' + T('room.kick') + '</button>'
           : '') +
       '</li>';

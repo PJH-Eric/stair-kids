@@ -32,6 +32,7 @@ npm run verify         # 下面全部跑一次（零依賴、不需要瀏覽器�
 npm test               # tests/verify.js           規則核心單元測試
 npm run test:stairs    # scripts/stairs-check.js   一萬層樓梯：可達性、無死路、空隙看得出來
 npm run test:match     # scripts/match-check.js    單機與對戰一局跑完、難度差異
+npm run test:versus    # scripts/versus-audit-check.js  棄權判輸、對局角色與權限、頭頂 AI
 npm run test:ai        # scripts/ai-check.js       四段 AI 的行為差異（各 200 局）
 npm run test:online    # scripts/online-check.js   房間、席位、觀戰、搶位、邀請、斷線判輸
 npm run test:online-ui # scripts/online-ui-check.js  結算快照重複抵達不會重開對局

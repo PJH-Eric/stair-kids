@@ -730,10 +730,12 @@
     return summarize(s, 'dead', judge(ps));
   }
 
-  /** 比較兩人：深度較深者勝，同深度比存活時間，都同判平手 */
+  /** 斷線／離開者先判輸；正常完賽再比深度與存活時間。 */
   function judge(ps) {
     const a = ps[0], b = ps[1];
     if (!b) return { winner: a.id, draw: false };
+    if (a.forfeit && b.forfeit) return { winner: null, draw: true };
+    if (a.forfeit || b.forfeit) return { winner: a.forfeit ? b.id : a.id, draw: false };
     if (Math.abs(a.best - b.best) > 1e-6) return { winner: a.best > b.best ? a.id : b.id, draw: false };
     if (Math.abs(a.aliveTime - b.aliveTime) > 1e-6) return { winner: a.aliveTime > b.aliveTime ? a.id : b.id, draw: false };
     return { winner: null, draw: true };

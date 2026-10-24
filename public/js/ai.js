@@ -130,8 +130,12 @@
 
   /** 真正的決策：挑一個落點，方向就是往它走 */
   function decide(s, me, cfg, rng) {
-    const cur = me.onStep ? Rules.stepById(s, me.onStep) : null;
+    let cur = me.onStep ? Rules.stepById(s, me.onStep) : null;
     const foe = s.players.find(p => p.id !== me.id && p.alive) || null;
+    /* 頭頂也是支撐面：要先走離對方身體，才能落到下方階梯。 */
+    const onHead = !cur && foe && me.onPlayer === foe.id;
+    if (onHead) cur = { x0: foe.x - HALF, x1: foe.x + HALF, depth: me.y };
+    const exitMargin = onHead ? HALF + 0.08 : OUT;
 
     /* 只看下方 lookahead 層，看不到更下面的東西（不作弊） */
     const layers = [];
@@ -158,7 +162,7 @@
         if (cur) {
           /* 站在階梯上：一定要走出這一階的邊緣才掉得下去 */
           const opts = [];
-          const L = cur.x0 - OUT, R = cur.x1 + OUT;
+          const L = cur.x0 - exitMargin, R = cur.x1 + exitMargin;
           if (L >= dst[0] - 1e-9 && L <= dst[1] + 1e-9) opts.push(L);
           if (R >= dst[0] - 1e-9 && R <= dst[1] + 1e-9) opts.push(R);
           if (!opts.length) continue;
