@@ -235,6 +235,7 @@
   }
 
   function show(name) {
+    if (window.ServerOutage) window.ServerOutage.setScreen(name);
     G.screen = name;
     if (window.NetworkLatency) window.NetworkLatency.setActive(name === 'game' && G.mode === 'online');
     $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
