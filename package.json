@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/analytics.js && node tests/localization.js && node tests/verify.js && node tests/i18n-hans.js",
+    "test": "node tests/server-outage.cjs && node tests/analytics.js && node tests/localization.js && node tests/verify.js && node tests/i18n-hans.js",
     "test:stairs": "node scripts/stairs-check.js",
     "test:match": "node scripts/match-check.js",
     "test:ai": "node scripts/ai-check.js",

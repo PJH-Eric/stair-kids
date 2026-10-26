@@ -129,6 +129,7 @@
 
     function setStatus(next, key) {
       S.status = next;
+      if (next === 'online' && root.ServerOutage) root.ServerOutage.state('online');
       S.statusKey = key || '';
       if (els.lobbyStatus) {
         els.lobbyStatus.textContent = T(key || ('lobby.status.' + next));
@@ -147,6 +148,7 @@
         setStatus('error', 'lobby.noServer');
         return;
       }
+      if (root.ServerOutage) root.ServerOutage.state('begin');
       S.afterConnect = then || null;
       setStatus('connecting');
 
@@ -234,6 +236,7 @@
     }
 
     function disconnect() {
+      if (root.ServerOutage) root.ServerOutage.state('idle');
       clearTimeout(S.retryTimer);
       clearTimeout(S.wakeTimer);
       clearWrap();
