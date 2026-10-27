@@ -11,6 +11,6 @@ services:
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
-        value: "20"
+        value: "26.12.1"
       - key: ALLOW_ORIGIN
         sync: false           # 正式環境請填前端網址，例如 https://<帳號>.github.io

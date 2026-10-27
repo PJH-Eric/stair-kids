@@ -18,8 +18,8 @@ if not defined NODE_EXE if exist "%ProgramFiles%\nodejs\node.exe" set "NODE_EXE=
 if not defined NODE_EXE if exist "%ProgramFiles(x86)%\nodejs\node.exe" set "NODE_EXE=%ProgramFiles(x86)%\nodejs\node.exe"
 if not defined NODE_EXE if exist "%LOCALAPPDATA%\Programs\nodejs\node.exe" set "NODE_EXE=%LOCALAPPDATA%\Programs\nodejs\node.exe"
 
-rem nvm-windows：從新版找到舊版，這個遊戲要 Node 18 以上
-for %%M in (24 23 22 21 20 19 18) do (
+rem nvm-windows：從新版找到舊版，這個遊戲需要 Node 26.12.1 或更新的 26.x 修補版本
+for %%M in (26) do (
   if not defined NODE_EXE (
     for /f "delims=" %%D in ('dir /b /a:d "%APPDATA%\nvm\v%%M.*" 2^>nul') do (
       if not defined NODE_EXE if exist "%APPDATA%\nvm\%%D\node.exe" set "NODE_EXE=%APPDATA%\nvm\%%D\node.exe"
@@ -37,10 +37,20 @@ if not defined NODE_EXE (
   exit /b 1
 )
 
+"%NODE_EXE%" -e "const [major, minor, patch] = process.versions.node.split('.').map(Number); if (major !== 26 || minor < 12 || (minor === 12 && patch < 1)) process.exit(1)"
+if errorlevel 1 (
+  echo 需要 Node.js 26.12.1 或更新的 26.x 修補版本。
+  for /f %%V in ('"%NODE_EXE%" --version') do echo 目前版本：%%V
+  echo 請安裝 Node.js 26.12.1：https://nodejs.org/
+  echo.
+  pause
+  exit /b 1
+)
+
 if not defined NODE_FROM_PATH (
   echo 注意：PATH 裡找不到 node，這次改用
   echo   %NODE_EXE%
-  echo 想一勞永逸的話，用系統管理員身分開命令提示字元執行：nvm use 22.11.0
+  echo 想一勞永逸的話，用系統管理員身分開命令提示字元執行：nvm use 26.12.1
   echo.
 )
 
