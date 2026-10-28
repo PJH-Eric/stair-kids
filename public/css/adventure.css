@@ -1,0 +1,114 @@
+/* 視覺方向：暖色探險手帳，清楚的資訊卡與樓梯形狀點綴。 */
+body {
+  background: radial-gradient(circle at 12% 14%, #fff8d9 0, transparent 30%),
+    radial-gradient(circle at 88% 20%, #dff3e7 0, transparent 28%),
+    linear-gradient(160deg, #fff8ed, #f9e5ce);
+}
+
+#screen-home { text-align: center; }
+#screen-home .home-art { width: min(390px, 82vw); }
+#screen-home .title { color: #a85129; letter-spacing: .035em; }
+#screen-home .subtitle { color: #705543; font-weight: 700; }
+#screen-home .home-buttons { width: min(390px, 100%); }
+#screen-home .home-buttons .big-btn { width: 100%; min-height: 54px; }
+#screen-home .home-buttons .big-btn:nth-child(2) {
+  background: linear-gradient(180deg, #e1f4e9, #b8dfcb);
+  color: #285f49;
+}
+#screen-home .home-keys, #screen-home .home-records {
+  background: rgba(255, 255, 255, .7);
+  border: 1px solid #ead8c1;
+  border-radius: 16px;
+  padding: 8px 14px;
+}
+
+#screen-lobby .panel, #screen-room .panel, #screen-help .panel {
+  background: linear-gradient(150deg, #fffefa, #fff5e9);
+  border-color: #e9d2b6;
+  box-shadow: 0 8px 0 rgba(145, 95, 54, .1), 0 20px 45px rgba(99, 65, 40, .14);
+}
+#screen-lobby h2, #screen-room h2, #screen-help h2 {
+  color: #a85129;
+  font-size: clamp(23px, 4vw, 30px);
+}
+.lobby-bar {
+  padding: 10px;
+  border-radius: 14px;
+  background: #f5eee2;
+}
+.lobby-actions { margin-top: 16px; }
+.room-item, .seat {
+  border-color: #ead9c5;
+  box-shadow: 0 4px 0 rgba(151, 103, 62, .08);
+}
+.room-item { padding: 12px 14px; }
+.seat { min-width: 0; padding: 12px; }
+.seat.is-ready { border-color: #8cc79a; background: #effaf2; }
+.seat.is-empty { background: #faf5eb; }
+.room-identity, .chat-list { background: #fffdfa; }
+#screen-room .chat { margin-top: 14px; }
+
+.side {
+  background: linear-gradient(180deg, #fffaf1, #f9e9d5);
+  border-color: #e7ceb0;
+}
+.side-who { border-color: #e7ceb0; }
+.side-depth strong { font-variant-numeric: tabular-nums; }
+.side-block, .side-foe, .side-live {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .65);
+  padding: 8px 10px;
+}
+.world-bar { background: #eadbc8; }
+.world-bar i { background: linear-gradient(90deg, #f6c36d, #e88949); }
+.pad { border-color: rgba(133, 80, 40, .32); }
+.stage-overlay { background: rgba(65, 43, 31, .52); }
+.ov-card {
+  background: linear-gradient(155deg, #fffefa, #fff0db);
+  border-color: #f2d6b2;
+  box-shadow: 0 10px 0 rgba(80, 46, 27, .15), 0 22px 50px rgba(55, 33, 23, .25);
+}
+.ov-card h2 { color: #a85129; }
+.result-stats { background: #fffdf8; border-color: #efddc6; }
+.result-stats li { padding: 4px 0; border-bottom: 1px solid #f2e8da; }
+.result-line b { color: #bd5e30; font-variant-numeric: tabular-nums; }
+
+.help-block {
+  padding: 14px 16px;
+  border: 1px solid #eedcc6;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .72);
+}
+.help-block h3 { color: #a85129; }
+.help-steps li + li { border-top: 1px solid #f2e8da; padding-top: 10px; }
+.help-ceiling figure { background: #fff8ed; border-radius: 12px; padding: 10px; }
+
+@media (max-width: 760px) {
+  .side-block, .side-foe, .side-live { padding: 3px 6px; }
+  #screen-home .home-art { width: min(310px, 72vw); }
+  #screen-home .home-buttons { gap: 9px; }
+  #screen-lobby .panel, #screen-room .panel, #screen-help .panel { padding: 18px; }
+  .help-block { padding: 12px; }
+}
+@media (max-width: 360px) {
+  .seat-list { grid-template-columns: minmax(0, 1fr); }
+  .room-diff { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-bar i { transition: none; }
+}
+
+/* 橫向矮螢幕：縮短結算資訊的縱向空間，避免按鈕聚焦時捲走標題。 */
+@media (max-height: 460px) and (orientation: landscape) {
+  .result-hero { flex-direction: row; justify-content: center; flex-wrap: wrap; }
+  .result-hero .kid-full { height: 48px; }
+  .result-stats { padding: 6px 10px; }
+  .result-stats li { padding: 1px 0; }
+  .result-new { font-size: 14px; margin: 0; }
+  .ov-btns { margin-top: 6px; }
+}
+@media (max-height: 460px) and (orientation: landscape) {
+  .ov-card { padding: 8px 12px; }
+  .ov-btns { gap: 4px; }
+  .ov-btns .big-btn { padding: 6px 10px; }
+}
