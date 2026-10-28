@@ -71,6 +71,7 @@ function json(res, code, data) {
 const people = new Map();
 
 const io = {
+  onlineCount() { return people.size; },
   send(personId, msg) {
     const it = people.get(personId);
     if (it && it.socket.alive) it.socket.sendJSON(msg);

@@ -1108,8 +1108,10 @@ button.soon-item:active { transform: translateY(2px); }
   align-items: center;
   gap: 8px;
   margin: 10px 0 4px;
+  flex-wrap: wrap;
 }
 .lobby-bar .grow { flex: 1 1 auto; }
+.online-count { max-width: 100%; padding: 4px 10px; border: 2px solid var(--mint-d); border-radius: 999px; background: #EDFBF5; color: #1F7A5C; font-size: .8rem; font-weight: 900; overflow-wrap: anywhere; }
 
 /* 連線狀態：顏色就是狀態，不用讀字也知道 */
 .net-state {

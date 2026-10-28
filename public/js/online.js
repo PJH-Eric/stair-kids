@@ -54,6 +54,7 @@
 
     const els = {
       lobbyStatus: $('#lobby-status'),
+      lobbyOnlineCount: $('#lobby-online-count'),
       lobbyList: $('#lobby-list'),
       lobbyEmpty: $('#lobby-empty'),
       lobbyMe: $('#lobby-me'),
@@ -103,6 +104,7 @@
 
     const S = {
       status: 'offline',          /* offline | connecting | online | error */
+      onlineCount: null,
       socket: null,
       client: null,
       retries: 0,
@@ -129,6 +131,8 @@
 
     function setStatus(next, key) {
       S.status = next;
+      if (next !== 'online') S.onlineCount = null;
+      paintOnlineCount();
       if (next === 'online' && root.ServerOutage) root.ServerOutage.state('online');
       S.statusKey = key || '';
       if (els.lobbyStatus) {
@@ -138,6 +142,13 @@
       if (els.btnReconnect) els.btnReconnect.hidden = next === 'online' || next === 'connecting';
       const busy = next !== 'online';
       for (const b of [els.btnQuick, els.btnCreate, els.btnRefresh]) if (b) b.disabled = busy;
+    }
+
+    function paintOnlineCount() {
+      if (!els.lobbyOnlineCount) return;
+      const count = S.onlineCount;
+      els.lobbyOnlineCount.hidden = !Number.isInteger(count) || S.status !== 'online';
+      els.lobbyOnlineCount.textContent = Number.isInteger(count) ? T('lobby.onlineCount', { n: count }) : '';
     }
 
     function connect(then) {
@@ -262,7 +273,12 @@
         renderLobby();
         return;
       }
-      if (msg.type === 'rooms') { renderLobby(); return; }
+      if (msg.type === 'rooms') {
+        S.onlineCount = Number.isInteger(msg.online) && msg.online >= 0 ? msg.online : null;
+        paintOnlineCount();
+        renderLobby();
+        return;
+      }
       if (msg.type === 'error') {
         S.inviteSubmitting = false;
         notice(SRV(msg.text), 'bad');
