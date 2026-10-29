@@ -458,23 +458,34 @@
       els.lobbyList.innerHTML = rooms.map(r => {
         const full = r.players >= r.seats;
         const playing = r.phase !== 'lobby';
+        /* 四種一眼分得出來：等待中（可加入）／遊戲中（只能看）／滿席（只能看）／可觀戰（後兩者都有） */
+        const state = playing ? 'playing' : full ? 'full' : 'waiting';
+        const watchable = state !== 'waiting';
         const label = playing ? T('lobby.tag.playing') : full ? T('lobby.tag.full') : T('lobby.tag.waiting');
-        const act = playing || full ? T('lobby.act.watch') : T('lobby.act.join');
+        const act = watchable ? T('lobby.act.watch') : T('lobby.act.join');
+        const role = watchable ? 'spectator' : 'player';
+        const dots = [];
+        for (let i = 0; i < r.seats; i++) dots.push('<i class="seat-dot p' + (i + 1) + (i < r.players ? ' on' : '') + '"></i>');
         /* 整張卡都可以點（手指按整張卡比按右邊那顆小按鈕容易得多）。
          * 裡面那顆按鈕留著當視覺提示，也留給鍵盤操作 —— 點按鈕時
          * closest('[data-join]') 會先命中按鈕，行為一樣。 */
-        return '<li class="room-item" data-join="' + esc(r.id) + '" ' +
-          'data-role="' + (playing || full ? 'spectator' : 'player') + '">' +
+        return '<li class="room-item state-' + state + '" data-join="' + esc(r.id) + '" data-role="' + role + '">' +
+          '<span class="room-state-ico">' + SvgUI.roomStateIcon(state) + '</span>' +
           '<div class="room-item-main">' +
             '<b>' + esc(SRV(r.name)) + '</b>' +
             '<span class="room-meta">' + esc(T('lobby.meta', {
               diff: root.ServerText ? root.ServerText.diffLabel(r.difficultyName) : r.difficultyName,
               players: r.players, seats: r.seats, spectators: r.spectators
             })) + '</span>' +
+            '<span class="room-seats" aria-hidden="true">' + dots.join('') +
+              '<span class="room-eye">' + SvgUI.eyeIcon(14) + r.spectators + '</span></span>' +
           '</div>' +
-          '<span class="room-tag' + (playing ? ' hot' : full ? ' full' : '') + '">' + label + '</span>' +
-          '<button class="mini-btn go" type="button" data-join="' + esc(r.id) + '" ' +
-            'data-role="' + (playing || full ? 'spectator' : 'player') + '">' + act + '</button>' +
+          '<div class="room-side">' +
+            '<span class="room-tag ' + state + '">' + (playing ? '<i class="live-dot"></i>' : '') + label + '</span>' +
+            (watchable ? '<span class="room-watchable">' + SvgUI.eyeIcon(12) + T('lobby.canWatch') + '</span>' : '') +
+            '<button class="mini-btn go ' + (watchable ? 'watch' : 'join') + '" type="button" data-join="' + esc(r.id) + '" ' +
+              'data-role="' + role + '">' + act + '</button>' +
+          '</div>' +
         '</li>';
       }).join('');
       if (els.lobbyEmpty) els.lobbyEmpty.hidden = rooms.length > 0;

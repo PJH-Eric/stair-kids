@@ -308,3 +308,72 @@ body {
   .result-stats ul { grid-template-columns: 1fr; }
   .result-stats li { white-space: nowrap; }
 }
+
+/* ---------- 線上大廳房間卡片：等待中／遊戲中／滿席／可觀戰 ---------- */
+.room-item {
+  position: relative;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border-width: 2px;
+  overflow: hidden;
+}
+.room-item::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: #8cc79a; }
+.room-item.state-playing::before { background: #e0405f; }
+.room-item.state-full::before { background: #e8a93a; }
+.room-item.state-waiting { border-color: #bfe3c8; background: linear-gradient(90deg, #f3fbf5, #fff 60%); }
+.room-item.state-playing { border-color: #f1c2cb; background: linear-gradient(90deg, #fff3f5, #fff 60%); }
+.room-item.state-full { border-color: #f1d9a8; background: linear-gradient(90deg, #fff8e8, #fff 60%); }
+.room-state-ico {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .85);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .06);
+}
+.room-item-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-seats { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
+.seat-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2.5px solid;
+  background: transparent;
+  box-sizing: border-box;
+}
+.seat-dot.p1 { border-color: #4f86d6; }
+.seat-dot.p2 { border-color: #f2545b; }
+.seat-dot.p1.on { background: #4f86d6; }
+.seat-dot.p2.on { background: #f2545b; }
+.room-eye { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 12px; font-weight: 700; color: #5b7d8f; }
+.room-side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.room-tag { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.room-tag.waiting { background: #dff3e0; color: #2f7a44; }
+.room-tag.full { background: #fff0cc; color: #8a6416; }
+.room-tag.playing { background: #fbe1e4; color: #a3364a; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #e0405f; animation: live-pulse 1.2s ease-in-out infinite; }
+@keyframes live-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+.room-watchable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #2f6f8f;
+  background: #e0f1fa;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.mini-btn.go.join { background: linear-gradient(180deg, #ffb45e, #f0892f); color: #fff; border-color: #d97a22; }
+.mini-btn.go.watch { background: linear-gradient(180deg, #eaf6fb, #cfe8f4); color: #2f6f8f; border-color: #a9d2e6; }
+@media (max-width: 440px) {
+  .room-item { flex-wrap: wrap; row-gap: 6px; }
+  .room-item-main { flex: 1 1 calc(100% - 70px); }
+  .room-side { flex: 1 1 100%; flex-direction: row; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+  .room-side .mini-btn { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+.room-side .mini-btn.go { min-width: 84px; padding: 6px 18px; font-weight: 800; border: 2px solid; white-space: nowrap; }

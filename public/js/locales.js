@@ -117,6 +117,7 @@
     'lobby.tag.full': '席位已滿',
     'lobby.tag.waiting': '等人',
     'lobby.act.watch': '觀戰',
+    'lobby.canWatch': '可觀戰',
     'lobby.act.join': '加入',
     'lobby.meta': function (p) {
       return p.diff + '　' + p.players + '/' + p.seats + ' 人' + (p.spectators ? '　觀戰 ' + p.spectators : '');
@@ -484,6 +485,7 @@
     'lobby.tag.full': 'Full',
     'lobby.tag.waiting': 'Waiting',
     'lobby.act.watch': 'Watch',
+    'lobby.canWatch': 'Spectate OK',
     'lobby.act.join': 'Join',
     'lobby.meta': function (p) {
       return p.diff + ' · ' + p.players + '/' + p.seats + ' players' + (p.spectators ? ' · ' + p.spectators + ' watching' : '');
@@ -928,6 +930,7 @@
     "lobby.empty.title": "现在没有人开房",
     "lobby.empty.body": "按上面的「开一间新房」自己开一间等人，或用邀请连结叫朋友进来。",
     "lobby.tag.playing": "对局中",
+    "lobby.canWatch": "可观战",
     "lobby.tag.full": "席位已满",
     "lobby.tag.waiting": "等人",
     "lobby.act.watch": "观战",

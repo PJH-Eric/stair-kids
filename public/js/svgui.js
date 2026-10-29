@@ -276,8 +276,32 @@
       '<circle cx="16" cy="14" r="2.2" fill="#E0405F"/><circle cx="8" cy="15" r="1.5" fill="#4F86D6"/><circle cx="24" cy="15" r="1.5" fill="#4F86D6"/></svg>';
   }
 
+  /** 大廳房間卡片左側的狀態圖示：waiting 空位等人、playing 往下跑、full 兩席都坐滿 */
+  function roomStateIcon(kind) {
+    const head = '<svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true">';
+    if (kind === 'playing') {
+      return head + '<path d="M5 12h14v6H5zM15 20h14v6H15zM25 28h12v6H25z" fill="#E0405F"/>' +
+        '<path d="M5 12h14v2H5zM15 20h14v2H15zM25 28h12v2H25z" fill="#fff" opacity=".45"/>' +
+        '<path d="M9 22l5 4-5 4z" fill="#A3364A"/></svg>';
+    }
+    if (kind === 'full') {
+      return head + '<circle cx="13" cy="15" r="6" fill="#4F86D6"/><path d="M3 34c0-7 4-10 10-10s10 3 10 10z" fill="#4F86D6"/>' +
+        '<circle cx="28" cy="15" r="6" fill="#F2545B"/><path d="M18 34c0-7 4-10 10-10s10 3 10 10z" fill="#F2545B"/></svg>';
+    }
+    return head + '<circle cx="14" cy="15" r="6" fill="#4F86D6"/><path d="M4 34c0-7 4-10 10-10s10 3 10 10z" fill="#4F86D6"/>' +
+      '<circle cx="30" cy="17" r="7" fill="none" stroke="#2F7A44" stroke-width="2.4" stroke-dasharray="3.5 3"/>' +
+      '<path d="M30 13.5v7M26.5 17h7" stroke="#2F7A44" stroke-width="2.4" stroke-linecap="round"/></svg>';
+  }
+
+  function eyeIcon(size) {
+    size = size || 14;
+    return '<svg class="eye" viewBox="0 0 24 24" width="' + size + '" height="' + size + '" aria-hidden="true">' +
+      '<path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>' +
+      '<circle cx="12" cy="12" r="3.4" fill="currentColor"/></svg>';
+  }
+
   root.SvgUI = {
-    medalIcon, crownIcon,
+    roomStateIcon, eyeIcon, medalIcon, crownIcon,
     hearts, heartSvg, arrowIcon, gearIcon, closeIcon, flagIcon, settingIcon,
     stepIcon, ceilingIcon, modal, homeArt
   };
