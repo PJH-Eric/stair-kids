@@ -34,7 +34,7 @@
     liveSpikes: $('#live-spikes'), liveSprings: $('#live-springs'),
     liveFakes: $('#live-fakes'), liveCeil: $('#live-ceil'),
     hudNet: $('#hud-net'), hudBest: $('#hud-best'),
-    hurtFlash: $('#overlay-hurt'),
+    hurtFlash: $('#overlay-hurt'), lowHp: $('#low-hp-glow'),
     dmgPop: $('#dmg-pop'),
     countdown: $('#overlay-countdown'), countdownNum: $('#countdown-num'),
     countdownTip: $('#countdown-tip'),
@@ -576,6 +576,7 @@
     els.milestone.hidden = true;
     if (els.ovResult) els.ovResult.hidden = true;
     if (els.hurtFlash) els.hurtFlash.classList.remove('blink');
+    if (els.lowHp) els.lowHp.classList.remove('on');
     if (els.spectateTag) els.spectateTag.hidden = true;
     if (els.sideChat) els.sideChat.hidden = true;
     G.menu = false;
@@ -801,7 +802,13 @@
             sound.play('spike');
           }
           if (hpTarget === 'foe') pulseFoeHp();
-          if (!isMine(e)) break;
+          if (hpTarget === 'me') hitHearts(els.hudHp);
+          if (!isMine(e)) {
+            /* 對手受傷：在他頭上飄出「−N」，不用盯著側欄也看得到是誰扣血 */
+            const fp = s.players.find(x => x.id === e.player);
+            if (fp) view.pop('−' + amount, '#D6314F', shownX(fp), shownY(fp) - 1.6, s.cameraTop);
+            break;
+          }
           view.kick(6 + amount * 2.5);
           flashHurt(amount >= 2);
           buzz(20 + amount * 18);
@@ -826,6 +833,12 @@
         }
         case 'heal': {
           syncHpHud(e.player, e.hp);
+          /* 回血在那位玩家的腳邊冒出愛心與「+1」；對手的也畫（位置上看得出是誰），只是不出聲 */
+          const hp = s.players.find(x => x.id === e.player);
+          if (hp) {
+            view.burst('heal', shownX(hp), shownY(hp), s.cameraTop);
+            view.pop('+1', '#E0405F', shownX(hp), shownY(hp) - 1.2, s.cameraTop);
+          }
           if (!mine) break;                  /* 對手回血只更新他的 HUD，我的愛心不要跟著跳 */
           sound.play('heal');
           /* 愛心排跳一下（updateHud 會重畫 innerHTML，所以要在下一格才加 class） */
@@ -907,6 +920,25 @@
     foeHpTimer = setTimeout(() => el.classList.remove('foe-hit'), 450);
   }
 
+  /** 自己的愛心排被打到：抖一下並泛紅光（對手那排用 pulseFoeHp） */
+  let heartHitTimer = 0;
+  function hitHearts(el) {
+    if (!el) return;
+    el.classList.remove('hit');
+    void el.offsetWidth;
+    el.classList.add('hit');
+    clearTimeout(heartHitTimer);
+    heartHitTimer = setTimeout(() => el.classList.remove('hit'), 480);
+  }
+
+  /** 血量只剩三成以下：畫面邊緣持續緩緩脈動紅光，提醒該找回血的階梯了 */
+  function updateLowHp(p) {
+    if (!els.lowHp) return;
+    /* 幼幼班不嚇小朋友：沒有紅色脈動 */
+    const low = !!p && p.alive && p.hpMax > 0 && p.hp / p.hpMax <= 0.3 && !(G.match && G.match.diff.cloudCeiling);
+    els.lowHp.classList.toggle('on', low);
+  }
+
   /** 受傷時畫面閃一圈紅光。減少動態時不關掉、只調弱（這是透明度不是位移） */
   let hurtTimer = 0;
   function flashHurt(strong) {
@@ -955,6 +987,7 @@
       els.hudHp.setAttribute('aria-label', T('hud.hpAria', { a: p.hp, b: p.hpMax }));
       hudCache.hp = p.hp;
       hudCache.compact = compact;
+      updateLowHp(p);
       if (G.healPulse) {
         const row = els.hudHp.querySelector('.hearts');
         if (row) { row.classList.remove('gain'); void row.offsetWidth; row.classList.add('gain'); }
@@ -1167,6 +1200,7 @@
     view.clearActors();
     /* 不換路由：樓梯定格留在後面，結算蓋在上面（跟打地鼠一樣） */
     els.ovResult.hidden = false;
+    if (els.lowHp) els.lowHp.classList.remove('on');
     els.pads.classList.add('hidden');
     input.clear();
     if (G.raf) { cancelAnimationFrame(G.raf); G.raf = 0; }
