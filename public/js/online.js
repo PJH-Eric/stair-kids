@@ -493,19 +493,29 @@
 
     /* ---------- 房間 ---------- */
 
-    function seatCard(m, room, iAmHost) {
+    /* 兩位玩家各一個代表色（跟遊戲中的角色外框一致：玩家 1 藍、玩家 2 紅） */
+    const SEAT_COLOR = ['#4F86D6', '#F2545B'];
+    let readyPrev = null;               /* 上一次畫面上誰已準備；null＝剛進房、不放慶祝動畫 */
+    let readyRoomId = null;
+
+    function seatCard(m, room, iAmHost, idx, justReady) {
       const tags = [];
       if (m.host) tags.push('<span class="pill host">' + T('room.pill.host') + '</span>');
       if (!m.connected) tags.push('<span class="pill off">' + T('room.pill.off') + '</span>');
-      if (m.ready) tags.push('<span class="pill ready">' + T('room.pill.ready') + '</span>');
-      return '<li class="seat' + (m.ready ? ' is-ready' : '') + (m.connected ? '' : ' is-off') + '">' +
-        '<div class="seat-face">' + Render.kidAvatarSvg(Characters.byId(m.char), 56) + '</div>' +
+      if (m.ready) tags.push('<span class="pill ready">' + SvgUI.readyCheck(13) + T('room.pill.ready') + '</span>');
+      const color = SEAT_COLOR[idx % SEAT_COLOR.length];
+      return '<li class="seat p' + ((idx % 2) + 1) + (m.ready ? ' is-ready' : '') + (justReady ? ' just-ready' : '') +
+        (m.connected ? '' : ' is-off') + '">' +
+        '<div class="seat-face">' + Render.kidAvatarSvg(Characters.byId(m.char), 56, color) +
+          (m.ready ? '<span class="seat-ok">' + SvgUI.readyCheck(20) + '</span>' : '') + '</div>' +
         '<div class="seat-body"><b>' + esc(m.name) + (m.id === myId() ? T('room.you') : '') + '</b>' +
-          '<div class="seat-tags">' + (tags.join('') || '<span class="pill wait">' + T('room.pill.wait') + '</span>') + '</div>' +
+          '<div class="seat-tags"><span class="seat-no">P' + ((idx % 2) + 1) + '</span>' +
+            (tags.join('') || '<span class="pill wait">' + T('room.pill.wait') + '</span>') + '</div>' +
         '</div>' +
         (iAmHost && m.id !== myId() && room.phase !== 'playing'
           ? '<button class="mini-btn danger" type="button" data-kick="' + esc(m.id) + '">' + T('room.kick') + '</button>'
           : '') +
+        (justReady ? '<span class="seat-spark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>' : '') +
       '</li>';
     }
 
@@ -537,10 +547,19 @@
         els.roomNickname.value = me.name || '';
       }
 
-      const empty = '<li class="seat is-empty"><div class="seat-face"></div>' +
+      const emptyIdx = seats.length;
+      const empty = '<li class="seat is-empty p' + ((emptyIdx % 2) + 1) + '"><div class="seat-face">' +
+        SvgUI.emptySeatArt(SEAT_COLOR[emptyIdx % SEAT_COLOR.length], 56) + '</div>' +
         '<div class="seat-body"><b>' + T('room.emptySeat') + '</b>' +
-        '<div class="seat-tags"><span class="pill wait">' + T('room.pill.open') + '</span></div></div></li>';
-      els.roomSeats.innerHTML = seats.map(m => seatCard(m, room, iAmHost)).join('') +
+        '<div class="seat-tags"><span class="seat-no">P' + ((emptyIdx % 2) + 1) + '</span>' +
+        '<span class="pill wait">' + T('room.pill.open') + '</span></div></div></li>';
+      /* 剛按下準備的那一位播一次慶祝效果（進房第一次畫面不播，避免重新整理就放煙火） */
+      if (readyRoomId !== room.id) { readyRoomId = room.id; readyPrev = null; }
+      const justReady = {};
+      if (readyPrev) for (const m of seats) if (m.ready && !readyPrev[m.id]) justReady[m.id] = true;
+      readyPrev = {};
+      for (const m of seats) readyPrev[m.id] = !!m.ready;
+      els.roomSeats.innerHTML = seats.map((m, i) => seatCard(m, room, iAmHost, i, !!justReady[m.id])).join('') +
         (seats.length < room.seats ? empty : '');
 
       if (els.roomSpecsBlock) els.roomSpecsBlock.hidden = specs.length === 0;

@@ -300,8 +300,26 @@
       '<circle cx="12" cy="12" r="3.4" fill="currentColor"/></svg>';
   }
 
+  /** 空席插畫：虛線小朋友剪影＋閃爍的「＋」，用該席位的玩家色 */
+  function emptySeatArt(color, size) {
+    size = size || 56;
+    return '<svg class="seat-empty-art" viewBox="0 0 56 56" width="' + size + '" height="' + size + '" aria-hidden="true">' +
+      '<circle cx="28" cy="28" r="26" fill="' + color + '" opacity=".1"/>' +
+      '<g fill="none" stroke="' + color + '" stroke-width="2.4" stroke-dasharray="4 3.4" stroke-linecap="round">' +
+        '<circle cx="28" cy="22" r="9"/><path d="M11 50c0-11 7-16 17-16s17 5 17 16"/></g>' +
+      '<g class="seat-plus"><circle cx="44" cy="12" r="8" fill="' + color + '"/>' +
+        '<path d="M44 8v8M40 12h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></g></svg>';
+  }
+
+  /** 準備完成的勾勾徽章 */
+  function readyCheck(size) {
+    size = size || 18;
+    return '<svg class="ready-check" viewBox="0 0 20 20" width="' + size + '" height="' + size + '" aria-hidden="true">' +
+      '<circle cx="10" cy="10" r="9" fill="#38a85a"/><path d="M5.5 10.5l3 3 6-6.5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
   root.SvgUI = {
-    roomStateIcon, eyeIcon, medalIcon, crownIcon,
+    emptySeatArt, readyCheck, roomStateIcon, eyeIcon, medalIcon, crownIcon,
     hearts, heartSvg, arrowIcon, gearIcon, closeIcon, flagIcon, settingIcon,
     stepIcon, ceilingIcon, modal, homeArt
   };
