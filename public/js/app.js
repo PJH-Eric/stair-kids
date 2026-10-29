@@ -1295,17 +1295,12 @@
     /* 橫向的方向鍵要避開左邊的資訊欄（不然會蓋在「本機最深」那些字上面）。
      * 資訊欄的寬度會隨斷點變，所以量出來丟給 CSS 用，不要在 CSS 裡抄一份。 */
     document.documentElement.style.setProperty('--side-w', Math.round(sideWidth()) + 'px');
-    /* 視窗比可玩區域高很多（直向）：多出來的高度要收掉，不然半個螢幕是死的。
-     * 只在有觸控按鍵的裝置上收 —— 桌機沒有按鍵可以放，收掉只會在下面留一條空白。
-     *
-     * 收到哪裡：就收到「場地剛好放得下」（wantStageH）。
-     * 不可以收到「方向鍵上緣」：直向的場地寬度被螢幕寬度綁死（scale 由寬度決定），
-     * 多給的高度一格樓梯也長不出來，**全部都變成死亡線以下的深淵**
-     * （實測深淵從畫面的 6.5% 漲到 16%，Eric 回報「深淵比例太多」）。
-     *
-     * 那剩下的空白呢？靠 wantViewH()：開局時就照螢幕比例把「這一局看幾格」調深，
-     * wantStageH 自己就會長到方向鍵上緣，這裡不必也不該再多收一次。 */
-    if (wantsPads() && box.height > st.wantStageH + 8) {
+    /* 直向舞台填滿操作區上方；render 的 fitHeight 同步延展樓梯與角色，
+     * 保持既有死亡線與深淵比例，不讓剩餘高度變成空白。 */
+    if (wantsPads() && window.matchMedia('(orientation: portrait)').matches) {
+      const controls = els.pads.getBoundingClientRect();
+      els.stage.style.maxHeight = Math.max(240, controls.top - box.top) + 'px';
+    } else if (wantsPads() && box.height > st.wantStageH + 8) {
       els.stage.style.maxHeight = st.wantStageH + 'px';
     } else {
       els.stage.style.maxHeight = '';
@@ -1370,6 +1365,7 @@
 
   function applyRenderOptions() {
     view.setOptions({
+      fitHeight: wantsPads() && window.matchMedia('(orientation: portrait)').matches,
       reduceMotion: store.reduceMotion,
       colorAssist: store.colorAssist,
       depthGuide: store.depthGuide,

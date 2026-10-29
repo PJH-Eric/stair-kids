@@ -145,3 +145,20 @@ assert.equal(lowerName.attributes.get('y'), '-6', '解除支撐後暱稱回到�
 
 console.log('✓ 角色死亡後立即從畫面移除');
 console.log('✓ 疊人暱稱避開上面玩家並在分開後復原');
+
+const tallCanvas = {
+  getContext: () => fakeContext(),
+  getBoundingClientRect: () => ({ width: 390, height: 684 })
+};
+const tallActors = new FakeElement('svg');
+const tallRender = loadRender().create(tallCanvas, tallActors);
+tallRender.setOptions({ viewH: 24, fitHeight: true });
+assert.ok(tallRender.view.h < 684, '直向延展使用原場景座標高度');
+assert.ok((tallRender.view.h - tallRender.view.voidTop) / tallRender.view.h < 0.06,
+  '填滿操作區上方時，深淵仍小於場景的 6%');
+assert.equal(tallActors.attributes.get('preserveAspectRatio'), 'none',
+  '角色與 Canvas 同步延展，保持落點對齊');
+tallRender.setOptions({ fitHeight: false });
+assert.equal(tallRender.view.h, 684, '離開直向模式後恢復一般場景高度');
+assert.equal(tallActors.attributes.get('preserveAspectRatio'), 'xMidYMid meet');
+console.log('✓ 直向填滿操作區上方，同步角色座標並保留深淵比例');

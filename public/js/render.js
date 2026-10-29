@@ -333,6 +333,11 @@
       const dpr = Math.min(2, root.devicePixelRatio || 1);
       view.w = Math.max(120, box.width);
       view.h = Math.max(120, box.height);
+      /* 直向操作區固定高度時，以同一個座標空間延展場景與角色，避免增加深淵。 */
+      if (opts.fitHeight) {
+        const sceneHeight = ((opts.viewH || 18) + CEIL_UNITS + VOID_UNITS) * view.w / fieldWidth();
+        view.h = Math.min(view.h, sceneHeight);
+      }
       view.dpr = dpr;
       canvas.width = Math.round(view.w * dpr);
       canvas.height = Math.round(view.h * dpr);
@@ -367,7 +372,10 @@
        * 所以也回報「舞台最多需要多高」＝天花板 ＋ 可見高度 ＋ 一小段深淵，
        * 多出來的高度讓 app.js 收掉（直向剛好留給下面的方向鍵）。 */
       view.wantStageH = Math.ceil((view.viewH + CEIL_UNITS + VOID_UNITS) * view.scale);
-      if (actorSvg) actorSvg.setAttribute('viewBox', '0 0 ' + view.w.toFixed(1) + ' ' + view.h.toFixed(1));
+      if (actorSvg) {
+        actorSvg.setAttribute('viewBox', '0 0 ' + view.w.toFixed(1) + ' ' + view.h.toFixed(1));
+        actorSvg.setAttribute('preserveAspectRatio', opts.fitHeight ? 'none' : 'xMidYMid meet');
+      }
     }
 
     const px = x => view.offX + x * view.scale;
