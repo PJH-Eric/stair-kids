@@ -147,6 +147,26 @@
       '<ellipse class="k-cheek-near" cx="72" cy="50" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/>' +
       '<path class="k-mouth" d="M44 53q6 6 12 0" stroke="#B4574F" stroke-width="3" fill="none" stroke-linecap="round"/>';
 
+    /* 結算用的表情：開心（^ ^ 笑眼＋大嘴）、難過（八字眉＋眼淚）、暈眩（X 眼＋小圓嘴） */
+    const MOOD = {
+      happy:
+        '<path d="M31 46q7-9 14 0M55 46q7-9 14 0" stroke="#2C2422" stroke-width="3.4" fill="none" stroke-linecap="round"/>' +
+        '<ellipse cx="27" cy="51" rx="7" ry="4.5" fill="#FF8FA3" opacity=".75"/><ellipse cx="73" cy="51" rx="7" ry="4.5" fill="#FF8FA3" opacity=".75"/>' +
+        '<path d="M41 53q9 15 18 0z" fill="#B4574F"/><path d="M45 59q5 4 10 0" stroke="#FF8FA3" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+        '<path d="M84 18l2.4 5.4 5.6.6-4.2 3.8 1.2 5.6-5-2.9-5 2.9 1.2-5.6-4.2-3.8 5.6-.6z" fill="#FFD44D" transform="translate(-3,-8) scale(.8)"/>',
+      sad:
+        '<ellipse cx="38" cy="43" rx="5" ry="6.5" fill="#2C2422"/><circle cx="36.4" cy="40.6" r="1.9" fill="#fff"/>' +
+        '<ellipse cx="62" cy="43" rx="5" ry="6.5" fill="#2C2422"/><circle cx="60.4" cy="40.6" r="1.9" fill="#fff"/>' +
+        '<path d="M30 33l13 5M70 33l-13 5" stroke="#2C2422" stroke-width="3" stroke-linecap="round"/>' +
+        '<path d="M33 51q-4.5 7 0 10.5 4.5-3.5 0-10.5z" fill="#7FC8F8"/><path d="M67 51q-4.5 7 0 10.5 4.5-3.5 0-10.5z" fill="#7FC8F8"/>' +
+        '<path d="M43 60q7-7 14 0" stroke="#B4574F" stroke-width="3" fill="none" stroke-linecap="round"/>',
+      dizzy:
+        '<path d="M33 37l10 10M43 37l-10 10M57 37l10 10M67 37l-10 10" stroke="#2C2422" stroke-width="3.2" stroke-linecap="round"/>' +
+        '<ellipse cx="28" cy="51" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/><ellipse cx="72" cy="51" rx="6" ry="4" fill="#FF9BB0" opacity=".55"/>' +
+        '<ellipse cx="50" cy="56" rx="4.5" ry="5.5" fill="#B4574F"/>'
+    };
+    const faceFinal = opt.mood && MOOD[opt.mood] ? '<g class="k-mood">' + MOOD[opt.mood] + '</g>' : face;
+
     const halo = opt.halo
       ? '<ellipse class="k-halo" cx="50" cy="156" rx="30" ry="8" fill="none" stroke="' + opt.halo + '" stroke-width="4" opacity=".8"/>'
       : '';
@@ -166,7 +186,7 @@
           '<path d="M44 62h12v10h-12z" fill="' + char.skinDark + '"/>' +
           '<circle cx="50" cy="40" r="30" fill="url(#' + c + '-skin)"/>' +
           '<g class="k-hair">' + hairPath(char.hair, c) + '</g>' +
-          '<g class="k-face">' + face + '</g>' +
+          '<g class="k-face">' + faceFinal + '</g>' +
           /* 鼻尖：從臉的輪廓凸出來，是「有在轉頭」最關鍵的一筆。所以要畫在最上面，
            * 排在頭髮後面會被瀏海蓋掉。也不能用 -skin 漸層 —— 漸層以「自己的
            * bounding box」為單位，這麼小的零件會整片變成最淺的那一端，等於看不見。 */
@@ -302,17 +322,17 @@
   }
 
   /** 大頭貼（首頁、選角、結算用）：裁到頭與肩，尺寸小也看得清楚 */
-  function kidAvatarSvg(char, size, ring) {
+  function kidAvatarSvg(char, size, ring, mood) {
     const id = 'av' + (++uid);
     return '<svg class="kid-avatar" viewBox="10 2 80 80" width="' + size + '" height="' + size +
-      '" role="img" aria-label="' + char.name + '">' + buildKid(char, { id: id, ring: ring }) + '</svg>';
+      '" role="img" aria-label="' + char.name + '">' + buildKid(char, { id: id, ring: ring, mood: mood }) + '</svg>';
   }
   /** 全身像 */
-  function kidFullSvg(char, size, ring) {
+  function kidFullSvg(char, size, ring, mood) {
     const id = 'fu' + (++uid);
     return '<svg class="kid-full" viewBox="0 0 100 166" width="' + Math.round(size * 100 / 166) +
       '" height="' + size + '" role="img" aria-label="' + char.name + '">' +
-      buildKid(char, { id: id, ring: ring }) + '</svg>';
+      buildKid(char, { id: id, ring: ring, mood: mood }) + '</svg>';
   }
 
   /* ================================================================

@@ -258,7 +258,26 @@
       '</svg>';
   }
 
+  /** 破紀錄徽章：金色圓章加緞帶 */
+  function medalIcon(size) {
+    size = size || 26;
+    return '<svg class="medal" viewBox="0 0 32 32" width="' + size + '" height="' + size + '" aria-hidden="true">' +
+      '<path d="M9 2h6l3 9h-6z" fill="#E0405F"/><path d="M23 2h-6l-3 9h6z" fill="#4F86D6"/>' +
+      '<circle cx="16" cy="20" r="10" fill="#FFD44D" stroke="#D99A1E" stroke-width="2"/>' +
+      '<path d="M16 13.5l2 4.2 4.6.6-3.4 3.2.9 4.6-4.1-2.3-4.1 2.3.9-4.6-3.4-3.2 4.6-.6z" fill="#FFF3B0" stroke="#D99A1E" stroke-width="1" stroke-linejoin="round"/></svg>';
+  }
+
+  /** 勝利皇冠 */
+  function crownIcon(size) {
+    size = size || 28;
+    return '<svg class="crown" viewBox="0 0 32 24" width="' + size + '" height="' + Math.round(size * 0.75) + '" role="img" aria-label="' +
+      (root.I18N ? root.I18N.t('res.crownAria') : '勝利') + '">' +
+      '<path d="M3 20L1.5 6l7 6L16 2l7.5 10 7-6L29 20z" fill="#FFD44D" stroke="#D99A1E" stroke-width="2" stroke-linejoin="round"/>' +
+      '<circle cx="16" cy="14" r="2.2" fill="#E0405F"/><circle cx="8" cy="15" r="1.5" fill="#4F86D6"/><circle cx="24" cy="15" r="1.5" fill="#4F86D6"/></svg>';
+  }
+
   root.SvgUI = {
+    medalIcon, crownIcon,
     hearts, heartSvg, arrowIcon, gearIcon, closeIcon, flagIcon, settingIcon,
     stepIcon, ceilingIcon, modal, homeArt
   };

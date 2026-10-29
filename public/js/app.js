@@ -1107,6 +1107,8 @@
     finishUi();
   }
 
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
   /** 結算畫面上所有文字（語言切換時會重畫一次） */
   function paintResult() {
     const v = G.resultView;
@@ -1121,27 +1123,43 @@
       : result.endedBy === 'fell' ? T('res.fell')
       : T('res.dead');
 
-    /* 對戰：勝方的大頭貼放大，下面各一行數據（規劃書 §7.6） */
-    const line = (p, tag) =>
-      '<div class="result-line' + (tag ? ' ' + tag : '') + '">' +
-      T('res.line', {
-        name: p.name, m: p.meters, t: fmtTime(p.survived),
-        tag: p.forfeit ? T('res.tag.forfeit') : p.fell ? T('res.tag.fell') : p.alive ? '' : T('res.tag.dead')
-      }) + '</div>';
+    /* 結算主視覺：
+     * 單機＝大角色（破紀錄開心、其他暈眩）＋超大深度數字；
+     * 對戰／觀戰＝左右兩張選手卡（玩家色外框），勝者戴皇冠表情開心，敗者流眼淚，各自顯示深度。 */
+    const tagOf = p => p.forfeit ? T('res.tag.forfeit') : p.fell ? T('res.tag.fell') : p.alive ? '' : T('res.tag.dead');
+    const survived = p => T('res.survived', { t: fmtTime(p.survived) }) + tagOf(p);
     const subLine = () => T('res.sub', { diff: diffName(result.difficulty), scene: Scenes.sceneFor(me.world).name });
+    const subExtra = () => (foe && foe.forfeit ? T('res.forfeitFoe', { name: foe.name }) : '') +
+      (foe && me.forfeit ? T('res.forfeitMe') : '');
     if (foe) {
-      const champ = result.draw ? me : (win ? me : foe);
-      const other = champ === me ? foe : me;
+      const RING = ['#4F86D6', '#F2545B'];
+      const cards = result.players.slice(0, 2).map((p, i) => {
+        const champ = !result.draw && result.winner === p.id;
+        const loser = !result.draw && !champ;
+        const mood = loser ? 'sad' : 'happy';
+        const you = !watching && p.id === me.id;
+        return '<div class="rh-card p' + (i + 1) + (champ ? ' win' : '') + (loser ? ' lose' : '') + '">' +
+          (champ ? '<span class="rh-crown">' + SvgUI.crownIcon(30) + '</span>' : '') +
+          '<span class="rh-face">' + Render.kidAvatarSvg(charOf(p.char), champ ? 84 : 66, RING[i], mood) + '</span>' +
+          '<span class="rh-name">' + esc(p.name) + (you ? T('room.you') : '') + '</span>' +
+          '<span class="rh-num"><b>' + p.meters + '</b><i>m</i></span>' +
+          '<span class="rh-sub">' + esc(survived(p)) + '</span>' +
+          '</div>';
+      }).join('<span class="rh-vs" aria-hidden="true">VS</span>');
       els.resultHero.innerHTML =
-        Render.kidFullSvg(charOf(champ.char), 118) +
-        line(champ, 'champ') + line(other) +
-        '<div class="result-line">' + subLine() +
-        (foe && foe.forfeit ? T('res.forfeitFoe', { name: foe.name }) : '') +
-        (me.forfeit ? T('res.forfeitMe') : '') + '</div>';
+        '<div class="rh-versus">' + cards + '</div>' +
+        '<div class="result-line">' + subLine() + subExtra() + '</div>';
     } else {
+      const mood = saved.record || result.endedBy === 'manual' ? 'happy' : 'dizzy';
       els.resultHero.innerHTML =
-        Render.kidFullSvg(charOf(me.char), 132) +
-        line(me) +
+        '<div class="rh-solo">' +
+          '<div class="rh-kid">' + Render.kidFullSvg(charOf(me.char), 132, null, mood) + '</div>' +
+          '<div class="rh-depth">' +
+            '<span class="rh-label">' + T('res.depthLabel') + '</span>' +
+            '<span class="rh-num big"><b>' + me.meters + '</b><i>m</i></span>' +
+            '<span class="rh-sub">' + esc(me.name) + '・' + esc(survived(me)) + '</span>' +
+          '</div>' +
+        '</div>' +
         '<div class="result-line">' + subLine() + '</div>';
     }
     els.resultNew.hidden = !saved.record;
@@ -1151,7 +1169,7 @@
       els.resultNew.textContent = T('res.near', { n: saved.best.depth - me.meters });
       els.resultNew.classList.add('near');
     } else {
-      els.resultNew.textContent = T('res.new');
+      els.resultNew.innerHTML = SvgUI.medalIcon(30) + '<span>' + esc(T('res.new')) + '</span>';
       els.resultNew.classList.remove('near');
     }
 
@@ -1204,7 +1222,9 @@
     els.pads.classList.add('hidden');
     input.clear();
     if (G.raf) { cancelAnimationFrame(G.raf); G.raf = 0; }
-    (online2 ? els.resultHome : els.again).focus();
+    /* 不要讓聚焦把卡片捲到按鈕，標題與主視覺要先看得到 */
+    (online2 ? els.resultHome : els.again).focus({ preventScroll: true });
+    if (els.ovResult.querySelector('.ov-card')) els.ovResult.querySelector('.ov-card').scrollTop = 0;
   }
 
   /* ================= 暫停選單（Esc；只有三顆） ================= */

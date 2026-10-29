@@ -180,3 +180,131 @@ body {
   .low-hp-glow.on { animation: none; opacity: .7; }
   .hearts.hit { animation: none; filter: drop-shadow(0 0 6px rgba(214, 49, 79, .9)); }
 }
+
+/* ---------- 結算主視覺：超大深度數字、最高紀錄徽章、勝負表情 ---------- */
+.result-hero { width: 100%; gap: 8px; }
+.rh-solo { display: flex; align-items: center; justify-content: center; gap: 14px; width: 100%; min-width: 0; }
+.rh-kid { flex: 0 0 auto; }
+.rh-depth { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; gap: 2px; }
+.rh-label { font-size: 13px; font-weight: 800; color: #8a6a4a; letter-spacing: .06em; }
+.rh-num { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rh-num b { font-size: 30px; line-height: 1; color: #bd5e30; }
+.rh-num i { font-style: normal; font-size: 15px; font-weight: 800; color: #8a6a4a; }
+.rh-num.big b {
+  font-size: clamp(54px, 15vw, 84px);
+  line-height: .95;
+  text-shadow: 0 3px 0 #fff, 0 6px 0 rgba(189, 94, 48, .16);
+}
+.rh-num.big i { font-size: 24px; }
+.rh-sub { font-size: 13px; line-height: 1.35; color: #705543; text-align: left; overflow-wrap: anywhere; }
+
+.rh-versus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  padding-top: 16px;
+}
+.rh-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 6px 8px;
+  border: 3px solid;
+  border-radius: 18px;
+  background: #fff;
+}
+.rh-card.p1 { border-color: #4f86d6; background: linear-gradient(180deg, #eef4ff, #fff 70%); }
+.rh-card.p2 { border-color: #f2545b; background: linear-gradient(180deg, #fff0f0, #fff 70%); }
+.rh-card.win {
+  transform: translateY(-4px);
+  box-shadow: 0 0 0 4px rgba(255, 212, 77, .6), 0 10px 20px rgba(217, 154, 30, .25);
+}
+.rh-card.win .rh-num b { color: #2f9a54; }
+.rh-card.lose { filter: saturate(.75); }
+.rh-card.lose .rh-num b { color: #8a7a6c; }
+.rh-crown { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); display: block; line-height: 0; }
+.rh-face { display: block; line-height: 0; }
+.rh-face svg { border-radius: 50%; background: rgba(255, 255, 255, .8); }
+.rh-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 800; color: #5a3b1e; }
+.rh-card .rh-sub { text-align: center; font-size: 12px; }
+.rh-vs { align-self: center; font-size: 14px; font-weight: 900; color: #a85129; }
+
+.result-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 16px 3px 8px;
+  border-radius: 999px;
+  color: #8a5a00;
+  background: linear-gradient(180deg, #fff3b8, #ffd44d);
+  border: 2px solid #e0a61e;
+  box-shadow: 0 3px 0 rgba(217, 154, 30, .35);
+  font-size: 17px;
+  animation: badge-pop .5s cubic-bezier(.3, 1.6, .5, 1);
+}
+.result-new .medal { flex: 0 0 auto; display: block; }
+.result-new.near {
+  display: block;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  animation: none;
+  font-size: 15px;
+  color: #bd5e30;
+}
+@keyframes badge-pop { 0% { transform: scale(.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.rh-kid svg, .rh-card.win .rh-face svg { animation: rh-bob 1.6s ease-in-out infinite; }
+@keyframes rh-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.rh-card.lose .rh-face svg { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .result-new, .rh-kid svg, .rh-card.win .rh-face svg { animation: none; }
+}
+@media (max-width: 360px) {
+  .rh-card { padding: 8px 3px 6px; }
+  .rh-name { font-size: 12.5px; }
+  .rh-num b { font-size: 26px; }
+  .rh-solo { gap: 8px; }
+}
+/* 手機橫向：卡片壓扁，角色縮小，按鈕仍在視線內 */
+@media (max-height: 460px) and (orientation: landscape) {
+  .rh-solo .kid-full { height: 76px; width: auto; }
+  .rh-num.big b { font-size: 46px; }
+  .rh-versus { padding-top: 12px; }
+  .rh-card { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 8px; padding: 6px 8px; }
+  .rh-face svg { width: 44px; height: 44px; }
+  .rh-name { flex: 1 1 100%; text-align: center; }
+  .rh-num b { font-size: 24px; }
+  .rh-crown { top: -16px; }
+  .rh-crown svg { width: 22px; height: 17px; }
+  .result-hero { flex-direction: column; }
+}
+
+/* 手機橫向：結算改左右兩欄（左：標題與主視覺、右：統計），三顆按鈕排一列，整張卡不必上下捲動。 */
+@media (max-height: 460px) and (orientation: landscape) {
+  .ov-card {
+    width: min(100%, 780px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "title stats" "hero stats" "badge stats" "btns btns";
+    column-gap: 14px;
+    align-items: center;
+  }
+  .ov-card h2 { grid-area: title; }
+  .result-hero { grid-area: hero; }
+  .result-new { grid-area: badge; justify-self: center; font-size: 14px; }
+  .result-new .medal { width: 22px; height: 22px; }
+  .result-stats { grid-area: stats; margin: 0; align-self: stretch; }
+  .result-stats ul { grid-template-columns: 1fr; gap: 0; }
+  .ov-btns { grid-area: btns; flex-wrap: nowrap; }
+  .ov-btns .big-btn { flex: 1 1 0; }
+}
+@media (max-width: 360px) and (orientation: portrait) {
+  .result-stats ul { grid-template-columns: 1fr; }
+  .result-stats li { white-space: nowrap; }
+}
