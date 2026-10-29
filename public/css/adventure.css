@@ -11,9 +11,36 @@ body {
 #screen-home .subtitle { color: #705543; font-weight: 700; }
 #screen-home .home-buttons { width: min(390px, 100%); }
 #screen-home .home-buttons .big-btn { width: 100%; min-height: 54px; }
-#screen-home .home-buttons .big-btn:nth-child(2) {
-  background: linear-gradient(180deg, #e1f4e9, #b8dfcb);
+/* 兩個入口各有自己的圖示與一行說明：單人＝橘色一個人，對戰＝玩家色藍／紅兩個人 */
+#screen-home .home-mode {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  padding: 10px 18px 10px 12px;
+  min-height: 64px;
+}
+#screen-home .home-mode .mode-ico {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+}
+#screen-home .home-mode .mode-ico svg { width: 34px; height: 34px; display: block; }
+#screen-home .home-mode .mode-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+#screen-home .home-mode .mode-txt b { font-size: 19px; }
+#screen-home .home-mode .mode-txt small { font-size: 12.5px; font-weight: 600; opacity: .85; overflow-wrap: anywhere; }
+#screen-home .home-mode.solo .mode-ico { background: rgba(255, 255, 255, .26); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .45); }
+#screen-home .home-mode.versus {
+  background: linear-gradient(180deg, #ffffff, #eaf3ee);
   color: #285f49;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .9), 0 5px 0 rgba(60, 120, 95, .22), 0 14px 26px rgba(60, 100, 80, .16);
+}
+#screen-home .home-mode.versus .mode-ico {
+  background: linear-gradient(90deg, rgba(79, 134, 214, .14) 50%, rgba(242, 84, 91, .14) 50%);
+  box-shadow: inset 0 0 0 2px rgba(60, 120, 95, .2);
 }
 #screen-home .home-keys, #screen-home .home-records {
   background: rgba(255, 255, 255, .7);
@@ -120,4 +147,9 @@ body {
     height: calc(112px + var(--safe-b));
   }
   .pad { height: 88px; bottom: calc(12px + var(--safe-b)); }
+}
+
+/* 矮螢幕（手機橫向）：主視覺跟著高度縮小，標題與按鈕不必捲很遠才看得到。 */
+@media (max-height: 520px) {
+  #screen-home .home-art { width: min(300px, 58vh); }
 }

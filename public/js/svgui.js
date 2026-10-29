@@ -170,26 +170,91 @@
   /* ---------- 首頁大主視覺：小朋友站在樓梯口往下看 ---------- */
 
   function homeArt(kids) {
-    /* kids：已經算好的 SVG 字串陣列（由 app.js 用 Render.buildKid 產生） */
-    const stairs = [
-      { x: 12, y: 118, w: 96 },
-      { x: 84, y: 150, w: 84 },
-      { x: 150, y: 182, w: 78 },
-      { x: 214, y: 212, w: 74 }
-    ].map(s =>
-      '<rect x="' + s.x + '" y="' + s.y + '" width="' + s.w + '" height="14" rx="5" fill="#D89B57"/>' +
-      '<rect x="' + (s.x + 3) + '" y="' + (s.y + 2) + '" width="' + (s.w - 6) + '" height="4" rx="2" fill="rgba(255,255,255,.5)"/>'
-    ).join('');
-    return '<svg viewBox="0 0 320 240" class="home-art-svg" aria-label="' +
+    /* kids：已經算好的 SVG 字串陣列（由 app.js 用 Render.buildKid 產生）。
+     * 場景：天花板刺在上、五種階梯一路往右下走（木頭／輸送帶／彈簧／假階／刺），
+     * 三個小朋友站在不同階上，兩位用玩家色外框（藍／紅）暗示對戰。 */
+    const wood = (x, y, w) =>
+      '<rect x="' + x + '" y="' + (y + 6) + '" width="' + w + '" height="15" rx="4" fill="#9B5F2B"/>' +
+      '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="14" rx="5" fill="url(#ha-wood)"/>' +
+      '<rect x="' + (x + 4) + '" y="' + (y + 2) + '" width="' + (w - 8) + '" height="3" rx="1.5" fill="rgba(255,255,255,.55)"/>' +
+      '<path d="M' + (x + 8) + ' ' + (y + 8.5) + 'h' + (w - 16) + 'M' + (x + 8) + ' ' + (y + 11.5) + 'h' + (w - 26) +
+        '" stroke="#8C5320" stroke-opacity=".45" stroke-width="1.2" stroke-linecap="round"/>';
+    const belt = (x, y, w) => {
+      let arrows = '';
+      for (let ax = x + 14; ax < x + w - 10; ax += 16) {
+        arrows += '<path d="M' + ax + ' ' + (y + 4) + 'l6 4-6 4z" fill="#12293A" stroke="#fff" stroke-width="1"/>';
+      }
+      return '<rect x="' + x + '" y="' + (y + 6) + '" width="' + w + '" height="15" rx="7" fill="#3F5F7F"/>' +
+        '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="14" rx="7" fill="url(#ha-belt)"/>' +
+        '<circle cx="' + (x + 7) + '" cy="' + (y + 7) + '" r="4" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="1.6"/>' +
+        '<circle cx="' + (x + w - 7) + '" cy="' + (y + 7) + '" r="4" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="1.6"/>' +
+        arrows;
+    };
+    const spring = (x, y, w) =>
+      '<path d="M' + (x + w / 2 - 12) + ' ' + (y + 12) + 'q12 5 24 0m-24 5q12 5 24 0m-24 5q12 5 24 0" fill="none" stroke="#C74F70" stroke-width="3" stroke-linecap="round"/>' +
+      '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="11" rx="5.5" fill="url(#ha-spring)"/>' +
+      '<rect x="' + (x + 5) + '" y="' + (y + 2) + '" width="' + (w - 10) + '" height="2.6" rx="1.3" fill="rgba(255,255,255,.6)"/>';
+    const fake = (x, y, w) =>
+      '<rect x="' + x + '" y="' + (y + 5) + '" width="' + w + '" height="13" rx="5" fill="#C9BBA4"/>' +
+      '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="13" rx="5" fill="#FBF6EE" stroke="#78705F" stroke-width="1.6" stroke-dasharray="5 4"/>' +
+      '<path d="M' + (x + w * .3) + ' ' + (y + 1) + 'l5 6-4 5M' + (x + w * .66) + ' ' + (y + 1) + 'l-4 6 5 5" fill="none" stroke="#5A5046" stroke-opacity=".6" stroke-width="1.4"/>';
+    const spikes = (x, y, w, up) => {
+      let t = '';
+      const n = Math.max(2, Math.round(w / 12));
+      const cw = w / n;
+      for (let i = 0; i < n; i++) {
+        const sx = x + i * cw;
+        t += up
+          ? '<path d="M' + sx + ' ' + y + 'l' + (cw / 2) + ' -16 ' + (cw / 2) + ' 16z" fill="url(#ha-metal)" stroke="#5A0B0A" stroke-width="1.2" stroke-linejoin="round"/>'
+          : '<path d="M' + sx + ' ' + y + 'l' + (cw / 2) + ' 16 ' + (cw / 2) + ' -16z" fill="url(#ha-metal)" stroke="#5A0B0A" stroke-width="1.2" stroke-linejoin="round"/>';
+      }
+      return t;
+    };
+    const spikeStep = (x, y, w) =>
+      spikes(x + 3, y + 3, w - 6, true) +
+      '<rect x="' + x + '" y="' + (y + 3) + '" width="' + w + '" height="14" rx="4" fill="url(#ha-spikebase)"/>';
+
+    const kid = (i, x, y, s, ring) => kids[i]
+      ? '<g transform="translate(' + x + ',' + (y - 157 * s) + ') scale(' + s + ')">' + kids[i] + '</g>' +
+        (ring ? '<ellipse cx="' + (x + 50 * s) + '" cy="' + (y + 1) + '" rx="' + (30 * s) + '" ry="' + (6 * s) + '" fill="none" stroke="' + ring + '" stroke-width="3"/>' : '')
+      : '';
+
+    return '<svg viewBox="0 0 360 290" class="home-art-svg" role="img" aria-label="' +
       (root.I18N ? root.I18N.t('home.art') : '小朋友站在樓梯口往下看') + '">' +
-      '<defs><linearGradient id="ha-sky" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#FFF6E0"/><stop offset="100%" stop-color="#FFD9B0"/></linearGradient></defs>' +
-      '<rect width="320" height="240" rx="18" fill="url(#ha-sky)"/>' +
-      '<circle cx="266" cy="42" r="26" fill="#FFE9A8" opacity=".9"/>' +
-      stairs +
-      '<g transform="translate(28,10) scale(0.62)">' + (kids[0] || '') + '</g>' +
-      '<g transform="translate(104,50) scale(0.5)">' + (kids[1] || '') + '</g>' +
-      '<g transform="translate(176,88) scale(0.42)">' + (kids[2] || '') + '</g>' +
+      '<defs>' +
+      '<linearGradient id="ha-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6E0"/><stop offset="55%" stop-color="#FFE2C0"/><stop offset="100%" stop-color="#FFC995"/></linearGradient>' +
+      '<linearGradient id="ha-wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0B56A"/><stop offset="100%" stop-color="#C98543"/></linearGradient>' +
+      '<linearGradient id="ha-belt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A9BFD8"/><stop offset="100%" stop-color="#6A88AA"/></linearGradient>' +
+      '<linearGradient id="ha-spring" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF9BB4"/><stop offset="100%" stop-color="#E0587C"/></linearGradient>' +
+      '<linearGradient id="ha-spikebase" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C73A34"/><stop offset="100%" stop-color="#5E0F0D"/></linearGradient>' +
+      '<linearGradient id="ha-metal" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6E605C"/><stop offset=".35" stop-color="#EEE6E2"/><stop offset=".6" stop-color="#B9AAA4"/><stop offset="1" stop-color="#4E4340"/></linearGradient>' +
+      '<linearGradient id="ha-well" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFB98A" stop-opacity="0"/><stop offset="1" stop-color="#8A4B2A" stop-opacity=".38"/></linearGradient>' +
+      '<clipPath id="ha-clip"><rect width="360" height="290" rx="22"/></clipPath>' +
+      '</defs>' +
+      '<g clip-path="url(#ha-clip)">' +
+        '<rect width="360" height="290" fill="url(#ha-sky)"/>' +
+        '<circle cx="300" cy="64" r="30" fill="#FFE9A8" opacity=".95"/><circle cx="300" cy="64" r="44" fill="#FFE9A8" opacity=".35"/>' +
+        '<g fill="#fff" opacity=".85"><ellipse cx="70" cy="78" rx="30" ry="9"/><ellipse cx="88" cy="70" rx="20" ry="10"/>' +
+          '<ellipse cx="248" cy="118" rx="26" ry="8"/><ellipse cx="262" cy="111" rx="16" ry="8"/></g>' +
+        '<rect y="150" width="360" height="140" fill="url(#ha-well)"/>' +
+        /* 兩側井壁的縱向接縫，帶出「一口往下的井」 */
+        '<path d="M14 0v290M346 0v290" stroke="#B9763D" stroke-opacity=".18" stroke-width="8"/>' +
+        /* 天花板：整局唯一在追的東西，首頁先讓它露個臉 */
+        '<rect width="360" height="12" fill="url(#ha-spikebase)"/>' +
+        spikes(0, 12, 360, false) +
+        wood(18, 150, 118) +
+        belt(104, 176, 104) +
+        spring(190, 204, 82) +
+        fake(252, 226, 78) +
+        spikeStep(286, 258, 62) +
+        kid(0, 28, 150, 0.62, null) +
+        kid(1, 124, 176, 0.5, '#4F86D6') +
+        kid(2, 224, 204, 0.46, '#F2545B') +
+        /* 深度牌：呼應「往下比深度」 */
+        '<g transform="translate(262,142)"><rect width="78" height="26" rx="13" fill="#fff" stroke="#E5C9A8" stroke-width="2"/>' +
+          '<path d="M16 8v10m-5-4l5 5 5-5" fill="none" stroke="#C9662A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+          '<text x="27" y="18" font-size="13" font-weight="800" fill="#A85129" font-family="system-ui,sans-serif">100 m</text></g>' +
+      '</g>' +
       '</svg>';
   }
 
