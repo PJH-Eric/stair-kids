@@ -112,3 +112,8 @@ body {
   .ov-btns { gap: 4px; }
   .ov-btns .big-btn { padding: 6px 10px; }
 }
+
+/* 直向操作區：按鍵填滿較多高度，減少舞台與按鍵之間的空白。 */
+@media (orientation: portrait) and (pointer: coarse) {
+  .pad { height: clamp(80px, 16.5dvh, 150px); }
+}
