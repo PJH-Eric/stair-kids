@@ -654,15 +654,37 @@
       void dark;
     }
 
-    /** 場地四周的暗角：邊緣壓暗一點，把視線收向中央的樓梯 */
+    /** 場地四周的暗角：邊緣壓暗一點，把視線收向中央的樓梯。
+     * 漸層只在尺寸改變時畫一次到離屏畫布，之後每格只 drawImage，不重算整張漸層。 */
+    let vignetteCanvas = null;
+    let vignetteKey = '';
     function drawVignette() {
-      const cx = view.w / 2, cy = view.h * 0.48;
-      const r = Math.max(view.w, view.h) * 0.75;
-      const g = ctx.createRadialGradient(cx, cy, r * 0.45, cx, cy, r);
-      g.addColorStop(0, 'rgba(40,20,10,0)');
-      g.addColorStop(1, 'rgba(40,20,10,.20)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, view.w, view.h);
+      const key = view.w + 'x' + view.h;
+      if (!(typeof document !== 'undefined' && document.createElement)) {
+        /* 沒有 DOM 可建離屏畫布（測試用的假環境）：直接在主畫布畫一次漸層 */
+        const r = Math.max(view.w, view.h) * 0.75;
+        const g = ctx.createRadialGradient(view.w / 2, view.h * 0.48, r * 0.45, view.w / 2, view.h * 0.48, r);
+        g.addColorStop(0, 'rgba(40,20,10,0)');
+        g.addColorStop(1, 'rgba(40,20,10,.20)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, view.w, view.h);
+        return;
+      }
+      if (vignetteKey !== key || !vignetteCanvas) {
+        vignetteKey = key;
+        vignetteCanvas = document.createElement('canvas');
+        vignetteCanvas.width = Math.max(1, Math.round(view.w / 2));
+        vignetteCanvas.height = Math.max(1, Math.round(view.h / 2));
+        const vc = vignetteCanvas.getContext('2d');
+        const w = vignetteCanvas.width, h = vignetteCanvas.height;
+        const r = Math.max(w, h) * 0.75;
+        const g = vc.createRadialGradient(w / 2, h * 0.48, r * 0.45, w / 2, h * 0.48, r);
+        g.addColorStop(0, 'rgba(40,20,10,0)');
+        g.addColorStop(1, 'rgba(40,20,10,.20)');
+        vc.fillStyle = g;
+        vc.fillRect(0, 0, w, h);
+      }
+      ctx.drawImage(vignetteCanvas, 0, 0, view.w, view.h);
     }
 
     /* ---------- 階梯材質：每個世界的普通階長得不一樣 ---------- */

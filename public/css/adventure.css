@@ -435,3 +435,12 @@ body {
   .seat-plus, .seat.just-ready, .seat.just-ready .seat-ok { animation: none; }
   .seat-spark { display: none; }
 }
+
+/* 選手卡的名字（含「你」與電腦難度）允許換成兩行，不再被省略號吃掉。 */
+.rh-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; text-align: center; line-height: 1.2; }
+
+/* 平板以上：首頁主視覺與入口按鈕放大一點，不要在大螢幕上顯得太小。 */
+@media (min-width: 700px) and (min-height: 700px) {
+  #screen-home .home-art { width: min(470px, 62vw); }
+  #screen-home .home-buttons { width: min(470px, 100%); }
+}
