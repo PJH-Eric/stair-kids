@@ -102,6 +102,7 @@ function loadOnline() {
     Net,
     Rules,
     Render: { kidAvatarSvg() { return ''; } },
+    SvgUI: require('../public/js/svgui.js').SvgUI,
     Characters,
     Nicknames
   };
