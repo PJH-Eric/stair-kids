@@ -396,7 +396,7 @@
 
       <!-- 結算：跟打地鼠一樣直接蓋在畫面上，不換路由，樓梯定格留在後面 -->
       <div class="stage-overlay" id="ov-result" hidden role="dialog" aria-modal="true" aria-labelledby="result-title">
-        <div class="ov-card">
+        <div class="ov-card" data-result-share>
           <h2 id="result-title">這局結束</h2>
           <div class="result-hero" id="result-hero"></div>
           <p class="result-new" id="result-new" hidden>破紀錄了！</p>
@@ -566,5 +566,7 @@
 <p><strong>How to play: </strong>Only two directions (← → or A D). No jumping</p>
 </section></div></noscript>
 <!--SEO:GAMEPLAY:END-->
+  <script defer src="js/locales/result-share.js"></script>
+  <script defer src="js/result-share.js"></script>
 </body>
 </html>
