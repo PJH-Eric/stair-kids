@@ -183,8 +183,8 @@ for (const [device, width, height, viewH, fitHeight] of [
   const k = Number(actor.children[0].attributes.get('transform').match(/scale\(([^)]+)\)/)[1]);
   const y = Number(actor.attributes.get('transform').match(/translate\([^,]+,([^)]+)\)/)[1]);
   const scale = deviceRender.view.scale;
-  assert.ok(Math.abs(k / (scale * 1.25 / 100) - 0.9) < 0.001,
-    device + '：角色繪圖縮小 10%');
+  assert.ok(Math.abs(k / (scale * 1.25 / 100) - 0.95) < 0.001,
+    device + '：角色繪圖縮小 5%');
   const expectedFeet = deviceRender.view.offY + 3 * scale;
   assert.ok(Math.abs(y + 160 * k - expectedFeet) < 0.07,
     device + '：縮小後腳底仍對齊階梯');

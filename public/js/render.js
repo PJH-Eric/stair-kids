@@ -1258,8 +1258,8 @@
     const TURN_TIME = 0.11;               /* 正面↔側身轉過去要多久（秒） */
 
     function drawActors(state, time, dt) {
-      /* 外觀等比縮小 10%，以腳底定位；碰撞尺寸保留既有玩法設定。 */
-      const pw = playerW() * 0.9, ph = playerH() * 0.9;
+      /* 外觀等比縮小 5%，以腳底定位；碰撞尺寸保留既有玩法設定。 */
+      const pw = playerW() * 0.95, ph = playerH() * 0.95;
       const k = view.scale * pw / 100;     /* 本地 100 單位 = 縮小後的角色寬度 */
       for (const p of state.players) {
         const a = actors.get(p.id);
