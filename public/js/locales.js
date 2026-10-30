@@ -404,7 +404,7 @@
 
     'home.title': 'Stair Kids',
     'home.subtitle': "Keep running down. Don't let the ceiling catch you!",
-    'home.keys': 'Just two directions: <span class="kbd">←</span> <span class="kbd">→</span> (or <span class="kbd">A</span> <span class="kbd">D</span>). No jumping!',
+    'home.keys': '<span class="kbd">←</span> <span class="kbd">→</span> / <span class="kbd">A</span> <span class="kbd">D</span> · No jumping',
     'home.solo': 'Solo Play',
     'home.solo.sub': 'Chase your deepest record',
     'home.versus.sub': 'Race a friend down, or just watch',

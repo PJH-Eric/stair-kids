@@ -1394,15 +1394,12 @@ button.soon-item:active { transform: translateY(2px); }
 /* 首頁：操作提示（第一次玩的人最需要知道「沒有跳」） */
 .home-keys {
   margin: -2px 0 14px;
-  font-size: 14px;
+  font-size: clamp(11px, 2.8vw, 14px);
   color: var(--ink-soft);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
 }
-.home-keys .kbd { margin: 0; }
+.home-keys .kbd { min-width: 1.7em; padding: 1px .35em; margin: 0; }
 
 /* 首頁紀錄：一行字改成一顆一顆的小標籤 */
 .home-records { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 460px; }
