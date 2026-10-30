@@ -7,7 +7,7 @@
  *
  * 量的不是「規則對不對」，而是「眼睛看到什麼」：直接從假 DOM 讀角色圖層每一格
  * 真正被寫進去的 transform，也就是角色在螢幕上的位置。像素再用角色自己的
- * scale(k) 換回「格」（k = view.scale × PLAYER_W ÷ 100），所以門檻可以直接用
+ * 場景的 data-world-scale 換回「格」，所以門檻可以直接用
  * 規則核心的速度上限來算，換視窗大小、換難度都不用改測試。
  *
  * 三個指標：
@@ -52,14 +52,12 @@ function readActors(w) {
     const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.attributes.get('transform') || '');
     if (!m) continue;
     const label = g.children.find(c => c.classes && c.classes.has('actor-name'));
-    /* 角色的 inner 是 scale(view.scale × PLAYER_W ÷ 100)，用它把像素換回「格」 */
-    const inner = g.children.find(c => c.classes && c.classes.has('actor-kid'));
-    const sm = inner ? /scale\(([\d.]+)\)/.exec(inner.attributes.get('transform') || '') : null;
+    /* 使用場景座標比例；角色美術可以獨立縮小，不能拿美術比例換算世界距離。 */
     out.push({
       name: label ? String(label.textContent) : '',
       x: Number(m[1]),
       y: Number(m[2]),
-      scale: sm ? Number(sm[1]) * 100 / C.PLAYER_W : 0
+      scale: Number(layer.attributes.get('data-world-scale')) || 0
     });
   }
   return out;

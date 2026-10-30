@@ -162,3 +162,31 @@ tallRender.setOptions({ fitHeight: false });
 assert.equal(tallRender.view.h, 684, '離開直向模式後恢復一般場景高度');
 assert.equal(tallActors.attributes.get('preserveAspectRatio'), 'xMidYMid meet');
 console.log('✓ 直向填滿操作區上方，同步角色座標並保留深淵比例');
+
+// 各裝置等比縮小，SVG 本地腳底 y=160 仍對齊規則中的腳底。
+for (const [device, width, height, viewH, fitHeight] of [
+  ['手機直向', 390, 684, 24, true],
+  ['手機橫向', 676, 390, 16, false],
+  ['平板直向', 768, 790, 18, true],
+  ['平板橫向', 1024, 768, 16, false],
+  ['桌機', 1156, 900, 16, false]
+]) {
+  const deviceCanvas = {
+    getContext: () => fakeContext(),
+    getBoundingClientRect: () => ({ width, height })
+  };
+  const deviceActors = new FakeElement('svg');
+  const deviceRender = loadRender().create(deviceCanvas, deviceActors);
+  deviceRender.setOptions({ viewH, fitHeight });
+  deviceRender.draw(stateWith(true), scene, charOf, 0, 0);
+  const actor = deviceActors.children[0];
+  const k = Number(actor.children[0].attributes.get('transform').match(/scale\(([^)]+)\)/)[1]);
+  const y = Number(actor.attributes.get('transform').match(/translate\([^,]+,([^)]+)\)/)[1]);
+  const scale = deviceRender.view.scale;
+  assert.ok(Math.abs(k / (scale * 1.25 / 100) - 0.9) < 0.001,
+    device + '：角色繪圖縮小 10%');
+  const expectedFeet = deviceRender.view.offY + 3 * scale;
+  assert.ok(Math.abs(y + 160 * k - expectedFeet) < 0.07,
+    device + '：縮小後腳底仍對齊階梯');
+}
+console.log('✓ 手機、平板直橫向與桌機的角色縮放及腳底座標');

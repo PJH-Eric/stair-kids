@@ -393,6 +393,7 @@
        * 多出來的高度讓 app.js 收掉（直向剛好留給下面的方向鍵）。 */
       view.wantStageH = Math.ceil((view.viewH + CEIL_UNITS + VOID_UNITS) * view.scale);
       if (actorSvg) {
+        actorSvg.setAttribute('data-world-scale', view.scale.toFixed(4));
         actorSvg.setAttribute('viewBox', '0 0 ' + view.w.toFixed(1) + ' ' + view.h.toFixed(1));
         actorSvg.setAttribute('preserveAspectRatio', opts.fitHeight ? 'none' : 'xMidYMid meet');
       }
@@ -1257,8 +1258,9 @@
     const TURN_TIME = 0.11;               /* 正面↔側身轉過去要多久（秒） */
 
     function drawActors(state, time, dt) {
-      const pw = playerW(), ph = playerH();
-      const k = view.scale * pw / 100;     /* 本地 100 單位 = PLAYER_W 格 */
+      /* 外觀等比縮小 10%，以腳底定位；碰撞尺寸保留既有玩法設定。 */
+      const pw = playerW() * 0.9, ph = playerH() * 0.9;
+      const k = view.scale * pw / 100;     /* 本地 100 單位 = 縮小後的角色寬度 */
       for (const p of state.players) {
         const a = actors.get(p.id);
         if (!a) continue;
