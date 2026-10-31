@@ -8,6 +8,7 @@
 
   let uid = 0;
   const C_FLASH = 0.22;                 /* 刺階閃白光的長度（秒），要跟 rules.js 的 step.flash 一致 */
+  const FLIP_TURN_TIME = 0.18;          /* 單次翻面動畫時間，獨立於階梯恢復時間 */
   /* 角色尺寸一律問規則核心，不在這裡另抄一份（抄了就會漂）。
    * SVG 的本地座標是 100 × 160，剛好是 1 : 1.6，所以只要 PLAYER_H = PLAYER_W × 1.6
    * 就可以用單一縮放，不會把小朋友壓扁。 */
@@ -836,11 +837,15 @@
       /* 階梯底下的一層柔影：讓階梯浮在背景上，不貼在牆面上 */
       if (st.kind === 'flip' && st.flipLeft > 0) {
         const duration = root.Rules ? root.Rules.C.FLIP_RECOVER : 1.5;
-        const progress = 1 - st.flipLeft / duration;
+        const elapsed = Math.max(0, duration - st.flipLeft);
+        /* 快速翻到背面、停留，恢復前再快速翻回；避免整段冷卻都在慢慢轉。 */
+        const turnTime = Math.min(FLIP_TURN_TIME, duration / 2);
+        const phase = elapsed < turnTime ? elapsed / turnTime
+          : st.flipLeft < turnTime ? 2 - st.flipLeft / turnTime : 1;
         ctx.globalAlpha = 0.45;
         if (!opts.reduceMotion) {
           ctx.translate(x0 + w / 2, y + h / 2);
-          ctx.scale(1, Math.cos(progress * Math.PI * 2));
+          ctx.scale(1, Math.cos(phase * Math.PI));
           ctx.translate(-x0 - w / 2, -y - h / 2);
         }
       }

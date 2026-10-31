@@ -43,13 +43,14 @@ class FakeElement {
   }
 }
 
-function fakeContext() {
+function fakeContext(scaleCalls) {
   const gradient = () => ({ addColorStop() {} });
   const target = {
     createLinearGradient: gradient,
     createRadialGradient: gradient,
     measureText: () => ({ width: 0 })
   };
+  if (scaleCalls) target.scale = (x, y) => scaleCalls.push([x, y]);
   return new Proxy(target, {
     get(obj, name) {
       if (name in obj) return obj[name];
@@ -200,3 +201,25 @@ for (const [device, width, height, viewH, fitHeight] of [
     device + '：縮小後腳底仍對齊階梯');
 }
 console.log('✓ 手機、平板直橫向與桌機的角色縮放及腳底座標');
+
+const flipScales = [];
+const flipCanvas = {
+  getContext: () => fakeContext(flipScales),
+  getBoundingClientRect: () => ({ width: 390, height: 684 })
+};
+const flipRender = loadRender().create(flipCanvas, new FakeElement('svg'));
+for (const flipLeft of [Rules.C.FLIP_RECOVER - 0.18, 0.75]) {
+  flipScales.length = 0;
+  const state = stateWith(true);
+  state.steps = [{ id: 'flip', kind: 'flip', depth: 4, x0: 3, x1: 8, flipLeft }];
+  flipRender.draw(state, scene, charOf, 0, 0);
+  assert.ok(flipScales.some(([x, y]) => x === 1 && Math.abs(y + 1) < 1e-8),
+    '0.18 秒內翻到背面，冷卻中保持背面');
+}
+flipRender.setOptions({ reduceMotion: true });
+flipScales.length = 0;
+const reducedFlipState = stateWith(true);
+reducedFlipState.steps = [{ id: 'flip', kind: 'flip', depth: 4, x0: 3, x1: 8, flipLeft: 0.75 }];
+flipRender.draw(reducedFlipState, scene, charOf, 0, 0);
+assert.ok(!flipScales.some(([, y]) => y < 0), '減少動態模式不旋轉翻板');
+console.log('✓ 翻轉階快速翻面、背面停留與減少動態模式');
