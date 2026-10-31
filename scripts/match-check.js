@@ -42,8 +42,9 @@ function botDir(s, p) {
   let best = null;
 
   for (const st of s.steps) {
-    if (st.broken) continue;
+    if (st.broken || st.flipLeft > 0) continue;
     if (st.depth <= p.y + 0.05 || st.depth > p.y + 9) continue;
+    if (st.flipIn != null && st.flipIn < Math.sqrt(2 * (st.depth - p.y) / Rules.C.GRAVITY)) continue;
     let lo = st.x0 - half + EDGE, hi = st.x1 + half - EDGE;
     if (lo > hi) { lo = hi = (st.x0 + st.x1) / 2; }
     let target = null;
