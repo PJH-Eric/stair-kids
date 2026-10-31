@@ -179,6 +179,16 @@ for (const [device, width, height, viewH, fitHeight] of [
   const deviceRender = loadRender().create(deviceCanvas, deviceActors);
   deviceRender.setOptions({ viewH, fitHeight });
   deviceRender.draw(stateWith(true), scene, charOf, 0, 0);
+  for (const reduceMotion of [false, true]) {
+    deviceRender.setOptions({ reduceMotion });
+    for (const status of [{}, { flipIn: 0.4 }, { flipLeft: 1.2 }, { flipLeft: 0.1 }]) {
+      const flipState = stateWith(true);
+      flipState.steps = [Object.assign({ id: 'flip', kind: 'flip', depth: 4, x0: 3, x1: 8 }, status)];
+      const before = JSON.stringify(flipState.steps);
+      deviceRender.draw(flipState, scene, charOf, 0, 1 / 60);
+      assert.equal(JSON.stringify(flipState.steps), before, device + '：繪圖不改變翻轉計時');
+    }
+  }
   const actor = deviceActors.children[0];
   const k = Number(actor.children[0].attributes.get('transform').match(/scale\(([^)]+)\)/)[1]);
   const y = Number(actor.attributes.get('transform').match(/translate\([^,]+,([^)]+)\)/)[1]);

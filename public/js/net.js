@@ -283,7 +283,7 @@
           m.steps = m.steps.filter(s => !gone.has(s.id));
         }
       }
-      /* 假階的崩解狀態是會變的，只能靠快照。
+      /* 假階崩解與翻轉階計時會改變，只能靠權威快照校正。
        * dirty 是「所有正在裂或已經碎掉的階梯」的完整清單，所以不在清單裡的一律要
        * 清回原狀 —— 這一段以前只更新清單裡的那幾階，於是：
        *   本地預測比伺服器超前 100ms 左右，會先踩上假階、先把 0.25 秒的引信點著；
@@ -298,8 +298,14 @@
         for (const d of snap.dirty) marked.set(d.id, d);
         for (const s of m.steps) {
           const d = marked.get(s.id);
-          if (d) { s.breakIn = d.breakIn; s.broken = d.broken; }
-          else if (s.breakIn != null || s.broken) { s.breakIn = null; s.broken = false; }
+          if (d) {
+            s.breakIn = d.breakIn; s.broken = d.broken;
+            s.flipIn = d.flipIn == null ? null : d.flipIn;
+            s.flipLeft = d.flipLeft || 0;
+          } else {
+            s.breakIn = null; s.broken = false;
+            s.flipIn = null; s.flipLeft = 0;
+          }
         }
       }
 

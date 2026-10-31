@@ -1547,7 +1547,7 @@
   /* ================= 怎麼玩：靜態圖文 ================= */
 
   function renderHelp() {
-    const steps = ['normal', 'belt', 'spring', 'spike', 'fake'];
+    const steps = ['normal', 'belt', 'spring', 'spike', 'fake', 'flip'];
     els.helpSteps.innerHTML = steps.map(id =>
       '<li>' + SvgUI.stepIcon(id) + '<div><b>' + T('help.step.' + id) + '</b><span>' +
       T('help.step.' + id + '.d') + '</span></div></li>').join('');

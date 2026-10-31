@@ -83,7 +83,7 @@
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M8 4h11l-2.4 4L19 12H8z" fill="currentColor"/></svg>';
   }
 
-  /* ---------- 五種階梯的小圖示（教學頁、色彩輔助說明用） ---------- */
+  /* ---------- 六種階梯的小圖示（教學頁、色彩輔助說明用） ---------- */
 
   function stepIcon(kind, w, h) {
     w = w || 96; h = h || 34;
@@ -104,6 +104,10 @@
         '<path d="M28 24q10-6 20 0t20-6" stroke="#C74F70" stroke-width="3" fill="none"/>' +
         '<rect x="20" y="10" width="56" height="10" rx="5" fill="#F27C9B"/>' +
         '<rect x="24" y="12" width="48" height="3" rx="1.5" fill="rgba(255,255,255,.6)"/>';
+    } else if (kind === 'flip') {
+      inner = '<rect x="4" y="12" width="88" height="16" rx="4" fill="#9874C6" stroke="#493064" stroke-width="2"/>' +
+        '<circle cx="12" cy="20" r="3" fill="#F8E8B5"/><circle cx="84" cy="20" r="3" fill="#F8E8B5"/>' +
+        '<path d="M55 16a8 8 0 1 0 0 8M51 12l5 4-6 3" fill="none" stroke="#fff" stroke-width="2"/>';
     } else if (kind === 'spike') {
       inner = '<rect x="4" y="14" width="88" height="14" rx="4" fill="#D6413B"/>' +
         '<path d="M8 14l6-10 6 10zM22 14l6-10 6 10zM36 14l6-10 6 10zM50 14l6-10 6 10zM64 14l6-10 6 10zM78 14l6-10 6 10z" fill="#FFF0EC"/>';

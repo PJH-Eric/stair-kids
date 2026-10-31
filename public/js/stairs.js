@@ -20,15 +20,16 @@
 })(typeof self !== 'undefined' ? self : this, function (RNG) {
   'use strict';
 
-  /* 五種階梯（規劃書 §1.3） */
+  /* 六種階梯（原五種階梯加上可恢復的翻轉階） */
   const KIND = {
     NORMAL: 'normal',   /* 普通階：木頭／磚塊，站著不動 */
     BELT: 'belt',       /* 輸送帶：滾輪＋箭頭，帶著走 ±3 格／秒 */
     SPRING: 'spring',   /* 彈簧跳床：踩到往上彈 */
     SPIKE: 'spike',     /* 刺階：紅底尖刺，踩到 −1 愛心 */
-    FAKE: 'fake'        /* 假階：偏白有裂痕，0.25 秒後崩解 */
+    FAKE: 'fake',       /* 假階：偏白有裂痕，0.25 秒後崩解 */
+    FLIP: 'flip'        /* 翻轉階：踩上後翻面，稍後恢復 */
   };
-  const KIND_LIST = [KIND.NORMAL, KIND.BELT, KIND.SPRING, KIND.SPIKE, KIND.FAKE];
+  const KIND_LIST = [KIND.NORMAL, KIND.BELT, KIND.SPRING, KIND.SPIKE, KIND.FAKE, KIND.FLIP];
   /** 安全落點＝普通階或輸送帶（規劃書 §3「保底安全落點」） */
   const SAFE_KINDS = [KIND.NORMAL, KIND.BELT];
 
@@ -77,7 +78,8 @@
     TWO_STEP_MIN_GAP: MIN_PASS,  /* 同一層兩階之間的空隙＝一定過得去的寬度（見 MIN_PASS） */
     TWO_STEP_MAX_SEP: 6.4,/* 同一層兩階最遠只能隔這麼開；理由見 x0RangeAll() 的註解 */
     BELT_RATE: 0.14,      /* ★ 規劃書沒給輸送帶比例，這是實作假設值（見 README 待確認清單） */
-    SPRING_RATE: 0.10     /* ★ 規劃書沒給彈簧比例，這是實作假設值（見 README 待確認清單） */
+    SPRING_RATE: 0.10,    /* ★ 規劃書沒給彈簧比例，這是實作假設值（見 README 待確認清單） */
+    FLIP_RATE: 0.08       /* 翻轉階占一般抽選權重 8%，幼幼班不出現 */
   };
 
   /**
@@ -128,7 +130,7 @@
       layer: 0,                 /* 下一層要產出的編號 */
       depth: 0,                 /* 上一層的深度 */
       prev: null,               /* 上一層：{ depth, steps: [...] } */
-      run: { belt: 0, spring: 0, spike: 0, fake: 0 },  /* 特殊階連續幾層 */
+      run: { belt: 0, spring: 0, spike: 0, fake: 0, flip: 0 },  /* 特殊階連續幾層 */
       unsafeRun: 0,             /* 連續幾層沒有安全落點 */
       blurry: 0                 /* 為了可達性而放行的模糊細縫層數（見 clearX0） */
     };
@@ -140,11 +142,12 @@
     if (mustSafe) return SAFE_KINDS.slice();            /* 保底安全落點 */
     const out = [KIND.NORMAL];
     const prevKinds = gen.prev ? gen.prev.steps.map(s => s.kind) : [];
-    for (const k of [KIND.BELT, KIND.SPRING, KIND.SPIKE, KIND.FAKE]) {
+    for (const k of [KIND.BELT, KIND.SPRING, KIND.SPIKE, KIND.FAKE, KIND.FLIP]) {
       if (gen.run[k] >= C.MAX_SAME_RUN) continue;                       /* 不連續超過 2 層 */
       if (k === KIND.SPIKE && prevKinds.indexOf(KIND.SPIKE) >= 0) continue; /* 刺階不連續出現 */
       if (k === KIND.SPIKE && gen.rates.spike <= 0) continue;
       if (k === KIND.FAKE && gen.rates.fake <= 0) continue;
+      if (k === KIND.FLIP && gen.rates.spike <= 0 && gen.rates.fake <= 0) continue;
       out.push(k);
     }
     return out;
@@ -156,6 +159,7 @@
     weight[KIND.SPRING] = C.SPRING_RATE;
     weight[KIND.SPIKE] = gen.rates.spike;
     weight[KIND.FAKE] = gen.rates.fake;
+    weight[KIND.FLIP] = C.FLIP_RATE;
     let special = 0;
     const items = [];
     for (const k of allowed) {
@@ -325,7 +329,7 @@
 
     /* ---- 更新連續性計數 ---- */
     const kinds = steps.map(s => s.kind);
-    for (const k of [KIND.BELT, KIND.SPRING, KIND.SPIKE, KIND.FAKE]) {
+    for (const k of [KIND.BELT, KIND.SPRING, KIND.SPIKE, KIND.FAKE, KIND.FLIP]) {
       gen.run[k] = kinds.indexOf(k) >= 0 ? gen.run[k] + 1 : 0;
     }
     gen.unsafeRun = kinds.some(k => SAFE_KINDS.indexOf(k) >= 0) ? 0 : gen.unsafeRun + 1;

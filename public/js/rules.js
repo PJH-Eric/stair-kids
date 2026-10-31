@@ -69,6 +69,8 @@
     SPIKE_DEEP_WORLDS: 3,        /* 傷害從「淺處範圍」推到「深處範圍」要幾個世界（＝300 公尺） */
     INVULN: 0.6,                 /* 扣血後的無敵閃爍（只擋「同類」傷害） */
     FAKE_DELAY: 0.25,            /* 假階踩到幾秒後崩解 */
+    FLIP_DELAY: 0.8,             /* 翻轉階踩上後的延遲時間 */
+    FLIP_RECOVER: 1.5,           /* 翻轉期間不能站立，之後恢復 */
     SPIKE_FLASH: 0.22,           /* 踩到刺時那一階閃白光的長度（純畫面，render.js 用同一個值） */
     CEIL_PUSH: 14.0,             /* 被天花板刺到時往下推的初速（格／秒）。
                                   * 一定要大於保底下捲，否則玩家會「黏」在天花板上：
@@ -276,7 +278,7 @@
   function resolveLanding(steps, x, fromY, toY) {
     let hit = null;
     for (const st of steps) {
-      if (st.broken) continue;
+      if (st.broken || st.flipLeft > 0) continue;
       if (st.depth < fromY - EPS || st.depth > toY + EPS) continue;
       if (!overlapsX(st, x)) continue;
       if (!hit || st.depth < hit.depth) hit = st;
@@ -474,6 +476,26 @@
     s.time += dt;
     if (s.worldFade > 0) s.worldFade = Math.max(0, s.worldFade - dt);
 
+    /* ---- 翻轉階：共享倒數、翻轉放人、恢復後可再次觸發 ---- */
+    for (const st of s.steps) {
+      if (st.kind !== KIND.FLIP) continue;
+      if (st.flipLeft > 0) {
+        st.flipLeft = Math.max(0, st.flipLeft - dt);
+        if (st.flipLeft <= EPS) {
+          st.flipLeft = 0;
+          events.push({ type: 'flipRecover', step: st.id });
+        }
+      } else if (st.flipIn != null) {
+        st.flipIn = Math.max(0, st.flipIn - dt);
+        if (st.flipIn <= EPS) {
+          st.flipIn = null;
+          st.flipLeft = C.FLIP_RECOVER;
+          for (const p of s.players) if (p.onStep === st.id) p.onStep = null;
+          events.push({ type: 'flip', step: st.id });
+        }
+      }
+    }
+
     /* ---- 假階崩解計時 ---- */
     for (const st of s.steps) {
       if (st.breakIn == null || st.broken) continue;
@@ -507,7 +529,7 @@
 
       /* 站著的階梯還在不在、還踩不踩得到 */
       let ground = p.onStep ? stepById(s, p.onStep) : null;
-      if (ground && (ground.broken || !overlapsX(ground, p.x))) { ground = null; p.onStep = null; }
+      if (ground && (ground.broken || ground.flipLeft > 0 || !overlapsX(ground, p.x))) { ground = null; p.onStep = null; }
 
       /* 水平：等速，站在輸送帶上再加帶動速度 */
       let vx = p.dir * C.MOVE_SPEED;
@@ -692,6 +714,10 @@
         damage(p, rollSpikeDamage(s, p, step.id), 'spike', events);
       }
       return;
+    }
+    if (step.kind === KIND.FLIP && step.flipIn == null && !(step.flipLeft > 0)) {
+      step.flipIn = C.FLIP_DELAY;
+      events.push({ type: 'flipReady', player: p.id, step: step.id });
     }
     if (step.kind === KIND.FAKE) {
       if (step.breakIn == null) {

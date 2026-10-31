@@ -823,7 +823,7 @@
       ctx.stroke();
     }
 
-    /* ---------- 階梯：五種都用不同形狀＋不同顏色＋不同動態 ---------- */
+    /* ---------- 階梯：六種都用不同形狀＋不同顏色＋不同動態 ---------- */
 
     function drawStep(st, scene, camTop, time) {
       const x0 = px(st.x0), x1 = px(st.x1);
@@ -834,6 +834,16 @@
 
       ctx.save();
       /* 階梯底下的一層柔影：讓階梯浮在背景上，不貼在牆面上 */
+      if (st.kind === 'flip' && st.flipLeft > 0) {
+        const duration = root.Rules ? root.Rules.C.FLIP_RECOVER : 1.5;
+        const progress = 1 - st.flipLeft / duration;
+        ctx.globalAlpha = 0.45;
+        if (!opts.reduceMotion) {
+          ctx.translate(x0 + w / 2, y + h / 2);
+          ctx.scale(1, Math.cos(progress * Math.PI * 2));
+          ctx.translate(-x0 - w / 2, -y - h / 2);
+        }
+      }
       if (st.kind !== 'spring' && st.kind !== 'spike') {
         ctx.fillStyle = 'rgba(40,20,5,.14)';
         roundRect(x0 + 3, y + h * 0.62, w - 6, h * 0.7, h * 0.35);
@@ -883,6 +893,23 @@
           ctx.stroke();
           ctx.restore();
         }
+      } else if (st.kind === 'flip') {
+        /* 紫色翻板＋中央轉軸與迴轉箭頭，不只依賴顏色辨識。 */
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, '#B59CE7'); g.addColorStop(1, '#73509F');
+        roundRect(x0, y, w, h, 4); ctx.fillStyle = g; ctx.fill();
+        ctx.strokeStyle = '#493064'; ctx.lineWidth = assist ? 3 : 2;
+        if (st.flipLeft > 0) ctx.setLineDash([4, 3]);
+        roundRect(x0, y, w, h, 4); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#F8E8B5';
+        for (const cx of [x0 + h * 0.4, x1 - h * 0.4]) {
+          ctx.beginPath(); ctx.arc(cx, y + h / 2, h * 0.18, 0, Math.PI * 2); ctx.fill();
+        }
+        const cx = x0 + w / 2, cy = y + h / 2;
+        ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, h * 0.28, 0.3, Math.PI * 1.8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx + h * 0.1, cy - h * 0.42);
+        ctx.lineTo(cx + h * 0.33, cy - h * 0.2); ctx.lineTo(cx + h * 0.05, cy - h * 0.12); ctx.stroke();
       } else if (st.kind === 'fake') {
         /* 假階：顏色偏白 ＋ 邊緣裂痕 */
         const g = ctx.createLinearGradient(0, y, 0, y + h);

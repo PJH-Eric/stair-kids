@@ -24,6 +24,13 @@ ok('房間卡片三種狀態圖示不同', () => {
   assert.notEqual(a, b); assert.notEqual(b, c); assert.notEqual(a, c);
 });
 
+ok('翻轉階具有獨立的轉軸與迴轉圖示', () => {
+  const flip = SvgUI.stepIcon('flip');
+  assert.notEqual(flip, SvgUI.stepIcon('fake'));
+  assert.ok(flip.includes('<circle'));
+  assert.ok(flip.includes('a8 8'));
+});
+
 ok('空席插畫使用該席位的玩家色', () => {
   assert.ok(SvgUI.emptySeatArt('#4F86D6').includes('#4F86D6'));
   assert.ok(SvgUI.emptySeatArt('#F2545B').includes('#F2545B'));

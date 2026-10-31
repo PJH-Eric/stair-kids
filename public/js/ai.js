@@ -140,7 +140,7 @@
     /* 只看下方 lookahead 層，看不到更下面的東西（不作弊） */
     const layers = [];
     for (const st of s.steps) {
-      if (st.broken) continue;
+      if (st.broken || st.flipLeft > 0) continue;
       if (st.depth <= me.y + 0.05) continue;
       let row = layers.find(r => Math.abs(r.depth - st.depth) < 0.01);
       if (!row) { row = { depth: st.depth, steps: [] }; layers.push(row); }
@@ -181,7 +181,7 @@
           const hi = Math.max(me.x, target) + HALF;
           let blocked = false;
           for (const other of s.steps) {
-            if (other === st || other.broken) continue;
+            if (other === st || other.broken || other.flipLeft > 0) continue;
             if (other.depth <= me.y + 0.05 || other.depth >= st.depth - 0.01) continue;
             if (other.x1 > lo + 1e-9 && other.x0 < hi - 1e-9) { blocked = true; break; }
           }
@@ -196,6 +196,11 @@
         if (drop > 12) score += (drop - 12) * 3;
         score += Math.abs(target - me.x) * 0.22;           /* 要橫走多遠 */
         score += cfg.avoid[st.kind] || 0;                  /* 落點安全性 */
+        if (st.kind === KIND.FLIP) {
+          /* 可恢復且不造成傷害，風險接近輸送帶；倒數不足以落地時才排除。 */
+          score += cfg.avoid.belt || 0;
+          if (st.flipIn != null && st.flipIn < Math.sqrt(2 * drop / C.GRAVITY)) continue;
+        }
         if (st.kind === KIND.SPRING) {
           /* 彈簧會把人往上彈：平常要避開，快被天花板頂到時反而不能踩 */
           score += cfg.springUse * (1 + panic);
