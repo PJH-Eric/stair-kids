@@ -177,20 +177,33 @@ console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單�
       ' 秒、下到 ' + fmt(avg[difficulty].meters) + ' m、' + fmt(avg[difficulty].speed) + ' m／秒' +
       '（5 局裡有 ' + survived + ' 局撐到 ' + DIFF_CAP + ' 秒上限）');
   }
-  /* 注意：這隻貪心機器人只是驗收用的假手，撐多久很吃它自己的爛決策，
-   * 所以這裡只驗「下降速度跟著難度變快」這個規則層面的結果。
-   * 四段難度真正的行為差異驗收在 M1 的 scripts/ai-check.js。 */
-  ok(avg.hard.speed >= avg.easy.speed,
-    '越難掉得越快（保底下捲速度單調遞增）',
-    '簡單 ' + fmt(avg.easy.speed) + '、困難 ' + fmt(avg.hard.speed));
+  /* 機器人的平均下降速度包含自由落體、翻轉階與存活時間的影響，
+   * 不是保底下捲速度。用相同站立條件直接量測鏡頭，隔離路線與落點差異。
+   * 加速前後、各難度的加速分界，以及到達上限後都必須符合規則。 */
+  for (const time of [0, 17.99, 18, 20, 22, 120, 600]) {
+    const speeds = [];
+    let followsRule = true;
+    for (const difficulty of ['easy', 'normal', 'hard']) {
+      const s = Rules.createMatch({ difficulty, mode: 'solo', players: [{ id: 'speed' }] }, 'camera-speed');
+      s.phase = 'playing'; s.time = time; s.cameraTop = 0; s.gen.depth = Infinity;
+      const depth = Rules.C.CAMERA_LEAD;
+      s.steps = [{ id: 'floor', kind: 'normal', depth, x0: 0, x1: Rules.C.FIELD_W }];
+      Object.assign(s.players[0], { x: Rules.C.FIELD_W / 2, y: depth, vy: 0, onStep: 'floor' });
+      Rules.stepMatch(s, {}, Rules.STEP_MS);
+      const actual = s.cameraTop / Rules.STEP;
+      const d = Rules.DIFFICULTY[difficulty];
+      const multiplier = Math.min(d.scrollCap,
+        Math.pow(1 + d.accelRate, Math.floor((time + Rules.STEP) / d.accelEvery)));
+      const expected = d.scrollBase * multiplier;
+      followsRule = followsRule && Math.abs(actual - expected) < 1e-9;
+      speeds.push(actual);
+    }
+    ok(followsRule, time + ' 秒：實際鏡頭速度符合保底下捲、加速與上限規則');
+    ok(speeds[0] < speeds[1] && speeds[1] < speeds[2],
+      time + ' 秒：相同條件下鏡頭速度隨難度單調遞增', speeds.map(v => fmt(v)).join(' → '));
+  }
   ok(avg.easy.meters > 20 && avg.normal.meters > 20 && avg.hard.meters > 20,
     '三段難度都能穩定跑完一局並拿到成績');
-  /* 舊版比的是「總公尺數」，但那個數字被存活時間汙染了：
-   * 簡單會一路撐到 90 秒上限，公尺數自然多；困難早早就死，公尺數自然少。
-   * 「越難越明顯」該看的是兩件分開的事 —— 掉得多快，以及撐多久。 */
-  ok(avg.easy.speed < avg.normal.speed && avg.normal.speed < avg.hard.speed,
-    '越難掉得越快，而且三段是單調的（' + fmt(avg.easy.speed) + ' → ' + fmt(avg.normal.speed) +
-    ' → ' + fmt(avg.hard.speed) + ' m／秒）');
   ok(avg.easy.secs > avg.normal.secs && avg.normal.secs > avg.hard.secs,
     '越難撐得越短，三段也是單調的（' + fmt(avg.easy.secs) + ' → ' + fmt(avg.normal.secs) +
     ' → ' + fmt(avg.hard.secs) + ' 秒）');
@@ -200,7 +213,8 @@ console.log('\n【難度差異】（每段難度跑 5 局取平均，避免單�
     ' → ' + avg.hard.survived + ' 局／5 局）');
   const camSpeed = id => Rules.DIFFICULTY[id].scrollBase;
   ok(camSpeed('easy') < camSpeed('normal') && camSpeed('normal') < camSpeed('hard'),
-    '難度的保底下捲速度本身是單調遞增的（2.0 < 2.8 < 3.6）');
+    '難度的保底下捲速度設定單調遞增（' +
+    ['easy', 'normal', 'hard'].map(camSpeed).join(' < ') + '）');
 }
 
 console.log('\n【跟電腦對戰】（M1 驗收：同畫面共用樓梯、推擠、倒數 3 秒、玩家一死就結束）');

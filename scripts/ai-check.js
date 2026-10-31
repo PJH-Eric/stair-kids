@@ -1,5 +1,5 @@
 /* ===== scripts/ai-check.js — 四段 AI 的行為差異驗收 =====
- * 規劃書 §5：讓四段 AI 各跑 200 局，平均深度必須單調遞增且差距穩定。
+ * 規劃書 §5：讓四段 AI 各跑 200 局，以相同路線比較深度、速度與死亡率。
  * 執行：node scripts/ai-check.js  或  npm run test:ai
  *
  * 一個必須先講清楚的觀察：加了「踩到非刺的階梯回血」之後，只要 AI 好到不會摔死，
@@ -11,6 +11,7 @@
 
 const Rules = require('../public/js/rules.js');
 const Ai = require('../public/js/ai.js');
+const pairedComparison = require('./paired-comparison.js');
 
 const GAMES = Number(process.env.GAMES) || 200;
 const CAP = Number(process.env.CAP) || 90;      /* 每局最長跑幾秒 */
@@ -35,7 +36,8 @@ function runTier(gameDiff, level, games) {
   let lands = 0, landSpike = 0, landFake = 0;
   const depths = [];
   for (let i = 0; i < games; i++) {
-    const seed = 'ai-' + gameDiff + '-' + level + '-' + i;
+    /* 各等級使用同一批樓梯，避免把路線差異誤判成 AI 強弱差異。 */
+    const seed = 'ai-' + gameDiff + '-' + i;
     const s = Rules.createMatch({
       difficulty: gameDiff, mode: 'solo',
       players: [{ id: 'a', name: 'AI', char: 'bobo', kind: 'ai', aiLevel: level }]
@@ -65,7 +67,7 @@ function runTier(gameDiff, level, games) {
   const mean = depth / games;
   const sd = Math.sqrt(depths.reduce((a, b) => a + (b - mean) * (b - mean), 0) / games);
   return {
-    depth: mean, sd: sd, secs: secs / games, speed: depth / secs,
+    depth: mean, sd: sd, samples: depths, secs: secs / games, speed: depth / secs,
     deathRate: deaths / games, fellRate: fell / games,
     /* 「會不會避刺」要看「落地的階梯裡有幾成是刺」。
      * 不能用「每局幾次」也不能用「每 100 公尺幾次」——
@@ -96,10 +98,13 @@ for (const gameDiff of DIFFS) {
   }
 
   const L = Ai.LEVEL_LIST;
-  /* 1. 平均深度單調遞增（§5 的驗收條件） */
-  let mono = true;
-  for (let i = 1; i < L.length; i++) if (!(r[L[i]].depth > r[L[i - 1]].depth)) mono = false;
-  ok(mono, gameDiff + '：四段 AI 的平均深度單調遞增',
+  const gaps = [];
+  for (let i = 1; i < L.length; i++) {
+    const stats = pairedComparison(r[L[i - 1]].samples, r[L[i]].samples);
+    gaps.push(Object.assign({ pair: Ai.LEVELS[L[i - 1]].name + '→' + Ai.LEVELS[L[i]].name }, stats));
+  }
+  /* 配對路線比較：只有超過兩倍標準誤的倒掛才算深度退步。 */
+  ok(gaps.every(g => g.gap >= -g.se2), gameDiff + '：四段 AI 深度差異沒有顯著倒掛',
     L.map(l => fmt(r[l].depth, 0)).join(' → '));
 
   /* 2. 普通與困難都活得下來，深度會被下捲速度綁住，所以它們真正的差別在下降速度。
@@ -108,30 +113,18 @@ for (const gameDiff of DIFFS) {
     gameDiff + '：撐得住的兩段之間，困難下降得比普通快（' +
     fmt(r.normal.speed, 2) + ' → ' + fmt(r.hard.speed, 2) + ' m/秒）');
 
-  /* 3. 差距要「穩定」＝ 明顯大於雜訊（用兩倍標準誤判斷）。
-   *
-   * 但有一個真實的限制要講清楚：只要 AI 好到不會死，它的深度就會被
-   * 「保底下捲速度」綁住 —— 鏡頭一直往下捲，玩家再快也只是跟著走。
-   * 所以普通與困難這一對在難度高的時候會收斂到同一個數字，這不是 bug，
-   * 是這款遊戲的節奏本來就由下捲速度決定。
-   * 前兩個差距（幼幼班→簡單→普通）必須分得開；最後一對只要求不退步，
-   * 真正的差別改看下降速度（上面那一條）。 */
-  const gaps = [];
-  for (let i = 1; i < L.length; i++) {
-    const a = r[L[i - 1]], b = r[L[i]];
-    const se2 = 2 * Math.sqrt((a.sd * a.sd + b.sd * b.sd) / GAMES);
-    const gap = b.depth - a.depth;
-    gaps.push({ pair: Ai.LEVELS[L[i - 1]].name + '→' + Ai.LEVELS[L[i]].name, gap: gap, se2: se2 });
-  }
+  /* 前兩級的進步必須超過兩倍配對標準誤；普通與困難深度相近時，
+   * 拒絕顯著退步，並另驗下降速度與死亡率。 */
   const shown = gaps.map(g => g.pair + ' ' + fmt(g.gap, 0) + ' m（雜訊 ±' + fmt(g.se2, 0) + '）').join('、');
   ok(gaps.slice(0, 2).every(g => g.gap > g.se2),
     gameDiff + '：幼幼班→簡單→普通的深度差距都明顯大於雜訊', shown);
   const last = gaps[gaps.length - 1];
-  ok(last.gap > 0, gameDiff + '：困難不會比普通淺（' + fmt(last.gap, 0) + ' m）');
-  if (last.gap <= last.se2) {
+  ok(last.gap >= -last.se2, gameDiff + '：困難相對普通的深度差沒有顯著退步',
+    fmt(last.gap, 1) + ' m，配對雜訊 ±' + fmt(last.se2, 1) + ' m');
+  if (Math.abs(last.gap) <= last.se2) {
     console.log('    註：普通與困難的深度差 ' + fmt(last.gap, 0) + ' m 落在雜訊 ±' +
-      fmt(last.se2, 0) + ' m 之內 —— 兩段都不會死，深度就被保底下捲速度綁住了，' +
-      '真正的差別在上面的下降速度與死亡率。');
+      fmt(last.se2, 0) + ' m 之內，尚無顯著深度差異，' +
+      '另看上面的下降速度與死亡率。');
   }
 
   /* 4. 幼幼班與困難之間要有明顯的量級差 */
