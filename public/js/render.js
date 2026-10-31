@@ -836,7 +836,7 @@
       ctx.save();
       /* 階梯底下的一層柔影：讓階梯浮在背景上，不貼在牆面上 */
       if (st.kind === 'flip' && st.flipLeft > 0) {
-        const duration = root.Rules ? root.Rules.C.FLIP_RECOVER : 1.5;
+        const duration = root.Rules ? root.Rules.C.FLIP_RECOVER : 0.5;
         const elapsed = Math.max(0, duration - st.flipLeft);
         /* 快速翻到背面、停留，恢復前再快速翻回；避免整段冷卻都在慢慢轉。 */
         const turnTime = Math.min(FLIP_TURN_TIME, duration / 2);

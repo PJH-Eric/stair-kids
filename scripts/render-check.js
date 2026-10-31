@@ -182,7 +182,7 @@ for (const [device, width, height, viewH, fitHeight] of [
   deviceRender.draw(stateWith(true), scene, charOf, 0, 0);
   for (const reduceMotion of [false, true]) {
     deviceRender.setOptions({ reduceMotion });
-    for (const status of [{}, { flipIn: 0.4 }, { flipLeft: 1.2 }, { flipLeft: 0.1 }]) {
+    for (const status of [{}, { flipIn: Rules.C.FLIP_DELAY / 2 }, { flipLeft: Rules.C.FLIP_RECOVER * 0.8 }, { flipLeft: 0.1 }]) {
       const flipState = stateWith(true);
       flipState.steps = [Object.assign({ id: 'flip', kind: 'flip', depth: 4, x0: 3, x1: 8 }, status)];
       const before = JSON.stringify(flipState.steps);
@@ -208,7 +208,7 @@ const flipCanvas = {
   getBoundingClientRect: () => ({ width: 390, height: 684 })
 };
 const flipRender = loadRender().create(flipCanvas, new FakeElement('svg'));
-for (const flipLeft of [Rules.C.FLIP_RECOVER - 0.18, 0.75]) {
+for (const flipLeft of [Rules.C.FLIP_RECOVER - 0.18, Rules.C.FLIP_RECOVER / 2]) {
   flipScales.length = 0;
   const state = stateWith(true);
   state.steps = [{ id: 'flip', kind: 'flip', depth: 4, x0: 3, x1: 8, flipLeft }];
@@ -219,7 +219,7 @@ for (const flipLeft of [Rules.C.FLIP_RECOVER - 0.18, 0.75]) {
 flipRender.setOptions({ reduceMotion: true });
 flipScales.length = 0;
 const reducedFlipState = stateWith(true);
-reducedFlipState.steps = [{ id: 'flip', kind: 'flip', depth: 4, x0: 3, x1: 8, flipLeft: 0.75 }];
+reducedFlipState.steps = [{ id: 'flip', kind: 'flip', depth: 4, x0: 3, x1: 8, flipLeft: Rules.C.FLIP_RECOVER / 2 }];
 flipRender.draw(reducedFlipState, scene, charOf, 0, 0);
 assert.ok(!flipScales.some(([, y]) => y < 0), '減少動態模式不旋轉翻板');
 console.log('✓ 翻轉階快速翻面、背面停留與減少動態模式');
