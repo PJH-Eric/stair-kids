@@ -11,8 +11,8 @@
 
   var zh = {
     /* ---------- 共用 ---------- */
-    'meta.title': "小朋友下樓梯｜免費線上反應闖關遊戲",
-    'meta.desc': "免費免下載的小朋友下樓梯，只用左右移動踩住階梯，閃避追來的天花板與危險機關。多種階梯、難度及世界可挑戰，也能對戰電腦、線上雙人競賽或觀戰，手機平板可玩。",
+    'meta.title': "小朋友下樓梯｜免費單人挑戰・線上雙人對戰",
+    'meta.desc': "小朋友下樓梯，左右閃躲、一路向下！踩穩階梯、避開尖刺與天花板，挑戰自己的最深紀錄。免費免下載，支援單人挑戰、電腦對戰、線上雙人競賽與觀戰，手機、平板、電腦隨時開玩。",
     'lang.switchTo': '切換成英文',
     'common.playerName': '小玩家',
     'fmt.range': '{a}～{b}',
@@ -31,14 +31,14 @@
 
     /* ---------- 首頁 ---------- */
     'home.title': '小朋友下樓梯',
-    'home.subtitle': '一直往下跑，別被上面的天花板追到',
+    'home.subtitle': '左右閃躲，挑戰更深一層',
     'home.keys': '只有 <span class="kbd">←</span> <span class="kbd">→</span> 兩個方向（或 <span class="kbd">A</span> <span class="kbd">D</span>），沒有跳',
     'home.solo': '一個人玩',
     'home.solo.sub': '挑戰自己的最深紀錄',
     'home.versus.sub': '兩人比誰下得深，也能觀戰',
     'home.versus': '跟別人玩',
     'home.help': '怎麼玩',
-    'home.art': '小朋友站在樓梯口往下看',
+    'home.art': '小朋友沿著浮空階梯向下探索',
     'home.rec.visited': function (p) { return '去過<b>' + p.name + '</b>'; },
     'home.rec.fav': function (p) { return '常用<b>' + p.name + '</b>'; },
     'home.rec.online': function (p) { return '線上<b>' + p.w + ' 勝 ' + p.l + ' 敗</b>'; },
@@ -387,8 +387,8 @@
   };
 
   var en = {
-    'meta.title': 'Stair Kids',
-    'meta.desc': 'Stair Kids - a cute endless stair-running game with 5 step types, 4 levels and 6 worlds.',
+    'meta.title': 'Stair Kids | Free Solo & Online 2-Player Game',
+    'meta.desc': 'Move left and right, land on platforms and dodge spikes and the ceiling. Play Stair Kids free in your browser: solo, against the computer or with a friend online. No download needed.',
     'lang.switchTo': 'Switch to Traditional Chinese',
     'common.playerName': 'Player',
     'fmt.range': '{a}–{b}',
@@ -405,14 +405,14 @@
     'nav.leave': '← Leave Room',
 
     'home.title': 'Stair Kids',
-    'home.subtitle': "Keep running down. Don't let the ceiling catch you!",
+    'home.subtitle': "Dodge left and right. Go one level deeper!",
     'home.keys': '<span class="kbd">←</span> <span class="kbd">→</span> / <span class="kbd">A</span> <span class="kbd">D</span> · No jumping',
     'home.solo': 'Solo Play',
     'home.solo.sub': 'Chase your deepest record',
     'home.versus.sub': 'Race a friend down, or just watch',
     'home.versus': 'Play Together',
     'home.help': 'How to Play',
-    'home.art': 'A kid standing at the top of the stairs, looking down',
+    'home.art': 'A kid exploring floating platforms on the way down',
     'home.rec.visited': function (p) { return 'Reached<b>' + p.name + '</b>'; },
     'home.rec.fav': function (p) { return 'Favorite<b>' + p.name + '</b>'; },
     'home.rec.online': function (p) { return 'Online<b>' + p.w + 'W ' + p.l + 'L</b>'; },
@@ -829,8 +829,8 @@
 // 由繁體中文介面字典轉換；動態參數（暱稱、分數等）維持原值。
 (function (root) {
   var hans = {
-    "meta.title": "小朋友下楼梯｜免费线上反应闯关游戏",
-    "meta.desc": "免费免下载的小朋友下楼梯，只用左右移动踩住阶梯，闪避追来的天花板与危险机关。多种阶梯、难度及世界可挑战，也能对战电脑、线上双人竞赛或观战，手机平板可玩。",
+    "meta.title": "小朋友下楼梯｜免费单人挑战・线上双人对战",
+    "meta.desc": "小朋友下楼梯，左右闪躲、一路向下！踩稳阶梯、避开尖刺与天花板，挑战自己的最深纪录。免费免下载，支持单人挑战、电脑对战、线上双人竞赛与观战，手机、平板、电脑随时开玩。",
     "lang.switchTo": "切换成英文",
     "common.playerName": "小玩家",
     "fmt.range": "{a}～{b}",
@@ -845,14 +845,14 @@
     "nav.back": "← 返回",
     "nav.leave": "← 离开房间",
     "home.title": "小朋友下楼梯",
-    "home.subtitle": "一直往下跑，别被上面的天花板追到",
+    "home.subtitle": "左右闪躲，挑战更深一层",
     "home.keys": "只有 <span class=\"kbd\">←</span> <span class=\"kbd\">→</span> 两个方向（或 <span class=\"kbd\">A</span> <span class=\"kbd\">D</span>），没有跳",
     "home.solo": "一个人玩",
     "home.solo.sub": "挑战自己的最深纪录",
     "home.versus.sub": "两人比谁下得深，也能观战",
     "home.versus": "跟别人玩",
     "home.help": "怎么玩",
-    "home.art": "小朋友站在楼梯口往下看",
+    "home.art": "小朋友沿着浮空阶梯向下探索",
     "home.rec.visited": function (p) { return "去过<b>" + p.name + "</b>"; },
     "home.rec.fav": function (p) { return "常用<b>" + p.name + "</b>"; },
     "home.rec.online": function (p) { return "线上<b>" + p.w + " 胜 " + p.l + " 败</b>"; },

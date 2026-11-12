@@ -1,13 +1,13 @@
 {
   "id": "stair-kids",
   "siteUrl": "https://pjh-eric.github.io/stair-kids/",
-  "title": "小朋友下樓梯｜免費線上反應闖關遊戲",
-  "description": "免費免下載的小朋友下樓梯，只用左右移動踩住階梯，閃避追來的天花板與危險機關。多種階梯、難度及世界可挑戰，也能對戰電腦、線上雙人競賽或觀戰，手機平板可玩。",
+  "title": "小朋友下樓梯｜免費單人挑戰・線上雙人對戰",
+  "description": "小朋友下樓梯，左右閃躲、一路向下！踩穩階梯、避開尖刺與天花板，挑戰自己的最深紀錄。免費免下載，支援單人挑戰、電腦對戰、線上雙人競賽與觀戰，手機、平板、電腦隨時開玩。",
   "lobbyUrl": "https://pjh-eric.github.io/game-lobby/",
   "googleSiteVerification": "",
   "genre": "動作",
   "players": "1-2",
   "iconUrl": "https://pjh-eric.github.io/stair-kids/favicon-96.png",
-  "ogImage": "https://pjh-eric.github.io/stair-kids/assets/images/cover.webp",
-  "ogImageAlt": "小朋友下樓梯 遊戲封面"
+  "ogImage": "https://pjh-eric.github.io/stair-kids/assets/images/seo.webp",
+  "ogImageAlt": "小朋友下樓梯：橘色吊帶褲小朋友走向傳送帶與彈簧階梯，搭配遊戲標題"
 }
