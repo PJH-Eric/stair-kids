@@ -29,6 +29,7 @@
 <!--SEO:END-->
 
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/lobby-chat.css?v=20261112">
 <link rel="stylesheet" href="css/adventure.css">
 <link rel="stylesheet" href="css/latency.css?v=20261002c">
 <link rel="icon" type="image/png" sizes="96x96" href="favicon-96.png">
@@ -489,6 +490,11 @@
             <input class="switch-input" type="checkbox" id="set-motion">
             <span class="switch" aria-hidden="true"></span>
           </label>
+          <label class="set-row" for="set-lobbychat">
+            <span class="set-text"><b id="set-lobbychat-label">大廳聊天室</b><small id="set-lobbychat-sub">在線上大廳左下角顯示聊天氣泡</small></span>
+            <input class="switch-input" type="checkbox" id="set-lobbychat" checked>
+            <span class="switch" aria-hidden="true"></span>
+          </label>
         </div>
       </section>
 
@@ -544,6 +550,7 @@
 <script src="js/latency.js?v=20261002c" data-skin="stair-kids"></script>
 <!-- 線上模式：net.js 是同步的腦袋（也被 netcode-check 在 Node 裡跑），online.js 是畫面與連線 -->
 <script src="js/net.js"></script>
+<script src="js/lobby-chat.js?v=20261112"></script>
 <script src="js/online.js"></script>
 <script src="js/app.js"></script>
 <!--SEO:GAMEPLAY-->

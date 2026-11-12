@@ -1565,3 +1565,12 @@ button.soon-item:active { transform: translateY(2px); }
 .char-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .char-opt { min-width: 0; overflow-wrap: anywhere; }
 @media(max-width:360px) { .char-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---------- 大廳聊天室：套用小朋友下樓梯配色 ---------- */
+body .lc-root {
+  --lc-accent: var(--brand); --lc-accent-ink: #fff;
+  --lc-panel-bg: var(--cream); --lc-panel-solid: var(--cream);
+  --lc-ink: var(--ink); --lc-muted: var(--ink-soft); --lc-line: var(--line);
+  --lc-field-bg: #fff; --lc-sys-bg: var(--cream-2); --lc-name: var(--brand-dark);
+  --lc-radius: var(--radius); --lc-z: 75;
+}

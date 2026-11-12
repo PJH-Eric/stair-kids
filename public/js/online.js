@@ -214,6 +214,7 @@
         S.socket = null;
         const wasOnline = S.status === 'online';
         setStatus('offline');
+        if (lobbyChat) lobbyChat.setConnected(false);
         /* 斷線就是離開這間房：伺服器已經把座位標成離線（對局中還會判輸），
          * 而重連會拿到一個新的身分，回不到原本的座位。所以本地也要把房間收掉 ——
          * 留著只會讓畫面停在一間按什麼都沒反應的幽靈房間裡。 */
@@ -257,6 +258,32 @@
       S.client = null;
       S.inMatch = false;
       setStatus('offline');
+      if (lobbyChat) lobbyChat.setConnected(false);
+    }
+
+    /* ---------- 大廳聊天室（左下氣泡）：跟房間聊天分開 ---------- */
+    function sendRaw(msg) { if (S.socket && S.socket.readyState === 1) S.socket.send(JSON.stringify(msg)); }
+    const lobbyChat = root.LobbyChat ? root.LobbyChat.create({
+      game: 'stair-kids',
+      watch: '#screen-lobby',
+      getName: () => (S.client && S.client.state.me.name) || (opt.nameOf ? opt.nameOf() : ''),
+      setName: n => {
+        if (opt.onNameChange) opt.onNameChange(n);
+        if (S.client) S.client.actions.rename(n);
+        renderLobby();
+      },
+      join: name => sendRaw({ type: 'lobbychat', op: 'join', name: name }),
+      leave: () => sendRaw({ type: 'lobbychat', op: 'leave' }),
+      send: (text, name) => sendRaw({ type: 'lobbychat', op: 'send', text: text, name: name }),
+      joinRoom: code => { if (S.client) S.client.actions.join(code, 'player'); }
+    }) : null;
+    if (lobbyChat) lobbyChat.bindSetting({ input: '#set-lobbychat', label: '#set-lobbychat-label', sub: '#set-lobbychat-sub', reset: '#set-reset' });
+    function onLobbyChat(m) {
+      if (!lobbyChat) return;
+      if (m.op === 'history') lobbyChat.history(m.history, m.online);
+      else if (m.op === 'msg') lobbyChat.add(m.msg);
+      else if (m.op === 'online') lobbyChat.online(m.online);
+      else if (m.op === 'error') lobbyChat.error(m.code);
     }
 
     /* ---------- 收到訊息之後：畫面該怎麼變 ---------- */
@@ -265,7 +292,9 @@
       const c = S.client;
       if (!c) return;
 
+      if (msg.type === 'lobbychat') { onLobbyChat(msg); return; }
       if (msg.type === 'welcome') {
+        if (lobbyChat) lobbyChat.setConnected(true);
         S.nameMax = Number(msg.nameMaxLen) || S.nameMax;
         /* 邀請連結先停在大廳讓使用者改暱稱；只有按確認才使用 token 加入。 */
         if (S.wantRoom) { const r = S.wantRoom; S.wantRoom = null; c.actions.join(r, 'player'); }
@@ -882,6 +911,7 @@
 
     return {
       PHRASES,
+      lobbyChat,
       connect, disconnect, client, rematch, backToRoom,
       renderLobby, renderRoom, renderChat,
       /** 語言切換：重畫大廳、房間、短語與連線狀態文字（不動連線與房間狀態） */

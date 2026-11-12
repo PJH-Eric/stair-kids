@@ -187,6 +187,7 @@ ws.attach(server, {
     socket.on('close', () => {
       console.log('[ws] 連線關閉：' + person.id + '（' + (person.name || '沒名字') + '）');
       people.delete(person.id);
+      proto.dropChat(person.id);
       /* 對局中斷線＝判輸（§4.4），房間邏輯自己會處理 */
       hub.markDisconnected(person.id);
       loop.forgetFull(person.id);
