@@ -29,6 +29,8 @@ const ALLOW_ORIGIN = process.env.ALLOW_ORIGIN || '*';
 const GAME_ID = 'stair-kids';
 /* 多久沒收到任何東西才算連線可能死了（要比心跳間隔寬鬆一點） */
 const ALIVE_MS = 2500;
+/* 大廳也要回收半斷線；留足網路抖動時間，不依賴分頁的 JS 計時器。 */
+const STALE_SOCKET_MS = 15000;
 const MILESTONE = 'M2';
 
 /* ---------- 靜態檔案 ---------- */
@@ -96,7 +98,19 @@ const io = {
   },
   /** 對所有連線發網路層 ping，瀏覽器會在網路層直接回 pong */
   pingAll() {
-    for (const it of people.values()) it.socket.ping();
+    const now = Date.now();
+    for (const it of people.values()) {
+      if (!it.socket.alive || now - it.socket.lastSeen >= STALE_SOCKET_MS) it.socket.close(true);
+      else it.socket.ping();
+    }
+  },
+  roomClosed(roomId) {
+    for (const [id, it] of people) {
+      if (it.person.roomId !== roomId) continue;
+      it.person.roomId = null;
+      it.person.role = null;
+      io.send(id, { type: 'closed', text: '這個房間已經結束了' });
+    }
   }
 };
 

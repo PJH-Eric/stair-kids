@@ -195,10 +195,12 @@
           if (msg.room && msg.room.phase === 'lobby') { st.match = null; st.result = st.result; }
           break;
         case 'left':
+        case 'closed':
         case 'kicked':
           st.room = null;
           st.match = null;
           if (msg.type === 'kicked') st.notice = '你被房主請出房間了';   /* 中文原文；前端顯示前由 ServerText 翻譯 */
+          if (msg.type === 'closed') st.notice = msg.text;
           break;
         case 'invite':
           if (st.room) st.room.invite = msg.token || null;

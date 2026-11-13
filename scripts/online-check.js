@@ -203,7 +203,7 @@ group('搶位（先按先得、對局中不開放）');
   hub.markDisconnected('A');
   hub.markDisconnected('B');
   run(hub, 0.2);
-  ok(room.phase === 'result', '兩個人都在倒數中斷線 → 立刻收掉這局（不用等倒數跑完）');
+  ok(room.phase === 'closed' && !hub.rooms.has(room.id), '兩位玩家斷線後立即關房，觀眾不能保留房間');
   ok(room.match.result && room.match.result.players.every(p => p.forfeit),
     '結果標明兩個人都是斷線判輸');
 }

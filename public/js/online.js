@@ -318,6 +318,7 @@
       if (msg.type === 'notice') { notice(SRV(msg.text)); return; }
       if (msg.type === 'kicked') { notice(T('net.kicked'), 'bad'); leaveToLobby(); return; }
       if (msg.type === 'left') { leaveToLobby(); return; }
+      if (msg.type === 'closed') { leaveToLobby(); notice(SRV(msg.text)); return; }
       if (msg.type === 'invite') { renderRoom(); return; }
 
       if (msg.type === 'joined' || msg.type === 'room') {
