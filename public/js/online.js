@@ -164,7 +164,7 @@
       setStatus('connecting');
 
       let socket;
-      try { socket = new WebSocket(url); } catch (e) {
+      try { socket = root.GameBackend?.createSocket(url) ?? new WebSocket(url); } catch (e) {
         setStatus('error');
         return;
       }
@@ -640,7 +640,7 @@
         if (roomId) u.searchParams.set('room', roomId);
         u.searchParams.set('invite', token);
         u.hash = '';
-        return u.toString();
+        return root.GameBackend?.pinInvite(u) ?? u.toString();
       } catch (e) {
         return root.location.href.split('?')[0] + (roomId ? '?room=' + encodeURIComponent(roomId) + '&' : '?') + 'invite=' + token;
       }
