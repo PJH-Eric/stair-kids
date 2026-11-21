@@ -114,6 +114,8 @@
       inviteSubmitting: false,
       nameMax: 8,
       wantRoom: null,             /* 連上線之後要進的房號 */
+      retryUntil: 0,
+      resuming: false,
       inMatch: false,
       resultShown: false,             /* 這一局的結算已經播給 app.js 了 */
       resultAt: 0,                    /* 結算是什麼時候播的（決定還要不要多留幾秒） */
@@ -128,6 +130,35 @@
     /* ---------- 連線 ---------- */
 
     function client() { return S.client; }
+
+    const roomKey = 'stair-kids:room';
+
+    function resumeKey() {
+      try {
+        const saved = root.sessionStorage.getItem('stair-kids:resume');
+        if (saved) return saved;
+        const next = root.crypto.randomUUID();
+        root.sessionStorage.setItem('stair-kids:resume', next);
+        return next;
+      } catch (error) { return null; }
+    }
+
+    function rememberRoom(id) {
+      if (!S.client.state.server?.resumeSupported) return;
+      try { root.sessionStorage.setItem(roomKey, id); } catch (error) { /* 儲存空間可能被停用 */ }
+      root.GameBackend?.rememberRoom?.();
+    }
+
+    function forgetRoom() {
+      try { root.sessionStorage.removeItem(roomKey); } catch (error) { /* 儲存空間可能被停用 */ }
+      root.GameBackend?.forgetRoom?.();
+    }
+
+    function restoreRoom() {
+      try { S.wantRoom = root.sessionStorage.getItem(roomKey); } catch (error) { return false; }
+      if (S.wantRoom) S.retryUntil = Date.now() + 180000;
+      return !!S.wantRoom;
+    }
 
     function setStatus(next, key) {
       S.status = next;
@@ -183,6 +214,7 @@
       S.client = Net.createClient({
         name: opt.nameOf ? opt.nameOf() : '',
         char: opt.charOf ? opt.charOf() : 'yuan',
+        resumeKey: resumeKey(),
         /* 這台裝置想看幾格（手機直向比較深）。連上線的第一則 hello 就帶著，
          * 免得第一次開局時伺服器還不知道，整房照預設值開。 */
         viewH: opt.viewHOf ? opt.viewHOf() : 0,
@@ -215,17 +247,13 @@
         const wasOnline = S.status === 'online';
         setStatus('offline');
         if (lobbyChat) lobbyChat.setConnected(false);
-        /* 斷線就是離開這間房：伺服器已經把座位標成離線（對局中還會判輸），
-         * 而重連會拿到一個新的身分，回不到原本的座位。所以本地也要把房間收掉 ——
-         * 留著只會讓畫面停在一間按什麼都沒反應的幽靈房間裡。 */
         clearWrap();
         const lostRoom = S.client && S.client.state.room ? S.client.state.room.id : null;
         const wasInRoom = !!lostRoom;
-        /* 剛剛在哪一間房：重新連上就自動回去。手機切到別的 App、螢幕暗掉都會斷線，
-         * 伺服器那邊「等人」的房間會留 60 秒（rooms.js 的 EMPTY_GRACE_MS），
-         * 所以切回來通常還回得去 —— 回不去（房間真的收掉了）會收到錯誤訊息。 */
-        if (lostRoom && !S.inMatch) S.wantRoom = lostRoom;
-        if (S.inMatch) notice(T('net.lost.match'), 'bad');
+        const recoverable = !!S.client?.state.server?.resumeSupported;
+        if (lostRoom && (recoverable || !S.inMatch)) S.wantRoom = lostRoom;
+        if (lostRoom && recoverable) S.retryUntil = Date.now() + 180000;
+        if (S.inMatch && !recoverable) notice(T('net.lost.match'), 'bad');
         else if (wasOnline && wasInRoom) notice(T('net.lost.room'), 'bad');
         S.inMatch = false;
         S.resultShown = false;
@@ -238,10 +266,10 @@
         renderLobby();
         if (wasInRoom && opt.onBackToLobby) opt.onBackToLobby();
         /* 自動重試三次（越試越久），之後交給「重新連線」按鈕 */
-        if (wasOnline && S.retries < 3) {
+        if (Date.now() < S.retryUntil || (wasOnline && S.retries < 3)) {
           S.retries++;
           clearTimeout(S.retryTimer);
-          S.retryTimer = setTimeout(() => connect(), 600 * S.retries);
+          S.retryTimer = setTimeout(() => connect(), Math.min(4000, 600 * S.retries));
         }
       };
       socket.onerror = () => { if (S.status === 'connecting') setStatus('error'); };
@@ -253,6 +281,8 @@
       clearTimeout(S.wakeTimer);
       clearWrap();
       S.wantRoom = null;               /* 自己走的，就不要再自動回房間 */
+      S.retryUntil = 0;
+      forgetRoom();
       S.retries = 99;
       if (S.socket) { const s = S.socket; S.socket = null; try { s.close(); } catch (e) { /* 已經斷了 */ } }
       S.client = null;
@@ -297,7 +327,10 @@
         if (lobbyChat) lobbyChat.setConnected(true);
         S.nameMax = Number(msg.nameMaxLen) || S.nameMax;
         /* 邀請連結先停在大廳讓使用者改暱稱；只有按確認才使用 token 加入。 */
-        if (S.wantRoom) { const r = S.wantRoom; S.wantRoom = null; c.actions.join(r, 'player'); }
+        if (S.wantRoom) {
+          S.resuming = true;
+          c.actions.join(S.wantRoom, 'player');
+        }
         if (S.afterConnect) { const f = S.afterConnect; S.afterConnect = null; f(); }
         renderLobby();
         return;
@@ -309,6 +342,12 @@
         return;
       }
       if (msg.type === 'error') {
+        if (S.resuming) {
+          S.resuming = false;
+          S.wantRoom = null;
+          S.retryUntil = 0;
+          forgetRoom();
+        }
         S.inviteSubmitting = false;
         notice(SRV(msg.text), 'bad');
         renderLobby();
@@ -323,6 +362,12 @@
 
       if (msg.type === 'joined' || msg.type === 'room') {
         const room = c.state.room;
+        if (msg.type === 'joined') {
+          S.resuming = false;
+          S.wantRoom = null;
+          S.retryUntil = 0;
+          if (room) rememberRoom(room.id);
+        }
         if (msg.type === 'joined' && S.pendingInvite) {
           S.pendingInvite = null;
           S.inviteSubmitting = false;
@@ -428,6 +473,8 @@
     function leaveToLobby() {
       clearWrap();
       S.wantRoom = null;               /* 被踢或自己離開：不要再自動回那間房 */
+      S.retryUntil = 0;
+      forgetRoom();
       S.inMatch = false;
       S.resultShown = false;
       S.resultAt = 0;
@@ -920,7 +967,7 @@
         setStatus(S.status, S.statusKey);
         renderLobby(); renderRoom(); renderPhrases();
       },
-      takeInviteFromUrl,
+      takeInviteFromUrl, restoreRoom,
       get status() { return S.status; },
       get inMatch() { return S.inMatch; },
       get spectating() { return S.spectating; },

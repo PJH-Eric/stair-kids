@@ -1793,5 +1793,5 @@
   if (online.takeInviteFromUrl()) {
     toast(T('invite.toast'));
     show('lobby');
-  }
+  } else if (online.restoreRoom()) show('lobby');
 })();

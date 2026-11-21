@@ -22,9 +22,10 @@
   }
 
   /** mulberry32：小、快、夠均勻 */
-  function create(seed) {
-    let a = hashSeed(seed);
+  function create(seed, state = hashSeed(seed)) {
+    let a = state | 0;
     const rng = {
+      checkpoint() { return a; },
       /** [0,1) */
       next() {
         a |= 0;

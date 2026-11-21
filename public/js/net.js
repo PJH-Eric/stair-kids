@@ -109,7 +109,7 @@
     function out(msg) { if (send) send(msg); }
 
     function hello() {
-      out({ type: 'hello', name: st.me.name, char: st.me.char, viewH: st.me.viewH });
+      out({ type: 'hello', name: st.me.name, char: st.me.char, viewH: st.me.viewH, resumeKey: opt.resumeKey });
     }
 
     const actions = {
@@ -508,14 +508,14 @@
     let acc = 0, last = null;
     function frame(nowMs, dir) {
       const t = nowMs == null ? now() : nowMs;
-      if (dir != null) setDir(dir);
+      if (dir != null && !st.room?.recovering) setDir(dir);
       if (last == null) { last = t; return 0; }
       let dt = t - last;
       last = t;
       if (dt < 0) dt = 0;
       if (dt > 250) dt = 250;                /* 分頁切回來別一次爆衝 */
       if (t - st.lastPingAt > C.PING_MS) { st.lastPingAt = t; actions.ping(); }
-      if (!st.match) { acc = 0; return 0; }
+      if (!st.match || st.room?.recovering) { acc = 0; return 0; }
       /* 超前太多：這幾格跑慢 15%，把多出來的時間吃掉（不硬拉時鐘，畫面才不會抽） */
       if (st.slowMs > 0) {
         const eat = dt * 0.15;

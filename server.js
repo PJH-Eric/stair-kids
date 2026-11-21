@@ -114,7 +114,10 @@ const io = {
   }
 };
 
-const hub = createHub();
+const checkpoints = process.env.STAIR_ROOM_DB_PATH
+  ? require('./lib/room-checkpoints.js').openCheckpoints(process.env.STAIR_ROOM_DB_PATH)
+  : null;
+const hub = createHub({ checkpoints });
 const loop = createLoop(hub, io, { log: msg => console.log(msg) });
 const proto = createProtocol(hub, loop, io);
 loop.start();
@@ -187,10 +190,25 @@ ws.attach(server, {
     socket.data.personId = person.id;
     socket.sendJSON({ type: 'hello', game: GAME_ID, milestone: MILESTONE, personId: person.id });
 
+    let welcomed = false;
     socket.on('message', text => {
       let msg = null;
       try { msg = JSON.parse(text); } catch (e) { return; }
       try {
+        if (checkpoints && !welcomed) {
+          if (msg?.type !== 'hello') return;
+          welcomed = true;
+          if (typeof msg.resumeKey === 'string' && /^[a-f0-9-]{36}$/.test(msg.resumeKey)) {
+            const id = checkpoints.identity(msg.resumeKey);
+            const previous = people.get(id);
+            people.delete(person.id);
+            person.id = id;
+            socket.data.personId = id;
+            people.set(id, { socket, person });
+            previous?.socket.close(true);
+            loop.forgetFull(id);
+          }
+        }
         proto.handle(person, msg);
       } catch (e) {
         console.error('[proto] ' + (msg && msg.type) + ' 出錯：', e && e.message);
@@ -199,6 +217,7 @@ ws.attach(server, {
     });
 
     socket.on('close', () => {
+      if (people.get(person.id)?.socket !== socket) return;
       console.log('[ws] 連線關閉：' + person.id + '（' + (person.name || '沒名字') + '）');
       people.delete(person.id);
       proto.dropChat(person.id);
