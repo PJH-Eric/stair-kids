@@ -53,6 +53,11 @@ try {
   assert.ok(sitemap.includes(cfg.siteUrl));
   inject(temp, {});
   assert.equal(fs.readFileSync(path.join(temp, 'public/index.html'), 'utf8'), built, '注入必須可重複執行');
+  const routing = '<script src="/game-lobby/backend-routing.js"></script>';
+  assert.ok(!built.includes(routing), '獨立站不應載入 GitHub Pages 專用路由');
+  for (let i = 0; i < 2; i++) inject(temp, { ENABLE_SHARED_BACKEND_ROUTING: '1' });
+  const pages = fs.readFileSync(path.join(temp, 'public/index.html'), 'utf8');
+  assert.equal(pages.split(routing).length, 2, 'GitHub Pages 產物必須載入一份共用路由');
   const bootstrap = built.match(/<script>([\s\S]*?)<\/script>/)[1];
   const local = { location: { hostname: 'localhost' } };
   local.window = local;

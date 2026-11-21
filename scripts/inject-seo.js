@@ -50,6 +50,7 @@ function inject(root, env = process.env) {
     '<script>window.GAME_ANALYTICS_CONFIG=' + safeJson({
       measurement_id: gaId, game_id: cfg.id, page_location: cfg.siteUrl
     }) + ';</script>',
+    env.ENABLE_SHARED_BACKEND_ROUTING === '1' && '<script src="/game-lobby/backend-routing.js"></script>',
     cfg.googleSiteVerification && '<meta name="google-site-verification" content="' + esc(cfg.googleSiteVerification) + '">',
     '<meta name="description" data-i18n-content="' + esc(descriptionKey ? descriptionKey[1] : 'meta.desc') + '" content="' + esc(cfg.description) + '">',
     '<link rel="canonical" href="' + esc(cfg.siteUrl) + '">',

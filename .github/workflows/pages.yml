@@ -35,8 +35,8 @@ jobs:
         with:
           node-version: "26.12.1"
 
-      - name: 跑測試
-        run: npm run verify
+      - name: 規則與線上流程測試
+        run: npm test && npm run verify
 
       - name: 注入伺服器網址
         env:
@@ -45,6 +45,8 @@ jobs:
 
       - uses: actions/configure-pages@v5
       - name: 驗證並注入 GA4 與 SEO
+        env:
+          ENABLE_SHARED_BACKEND_ROUTING: '1'
         run: node tests/seo.js && node scripts/inject-seo.js
 
       - uses: actions/upload-pages-artifact@v3
