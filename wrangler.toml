@@ -1,0 +1,28 @@
+name = "stair-kids-backup"
+main = "cloudflare/dist/worker.mjs"
+compatibility_date = "2026-11-19"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "GameLobby"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameLobby"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true

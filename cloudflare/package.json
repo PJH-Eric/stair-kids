@@ -1,0 +1,17 @@
+{
+  "name": "game-island-cloudflare-backends",
+  "private": true,
+  "scripts": {
+    "build": "node build.cjs",
+    "verify": "node verify.cjs"
+  },
+  "dependencies": {
+    "engine.io": "6.6.10",
+    "esbuild": "0.28.2",
+    "socket.io": "4.8.3"
+  },
+  "devDependencies": {
+    "socket.io-client": "4.8.3",
+    "wrangler": "^4.166.0"
+  }
+}
