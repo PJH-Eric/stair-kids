@@ -1,0 +1,22 @@
+'use strict';
+const assert = require('node:assert/strict');
+const store = {};
+global.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
+const R = require('../public/js/records.js');
+const row = (o) => Object.assign({ matchId: 'a', mode: 'solo', difficulty: 'normal', meters: 60, world: 0, survived: 70, win: null, spikes: 1, springs: 0, heals: 0 }, o);
+
+let r = R.record(row());
+assert.deepEqual(r.unlocked.sort(), ['depth_50', 'first_run']);
+assert.equal(R.record(row()).duplicate, true, 'matchId 重送不重複累計');
+assert.equal(R.data().stats.all.games, 1);
+r = R.record(row({ matchId: 'b', meters: 120, spikes: 0, world: 5 }));
+assert.ok(r.unlocked.includes('depth_100') && r.unlocked.includes('clean_100') && r.unlocked.includes('all_worlds'));
+r = R.record(row({ matchId: 'c', mode: 'ai', win: true }));
+assert.ok(r.unlocked.includes('ai_win'));
+for (let i = 0; i < 60; i++) R.record(row({ matchId: 'x' + i }));
+assert.equal(R.data().matches.length, R.KEEP, '近期明細有上限');
+R._reset();
+assert.equal(R.data().stats.all.games, 63, '重新讀取後資料還在');
+R.clearAll();
+assert.equal(R.data().matches.length, 0);
+console.log('records 測試通過');

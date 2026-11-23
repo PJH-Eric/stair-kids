@@ -72,6 +72,7 @@
           <span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="15" cy="16" r="8" fill="#4F86D6"/><path d="M2 40c1-9 6-13 13-13s12 4 13 13z" fill="#4F86D6"/><circle cx="34" cy="16" r="8" fill="#F2545B"/><path d="M21 40c1-9 6-13 13-13s12 4 13 13z" fill="#F2545B"/></svg></span>
           <span class="mode-txt"><b data-i18n="home.versus">跟別人玩</b><small data-i18n="home.versus.sub">兩人比誰下得深，也能觀戰</small></span>
         </button>
+        <button class="big-btn ghost" type="button" data-go="records" data-i18n="home.records">紀錄與成就</button>
         <button class="big-btn ghost" type="button" data-go="help" data-i18n="home.help">怎麼玩</button>
       </div>
       <div class="home-records" id="home-records"></div>
@@ -244,6 +245,13 @@
 </section>
 
 <!-- ============ 怎麼玩（靜態圖文說明） ============ -->
+<section id="screen-records" class="screen">
+  <div class="panel records">
+    <h2 data-i18n="rec.title">紀錄與成就</h2>
+    <div id="records-body" class="records-body"></div>
+  </div>
+</section>
+
 <section id="screen-help" class="screen">
   <div class="panel help">
     <h2 data-i18n="help.title">怎麼玩</h2>
@@ -405,6 +413,7 @@
           <h2 id="result-title">這局結束</h2>
           <div class="result-hero" id="result-hero"></div>
           <p class="result-new" id="result-new" hidden>破紀錄了！</p>
+          <div class="result-ach" id="result-ach" hidden></div>
           <div class="result-stats">
             <h3 data-i18n="res.stats">這局統計</h3>
             <ul id="result-list"></ul>
@@ -551,6 +560,7 @@
 <script src="js/input.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/records.js"></script>
 <script src="js/latency.js?v=20261002c" data-skin="stair-kids"></script>
 <!-- 線上模式：net.js 是同步的腦袋（也被 netcode-check 在 Node 裡跑），online.js 是畫面與連線 -->
 <script src="js/net.js"></script>

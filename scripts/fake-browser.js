@@ -470,7 +470,7 @@ function boot(opt) {
     'js/config.js', 'js/rng.js', 'js/stairs.js', 'js/rules.js', 'js/ai.js',
     'js/themes/characters.js', 'js/themes/scenes.js', 'js/themes/nicknames.js',
     'js/localize.js',
-    'js/svgui.js', 'js/render.js', 'js/input.js', 'js/audio.js', 'js/storage.js',
+    'js/svgui.js', 'js/render.js', 'js/input.js', 'js/audio.js', 'js/storage.js', 'js/records.js',
     'js/net.js', 'js/online.js', 'js/app.js'
   ];
   for (const f of files) {

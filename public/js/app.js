@@ -16,7 +16,7 @@
     nav: $('#screen-nav'), back: $('#btn-back'), lobbyLink: $('#lobby-home-link'),
     leaveRoom: $('#btn-leave-room'),
     settingsBtn: $('#btn-settings'), finishBtn: $('#btn-finish'),
-    homeArt: $('#home-art'), homeRecords: $('#home-records'),
+    homeArt: $('#home-art'), homeRecords: $('#home-records'), recordsBody: $('#records-body'), resultAch: $('#result-ach'),
     nickname: $('#in-nickname'), charPicker: $('#char-picker'),
     diffPicker: $('#diff-picker'), diffNote: $('#diff-note'),
     foeField: $('#foe-field'), foePicker: $('#foe-picker'), foeNote: $('#foe-note'),
@@ -203,7 +203,7 @@
 
   /* ================= 畫面切換 ================= */
 
-  const BACK_TO = { setup: 'home', online: 'home', help: 'home', lobby: 'online', room: 'lobby' };
+  const BACK_TO = { setup: 'home', online: 'home', help: 'home', records: 'home', lobby: 'online', room: 'lobby' };
 
   /**
    * 量左上角的「離開房間」與右上角的「設定／結束這局」實際佔多寬，丟給 CSS 用。
@@ -260,6 +260,7 @@
     measureCorners();
     if (name === 'home') renderHomeRecords();
     if (name === 'setup') renderSetup();
+    if (name === 'records') renderRecords();
     /* 進遊戲畫面才量得到真正的尺寸（隱藏中的 section 量出來是 0），所以在這裡重新收邊 */
     if (name === 'game') { blurTyping(); applyRenderOptions(); updateRotateTip(); }
     if (name === 'lobby') {
@@ -325,6 +326,37 @@
     els.homeRecords.innerHTML = chips.length
       ? chips.join('')
       : '<span class="rec-chip soft">' + T('home.rec.none') + '</span>';
+  }
+
+  /* ================= 紀錄與成就 ================= */
+
+  function renderRecords() {
+    const d = StairRecords.data();
+    const tot = Object.assign(StairRecords.newTotals(), d.stats.all || {});
+    let bestSolo = 0;
+    for (const id of Rules.DIFFICULTY_LIST) bestSolo = Math.max(bestSolo, (store.records[id] || {}).depth || 0);
+    const stat = (k, v) => '<li><span>' + esc(T(k)) + '</span><b>' + esc(v) + '</b></li>';
+    const got = StairRecords.ACH.filter(a => d.ach[a.id] && d.ach[a.id].unlockedAt).length;
+    const ach = StairRecords.ACH.map(a => {
+      const s = d.ach[a.id] || { progress: 0, unlockedAt: null };
+      const pct = Math.round(Math.min(1, s.progress / a.target) * 100);
+      return '<li class="ach' + (s.unlockedAt ? ' got' : '') + '">' +
+        '<span class="ach-ico" aria-hidden="true">' + SvgUI.medalIcon(30) + '</span>' +
+        '<span class="ach-txt"><b>' + esc(T('ach.' + a.id)) + '</b><small>' + esc(T('achd.' + a.id)) + '</small>' +
+        (s.unlockedAt ? '' : '<i class="ach-bar"><u style="width:' + pct + '%"></u></i>') + '</span></li>';
+    }).join('');
+    const hist = d.matches.length ? d.matches.map(m =>
+      '<li><span>' + esc(m.at.slice(5, 10)) + '・' + esc(T('rec.mode.' + m.mode)) +
+      (m.difficulty ? '・' + esc(diffName(m.difficulty)) : '') + '</span><b>' + m.meters + ' m' +
+      (m.win === true ? '・' + esc(T('rec.win')) : m.win === false ? '・' + esc(T('rec.lose')) : '') + '</b></li>').join('')
+      : '<li class="empty">' + esc(T('rec.empty')) + '</li>';
+    els.recordsBody.innerHTML =
+      '<section class="help-block"><h3>' + esc(T('rec.stats')) + '</h3><ul class="rec-list">' +
+        stat('rec.games', tot.games) + stat('rec.wins', tot.wins) + stat('rec.bestSolo', bestSolo + ' m') +
+        stat('rec.meters', tot.meters + ' m') + stat('rec.playTime', T('rec.minutes', { n: Math.floor(tot.playSec / 60) })) +
+      '</ul></section>' +
+      '<section class="help-block"><h3>' + esc(T('rec.ach')) + ' ' + got + '/' + StairRecords.ACH.length + '</h3><ul class="ach-grid">' + ach + '</ul></section>' +
+      '<section class="help-block"><h3>' + esc(T('rec.history')) + '</h3><ul class="rec-list">' + hist + '</ul></section>';
   }
 
   /* ================= 一個人玩：選角色與難度 ================= */
@@ -1080,6 +1112,8 @@
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
+  const recordedResults = new WeakSet();
+
   function finish(result, meId) {
     const online2 = G.mode === 'online';
     if (online2 && window.NetworkLatency) window.NetworkLatency.setActive(false);
@@ -1099,6 +1133,19 @@
         versus: foe ? { kind: online2 ? 'online' : 'ai', win: win } : null
       });
     if (!watching) store = Store.load();
+    /* 對局紀錄與成就（觀戰不計；同一份結果只記一次） */
+    let rec = { unlocked: [] };
+    if (!watching && !recordedResults.has(result)) {
+      recordedResults.add(result);
+      rec = StairRecords.record({
+        matchId: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        mode: online2 ? 'online' : foe ? 'ai' : 'solo',
+        difficulty: result.difficulty, meters: me.meters, world: me.stats.deepestWorld,
+        survived: me.survived, win: foe ? win : null,
+        spikes: me.stats.spikes, springs: me.stats.springs, heals: me.stats.heals
+      });
+    }
+    saved.unlocked = rec.unlocked || [];
 
     G.resultView = { result: result, me: me, foe: foe, win: win, saved: saved, watching: watching, online2: online2 };
     paintResult();
@@ -1163,6 +1210,9 @@
         '<div class="result-line">' + subLine() + '</div>';
     }
     els.resultNew.hidden = !saved.record;
+    els.resultAch.hidden = !(saved.unlocked && saved.unlocked.length);
+    els.resultAch.innerHTML = (saved.unlocked || []).map(id =>
+      '<span class="chip-ach">' + SvgUI.medalIcon(20) + '<span>' + esc(T('rec.unlocked', { name: T('ach.' + id) })) + '</span></span>').join('');
     if (!saved.record && !watching && saved.best && saved.best.depth > me.meters) {
       /* 沒破紀錄就講差多少 —— 比只說「沒破」有動力得多 */
       els.resultNew.hidden = false;
@@ -1533,6 +1583,7 @@
     }
     disarmClear();
     store = Store.clearRecords(store);
+    StairRecords.clearAll();
     els.setMsg.textContent = T('set.clear.done');
     renderHomeRecords();
     if (G.screen === 'setup') renderSetup();
@@ -1759,6 +1810,7 @@
       if (els.pause && !els.pause.hidden) paintPause();
       if (els.ovResult && !els.ovResult.hidden) paintResult();
     }
+    if (G.screen === 'records') renderRecords();
     if (els.countdownTip && !els.countdownTip.hidden) {
       els.countdownTip.textContent = T(wantsPads() ? 'hud.tip.pads' : 'hud.tip.keys');
     }

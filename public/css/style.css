@@ -1574,3 +1574,19 @@ body .lc-root {
   --lc-field-bg: #fff; --lc-sys-bg: var(--cream-2); --lc-name: var(--brand-dark);
   --lc-radius: var(--radius); --lc-z: 75;
 }
+
+/* 紀錄與成就 */
+.records { max-height: 100%; overflow-y: auto; }
+.rec-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.rec-list li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.rec-list li.empty { color: var(--ink-soft); justify-content: center; border: 0; }
+.rec-list b { color: var(--brand-dark); }
+.ach-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.ach { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 2px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, .7); opacity: .6; filter: grayscale(.8); }
+.ach.got { opacity: 1; filter: none; border-color: #D99A1E; background: #FFF8DC; }
+.ach-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ach-txt small { color: var(--ink-soft); font-size: 12.5px; }
+.ach-bar { display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.ach-bar u { display: block; height: 100%; background: var(--brand-dark); text-decoration: none; }
+.result-ach { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 6px 0; }
+.chip-ach { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: #FFF3B0; border: 2px solid #D99A1E; }
