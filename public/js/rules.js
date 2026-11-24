@@ -124,9 +124,12 @@
     normal: makeDifficulty('normal', '普通', 2.8, 20, 0.12, 2.2, 10, 0.6,
       { spikeDamage: { base: [1, 3], deep: [2, 4] } }),
     hard: makeDifficulty('hard', '困難', 3.6, 18, 0.15, 2.6, 9, 0.4,
-      { spikeDamage: { base: [2, 3], deep: [3, 5] } })
+      { spikeDamage: { base: [2, 3], deep: [3, 5] } }),
+    /* 神話：比困難再狠一階 —— 下捲更快、血更少、刺更痛，電腦對手也直接用神話等級 */
+    mythic: makeDifficulty('mythic', '神話', 4.4, 15, 0.18, 3.2, 8, 0.3,
+      { spikeDamage: { base: [3, 4], deep: [4, 6] } })
   };
-  const DIFFICULTY_LIST = ['baby', 'easy', 'normal', 'hard'];
+  const DIFFICULTY_LIST = ['baby', 'easy', 'normal', 'hard', 'mythic'];
 
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   const EPS = 1e-9;

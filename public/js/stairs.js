@@ -91,7 +91,8 @@
     baby:   { spike: 0.00, fake: 0.00 },   /* 幼幼班：完全不出現 */
     easy:   { spike: 0.06, fake: 0.06 },
     normal: { spike: 0.15, fake: 0.14 },
-    hard:   { spike: 0.24, fake: 0.20 }
+    hard:   { spike: 0.24, fake: 0.20 },
+    mythic: { spike: 0.30, fake: 0.26 }
   };
 
   function ratesOf(difficulty) {

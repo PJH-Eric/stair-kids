@@ -430,8 +430,9 @@
 
   /** 電腦對手強度：跟遊戲難度一樣，或是神話（只有對電腦才有；遊戲規則仍照上面選的難度） */
   function renderFoePicker(vs) {
-    els.foeField.hidden = !vs;
-    if (!vs) return;
+    /* 遊戲難度本身就是神話時，電腦一定是神話，不用再選 */
+    els.foeField.hidden = !vs || G.difficulty === 'mythic';
+    if (!vs || G.difficulty === 'mythic') return;
     const myth = !!store.foeMythic;
     const sameName = diffName(G.difficulty);
     els.foePicker.innerHTML =

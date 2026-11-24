@@ -667,7 +667,7 @@ group('四段難度參數（規劃書 §1.7）');
     normal: { scrollBase: 2.8, accelEvery: 20, accelRate: 0.12, scrollCap: 2.2, hp: 10, ceilInterval: 0.6, spikeRate: 0.15, fakeRate: 0.14 },
     hard:   { scrollBase: 3.6, accelEvery: 18, accelRate: 0.15, scrollCap: 2.6, hp: 9, ceilInterval: 0.4, spikeRate: 0.24, fakeRate: 0.20 }
   };
-  eq(Rules.DIFFICULTY_LIST.join(','), 'baby,easy,normal,hard', '四段難度：幼幼班／簡單／普通／困難');
+  eq(Rules.DIFFICULTY_LIST.join(','), 'baby,easy,normal,hard,mythic', '五段難度：幼幼班／簡單／普通／困難／神話');
   for (const id in table) {
     const want = table[id], got = Rules.DIFFICULTY[id];
     let same = true;
