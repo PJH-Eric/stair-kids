@@ -10,7 +10,7 @@ const configuredGameRoot = process.env.GAME_SOURCE_DIR
   ? path.resolve(process.env.GAME_SOURCE_DIR)
   : null;
 const builtins = new Set(builtinModules.map(name => name.replace(/^node:/, '')));
-const optionalModules = ['bufferutil', 'supports-color', 'utf-8-validate', 'uWebSockets.js'];
+const optionalModules = ['bufferutil', 'supports-color', 'utf-8-validate', 'uWebSockets.js', 'node:sqlite'];
 
 function replaceOnce(source, pattern, replacement) {
   const updated = source.replace(pattern, replacement);
