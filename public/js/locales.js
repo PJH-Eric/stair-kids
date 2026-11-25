@@ -1326,8 +1326,8 @@
 /* Server outage translations (shared by the custom notice component). */
 (function (root) {
   root.ServerOutageMessages = {
-    'zh-Hant': ['線上暫時無法連線', '免費伺服器額度將於 {date} 月 1 日重置，期間可繼續遊玩單機版。', '知道了'],
-    'zh-Hans': ['线上暂时无法连线', '免费服务器额度将于 {date} 月 1 日重置，期间可继续游玩单机版。', '知道了'],
-    en: ['Online unavailable', 'Free server quota resets on {date}. You can keep playing offline.', 'Got it']
+    'zh-Hant': ['目前伺服器過載休息中', '歡迎贊助升級', '知道了'],
+    'zh-Hans': ['目前服务器过载休息中', '欢迎赞助升级', '知道了'],
+    en: ['The server is overloaded and resting', 'Sponsorships to help us upgrade are welcome', 'Got it']
   };
 })(typeof window !== 'undefined' ? window : globalThis);

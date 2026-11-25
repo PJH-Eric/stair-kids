@@ -77,18 +77,14 @@ local.api.state('connecting'); local.tick(10000); local.api.state('open'); local
 assert.equal(local.document.body.children.length, 1, 'Successful cold start cancels the notice');
 local.api.state('connecting'); local.api.state('idle'); local.tick(110000);
 assert.equal(local.document.body.children.length, 1, 'Leaving online cancels pending notices');
-for (let month = 0; month < 12; month++) {
-  const text = local.api.copy(new Date(2026, month, 28), 'zh-Hant')[1];
-  assert.ok(text.includes(((month + 1) % 12 + 1) + ' 月 1 日'), 'Next month including December rollover');
-}
-assert.match(local.api.copy(new Date(2026, 11, 31), 'en')[1], /January 1/);
-assert.match(local.api.copy(new Date(2026, 9, 31), 'zh-Hans')[1], /单机版/);
-assert.match(local.api.copy(new Date(2026, 9, 31), 'zh-Hant')[1], /單機版/);
+assert.deepEqual(Array.from(local.api.copy(new Date(2026, 11, 31), 'zh-Hant').slice(0, 2)), ['目前伺服器過載休息中', '歡迎贊助升級']);
+assert.deepEqual(Array.from(local.api.copy(new Date(2026, 9, 31), 'zh-Hans').slice(0, 2)), ['目前服务器过载休息中', '欢迎赞助升级']);
+assert.deepEqual(Array.from(local.api.copy(new Date(2026, 9, 31), 'en').slice(0, 2)), ['The server is overloaded and resting', 'Sponsorships to help us upgrade are welcome']);
 const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
 assert.match(html, /js\/server-outage\.js/);
 assert.match(html, /css\/server-outage\.css/);
 assert.ok(!/\b(?:alert|confirm|prompt)\s*\(/.test(fs.readFileSync(path.join(__dirname, '../public/js/server-outage.js'), 'utf8')), 'No browser-native alerts');
-console.log('Server outage: timing, recovery, cancellation, deduplication, focus, translations and 12 month boundaries passed');
+console.log('Server outage: timing, recovery, cancellation, deduplication, focus, translations and overload notice text passed');
 
 const scoped = setup();
 scoped.api.setScreen('lobby'); scoped.api.state('connecting'); scoped.tick(20000);
