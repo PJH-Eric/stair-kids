@@ -24,6 +24,7 @@ function setup() {
   const document = {
     documentElement: { lang: 'zh-Hant' }, activeElement: original, body: element('body'),
     createElement: element,
+    createTextNode: text => Object.assign(element('#text'), { text }),
     addEventListener(k, fn) { keys.set(k, fn); },
     removeEventListener(k) { keys.delete(k); }
   };

@@ -31,7 +31,23 @@
 
   function onKey(event) {
     if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); close(); }
-    else if (event.key === 'Tab') { event.preventDefault(); mask.querySelector('button').focus(); }
+    else if (event.key === 'Tab') { event.preventDefault(); var link = mask.querySelector('a'), btn = mask.querySelector('button'); (link && document.activeElement === btn ? link : btn).focus(); }
+  }
+
+  var SPONSOR_URL = 'https://portaly.cc/pjh-eric/support';
+  var SPONSOR_WORD = { 'zh-Hant': '贊助', 'zh-Hans': '赞助', en: 'Sponsorships' };
+
+  function fillMessage(el, text, language) {
+    var locale = /^en/i.test(language) ? 'en' : /Hans|CN|SG/i.test(language) ? 'zh-Hans' : 'zh-Hant';
+    var word = SPONSOR_WORD[locale];
+    var at = text.indexOf(word);
+    if (at < 0) { el.textContent = text; return; }
+    var link = document.createElement('a');
+    link.href = SPONSOR_URL;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = word;
+    el.append(document.createTextNode(text.slice(0, at)), link, document.createTextNode(text.slice(at + word.length)));
   }
 
   function show() {
@@ -52,7 +68,7 @@
     title.textContent = words[0];
     var message = document.createElement('p');
     message.id = 'server-outage-message';
-    message.textContent = words[1];
+    fillMessage(message, words[1], document.documentElement.lang || 'zh-Hant');
     var button = document.createElement('button');
     button.type = 'button';
     button.className = 'server-outage-button';

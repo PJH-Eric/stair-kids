@@ -70,3 +70,15 @@
   .server-outage-panel h2 { margin-bottom: 8px; }
   .server-outage-panel p { margin-bottom: 12px; line-height: 1.5; }
 }
+
+.server-outage-panel a {
+  color: inherit;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.server-outage-panel a:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
