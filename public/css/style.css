@@ -1590,3 +1590,41 @@ body .lc-root {
 .ach-bar u { display: block; height: 100%; background: var(--brand-dark); text-decoration: none; }
 .result-ach { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 6px 0; }
 .chip-ach { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: #FFF3B0; border: 2px solid #D99A1E; }
+
+.home-support {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 5px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: .875rem;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  width: auto;
+}
+.home-support:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+body:not(:has(#screen-home.active)) .home-support { display: none; }
+
+.home-support .support-label:not([lang="zh-Hant"]),
+:is(html:lang(zh-Hans), html:lang(zh-CN)) .home-support .support-label[lang="zh-Hant"],
+html:lang(en) .home-support .support-label[lang="zh-Hant"] { display: none; }
+:is(html:lang(zh-Hans), html:lang(zh-CN)) .home-support .support-label[lang="zh-Hans"],
+html:lang(en) .home-support .support-label[lang="en"] { display: inline; }
+
+@media (max-width: 480px) {
+  .home-support {
+    flex-direction: column;
+    gap: 2px;
+    width: 50px;
+    padding-inline: 3px;
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+  .home-support > [aria-hidden="true"] { font-size: 1rem; }
+}
