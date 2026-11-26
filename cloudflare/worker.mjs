@@ -4,6 +4,8 @@ import { allowedOrigin, createRuntime, handleHttp } from './runtime.mjs';
 import socketIo from 'socket-io-adapter';
 import browserClient from 'socket-io-browser-client';
 
+const DO_VERSION = 'v2';
+
 const headers = {
   'Access-Control-Allow-Origin': allowedOrigin,
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -12,7 +14,7 @@ const headers = {
 };
 
 export default {
-  fetch(request, env) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const upgrade = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
     const socketPath = url.pathname === game.path || (game.path === '/' && url.pathname === '/ws');
@@ -42,7 +44,20 @@ export default {
       if (request.method !== 'GET') return new Response('Method not allowed', { status: 405, headers });
     }
 
-    return env.LOBBY.getByName(game.id, { locationHint: 'apac' }).fetch(request);
+    const id = env.LOBBY.idFromName(`${game.id}-${DO_VERSION}`);
+    const stub = env.LOBBY.get(id, { locationHint: 'apac' });
+    const started = performance.now();
+    const response = await stub.fetch(request);
+    const rtt = performance.now() - started;
+    const out = new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+      webSocket: response.webSocket
+    });
+    out.headers.set('x-do-rtt-ms', rtt.toFixed(1));
+    out.headers.set('x-edge-colo', request.cf?.colo ?? 'unknown');
+    return out;
   }
 };
 
@@ -69,6 +84,11 @@ function createRoomStore(storage) {
 export class GameLobby extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
+    ctx.blockConcurrencyWhile(async () => {
+      if (await ctx.storage.get('creationLogged')) return;
+      await ctx.storage.put('creationLogged', true);
+      console.log('durable_object_created', { id: ctx.id.toString(), version: DO_VERSION, role: 'lobby' });
+    });
     this.runtime = createRuntime(game, socketIo);
     if (game.id === 'guess-ab') {
       this.runtime.roomStore = createRoomStore(ctx.storage);
